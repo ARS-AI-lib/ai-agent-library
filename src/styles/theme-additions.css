@@ -1,0 +1,14 @@
+/* ══════════════════════════════════════════════════
+   APPEND TO theme.css (run ONCE — do not duplicate)
+   ══════════════════════════════════════════════════ */
+
+/* ── Nav Tabs ── */
+.nav-tabs { display: flex; align-items: stretch; gap: 0; margin-left: 16px; }
+.nav-tab { background: none; border: none; border-bottom: 3px solid transparent; padding: 0 16px; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--mu); cursor: pointer; white-space: nowrap; transition: color .15s, border-color .15s; }
+.nav-tab:hover { color: var(--tx); }
+.nav-tab.active { color: var(--ag); border-bottom-color: var(--ag); }
+
+/* ── Pill toggle buttons ── */
+.pill { padding: 4px 11px; border-radius: 20px; border: 1.5px solid var(--bd2); background: var(--sf2); color: var(--tx2); font-size: 11.5px; font-family: inherit; cursor: pointer; transition: all .18s; white-space: nowrap; }
+.pill.on { background: var(--uc); border-color: var(--uc); color: #fff; font-weight: 600; }
+.pill:not(.on):hover { border-color: var(--uc); color: var(--uc); }

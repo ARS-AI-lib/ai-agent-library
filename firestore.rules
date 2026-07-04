@@ -1,0 +1,194 @@
+// ⚠️ RECONSTRUCTED FROM SCRATCH — I (Claude) don't have a local copy of the
+// currently-deployed rules (they only ever existed pasted into the Firebase
+// Console, named database "ai-agent-lib"). This file implements the 4-tier
+// permission model discussed 2026-07-01. REVIEW BEFORE PASTING — if the
+// deployed ruleset has collections/rules not covered here (e.g. something
+// added ad-hoc in the Console), re-add them; this is a full overwrite, not
+// a patch (per project convention: always replace the whole ruleset).
+//
+// Roles (on /users/{uid}.role): 'user' | 'approver' | 'committee' | 'admin'
+//   admin     — everything, incl. user management.
+//   committee — everything admin can do on /agents, NOT /users.
+//   approver  — approve/reject + progress-update scoped to own approveAreas
+//               (area matching is enforced in the UI via agentApproveAreas();
+//               these rules only gate role tier + field scope, same pattern
+//               already used for the existing progress-update rule).
+//   user      — submit ideas, withdraw/reject their own pending idea, update
+//               progress on agents they created.
+//
+// Publish via: Firebase Console → Firestore Database → Rules → make sure the
+// named database dropdown is set to "ai-agent-lib" (NOT "(default)") before
+// publishing — publishing against the wrong DB silently no-ops.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() {
+      return isSignedIn() && userRole() == 'admin';
+    }
+    function isCommittee() {
+      return isSignedIn() && (userRole() == 'committee' || isAdmin());
+    }
+    function isApproverOrAbove() {
+      return isSignedIn() && userRole() in ['approver', 'committee', 'admin'];
+    }
+    function isKnownUser() {
+      return isSignedIn() && userRole() in ['user', 'approver', 'committee', 'admin'];
+    }
+    function affectedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+    // Whether the signed-in user is one of an agent's (possibly multiple)
+    // creators, matched by email — not uid. This needs no login/UID backfill
+    // at all: creatorEmails is populated straight from the Creator/Team-member
+    // picker at submit time, and request.auth.token.email is always present
+    // on a Google-signed-in user.
+    function isCreatorEmail(agentData) {
+      return isSignedIn()
+        && agentData.creatorEmails is list
+        && request.auth.token.email in agentData.creatorEmails;
+    }
+
+    // ── /agents ──────────────────────────────────────────────────
+    match /agents/{agentId} {
+      // Read: any signed-in user with a role doc. Pending items are
+      // area/ownership-scoped in the UI (PendingApprovalModal), not here —
+      // same pattern as the rest of this app's permission model.
+      allow read: if isKnownUser();
+
+      // Create: any tier may submit a new idea, but only as their own
+      // pending draft — can't self-approve or impersonate another creator.
+      allow create: if isKnownUser()
+        && request.resource.data.approvalStatus == 'pending'
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if
+        // Admin: any field, any doc.
+        isAdmin()
+        // Committee: same as admin on /agents (just not /users).
+        || isCommittee()
+        // Approver: approve/reject action only (area scoping is UI-side).
+        || (isApproverOrAbove()
+            && affectedKeys().hasOnly(['approvalStatus', 'approvedBy', 'updatedAt']))
+        // Self-withdraw: creator can reject (never approve) their OWN
+        // still-pending idea — covers the base "user" tier's "reject idea
+        // ของตัวเอง" requirement.
+        || (affectedKeys().hasOnly(['approvalStatus', 'updatedAt'])
+            && resource.data.createdBy == request.auth.uid
+            && resource.data.approvalStatus == 'pending'
+            && request.resource.data.approvalStatus == 'rejected')
+        // Progress-update: any of the agent's creators (by email —
+        // creatorEmails, no UID backfill needed), createdBy uid, or
+        // approvedBy uid, only while devProgress < 100, only these fields —
+        // any tier (user included). Cap at 95 unless a deployment request was
+        // already approved (2026-07-02 Deploy Approval feature) — going past
+        // 95 requires the doc's deploymentStatus to already be 'approved'
+        // when this write lands.
+        || (affectedKeys().hasOnly(['devProgress', 'launchDate', 'developmentPhase', 'updatedAt'])
+            && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid || resource.data.approvedBy == request.auth.uid)
+            && (resource.data.devProgress == null || resource.data.devProgress < 100)
+            && (request.resource.data.devProgress <= 95 || resource.data.deploymentStatus == 'approved'))
+        // Deployment request: any of the agent's creators (by email), or
+        // createdBy/approvedBy uid, confirms "tested and ready" (via the
+        // confirm dialog in the UI) — one write bumps devProgress to exactly
+        // 95 AND files the request, no separate "save to 95 first" step
+        // required. Only while no request is already in flight (re-request
+        // allowed after a rejection).
+        || (affectedKeys().hasOnly(['devProgress', 'deploymentStatus', 'deployRequestedBy', 'deployRequestedAt', 'updatedAt'])
+            && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid || resource.data.approvedBy == request.auth.uid)
+            && resource.data.devProgress < 100
+            && resource.data.deploymentStatus in ['none', 'rejected', null]
+            && request.resource.data.devProgress == 95
+            && request.resource.data.deploymentStatus == 'requested')
+        // Detail edit (2026-07-03): any of the agent's creators (by email)
+        // may edit the broader detail set on an already-approved doc —
+        // name/description/scope/ability/role/creator list/reusable/hml/
+        // launchDate/devProgress — but ONLY until a deployment request is
+        // filed (harder cutoff than plain progress-update above, since the
+        // record is meant to be frozen once deploy review starts). Type
+        // (aiAgent/skillMd) is deliberately NOT editable here — locked
+        // permanently once approved, to prevent gaming approval scope by
+        // relabeling an Agent↔Skill after the fact (2026-07-03 decision).
+        // Admin/committee already have unconditional access via the
+        // branches above, so this only needs to cover the creator case.
+        || (affectedKeys().hasOnly([
+              'agentName', 'description', 'customerFacing', 'internalUse',
+              'coreAbility', 'relatedRole', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
+              'humanJob', 'launchDate', 'devProgress', 'developmentPhase', 'updatedAt',
+            ])
+            && isCreatorEmail(resource.data)
+            && !(resource.data.deploymentStatus in ['requested', 'approved'])
+            && (request.resource.data.devProgress <= 95 || resource.data.deploymentStatus == 'approved'))
+        // Deployment decision: approver-or-above approves/rejects a pending
+        // deployment request (area scoping is UI-side, same pattern as the
+        // new-entry approve/reject action above).
+        || (isApproverOrAbove()
+            && affectedKeys().hasOnly(['deploymentStatus', 'deployDecidedBy', 'deployDecidedAt', 'updatedAt'])
+            && resource.data.deploymentStatus == 'requested'
+            && request.resource.data.deploymentStatus in ['approved', 'rejected']);
+
+      allow delete: if isAdmin();
+    }
+
+    // ── /users ───────────────────────────────────────────────────
+    match /users/{uid} {
+      // A user may read their own doc (role bootstrap); admin/committee may
+      // read any doc (list is only actually used by the admin-only
+      // UserManagementModal, but committee is allowed to read too since it
+      // shares agent-management visibility).
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin() || isCommittee());
+      allow list: if isAdmin();
+
+      // First-login auto-provision: self-create at the base "user" tier only.
+      allow create: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.role == 'user';
+
+      // Only admin grants/changes roles or approveAreas — for anyone,
+      // including themselves (2026-07-04, revised: self-lockout is an
+      // accepted risk the admin can knowingly take, not something to block).
+      // No other role has any user-management rights at all.
+      allow update: if isAdmin();
+
+      allow delete: if false;
+    }
+
+    // ── SDLC catalog + schema config ─────────────────────────────
+    // Read-only reference data for every signed-in tier; only admin edits
+    // the catalog (via the migration scripts, not the app UI).
+    match /sdlcProcesses/{id} {
+      allow read: if isKnownUser();
+      allow write: if isAdmin();
+    }
+    match /sdlcUseCases/{id} {
+      allow read: if isKnownUser();
+      allow write: if isAdmin();
+    }
+    match /config/{id} {
+      allow read: if isKnownUser();
+      allow write: if isAdmin();
+    }
+
+    // ── /analysisRuns — duplicate-check knowledge base ───────────────
+    // One doc per submitted analysis (doc id = the agent's id). Written by the
+    // submitter at submit time; the human outcome (approved/rejected) is
+    // attached later by whoever can act on the pending item.
+    match /analysisRuns/{id} {
+      allow read: if isKnownUser();
+      // Submitter self-creates their own run; can't forge another creator.
+      allow create: if isKnownUser()
+        && request.resource.data.createdBy == request.auth.uid;
+      // Outcome update: approver/committee/admin, and only the outcome fields.
+      allow update: if isApproverOrAbove()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['outcome', 'outcomeBy', 'outcomeAt']);
+      allow delete: if isAdmin();
+    }
+  }
+}

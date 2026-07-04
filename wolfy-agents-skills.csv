@@ -1,0 +1,16 @@
+id,agentName,type,desc,reusable,devProgress,approvalStatus
+pYrXYO5EJZAbrQGPm4jT,AI Agent Library Chat Assistant,Agent,"แชทที่คุยกับ AI Agent Library ด้วยภาษาธรรมชาติ แทนที่จะกรอกฟอร์ม Pre-Registration อย่างเดียว — เรียก skill registry เดียวกับ AI Agent Library Copilot (search_library, duplicate_check, agent_library_connection_suggest, get_agent_detail) ผ่าน LLM function-calling. ⚠️ ยังไม่ได้ build — SKILL_TOOLS descriptor พร้อมใช้แล้วใน lib/skills.js แต่ยังไม่มี chat frontend/backend",Reusable with Conditions,90,approved
+tM9BRb0ZGbGrqVpqO39b,AI Agent Library Copilot,Agent,Orchestrator agent ที่รับ draft agent/skill ใหม่จากผู้ใช้ วิเคราะห์ความซ้ำซ้อนกับไลบรารีที่มีอยู่ แนะนำการเชื่อมต่อกับของเดิม และให้คำตอบ verdict ผ่านการเรียก skills ที่ลงทะเบียนไว้ + Vertex AI (Gemini 2.5 Flash) สำหรับตัดสินเชิงความหมาย,Reusable with Conditions,90,approved
+agent_0002,Epic Writer,Agent,This agent is a cutting edge LLM model (Gemini-3-flash or better) that can write epic components thoughtfully. The company's standard epic writing guideline has been carefully crafted and given to the model as a part of the system instruction.,,90,approved
+agent_0004,Product Inquiry Agent (Story Maker Chat agent),Agent,"This agent is an entry point of the chat-based editor functionality. The user can ask in the chat about recently generated epics and user stories. In addition, the user can revise the work via natural language command. For example, the user request could",,40,approved
+agent_0003,User Story Writer,Agent,This agent is a cutting edge LLM model (Gemini-3-flash or better) that can write user story components thoughtfully. The company's standard user story writing guideline has been carefully crafted and given to the model as a part of the system instruction.,,90,approved
+fSuc9H8StRP0Yw8nNm0W,agent_library_connection_suggest,Skill,"หา Agent/Skill ที่ draft ""ต่อกับตัวนี้ได้"" ผ่าน directional scoring: Output↔Input data-handoff (0.50), process-step adjacency ตาม catalog เฉพาะขององค์กร (0.20), tool overlap (0.15), team match (0.15) — คืนพร้อมทิศทาง (draft→existing หรือ existing→draft), ประเภท (Data Handoff/Trigger/Shared Context) และเหตุผล",Reusable with Conditions,95,approved
+agent_0122,ALPHA - Doc Extraction,Skill,TBC,,10,approved
+agent_0123,ALPHA - EPIC Analyzer,Skill,TBC,,10,approved
+agent_0125,ALPHA - Jira Information Retrieval,Skill,TBC,,10,approved
+agent_0127,ALPHA - Jira issue creation,Skill,TBC,,10,approved
+agent_0124,ALPHA - Story analyzer,Skill,TBC,,10,approved
+agent_0126,ALPHA - Summarizer,Skill,TBC,,10,approved
+QQnDaBJ2K5LlBCUBtozk,duplicate_check,Skill,ให้คะแนนความซ้ำของ draft เทียบทั้งไลบรารี คืนเฉพาะที่ทับซ้อน >= เกณฑ์ medium (40%) เรียงมากไปน้อย — เป็น deterministic fallback เมื่อ Vertex AI ไม่พร้อมใช้งาน,Reusable,90,approved
+1kFtOck4Abf67MO3NvXC,get_agent_detail,Skill,ดึงข้อมูลเต็มของ Agent/Skill หนึ่งตัวจากไลบรารีด้วยชื่อ (case-insensitive) — ใช้ตอบคำถามเจาะจงตัวใดตัวหนึ่ง (เตรียมไว้สำหรับ chat entry point ที่ยังไม่ build),Reusable,90,approved
+TugZODmjFodpCOZ0WYXd,search_library,Skill,"ค้นหา Agent/Skill ที่มีอยู่แล้วในไลบรารีที่ใกล้เคียงกับ draft ที่ให้มา (rule-based nearest-neighbour, ไม่กรอง threshold) คืน top-15 พร้อมคะแนนดิบ — ใช้เป็น ""หน้าด่าน"" ก่อนส่งให้ AI ตัดสินเชิงความหมาย",Reusable,90,approved

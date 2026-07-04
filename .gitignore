@@ -1,0 +1,17 @@
+# dependencies
+node_modules
+
+# build output
+dist
+
+# local env / secrets (real Firebase web config — keep out of git)
+.env.local
+
+# firebase local cache
+.firebase/
+
+# macOS junk
+.DS_Store
+
+# logs
+*.log

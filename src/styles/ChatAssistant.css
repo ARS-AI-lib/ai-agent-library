@@ -1,0 +1,71 @@
+/* Chat Assistant — floating icon + panel (2026-07-02). Scoped with .chat- */
+.chat-fab {
+  position: fixed; right: 22px; bottom: 22px; z-index: 1200;
+  height: 48px; border-radius: 24px; padding: 0 16px 0 6px;
+  background: var(--ag); color: #fff; border: none;
+  font-size: 22px; cursor: pointer; box-shadow: var(--shm);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform .15s, background .15s;
+}
+.chat-fab:hover { transform: scale(1.04); background: #0f4690; }
+.chat-fab.chat-fab-closed { width: 48px; padding: 0; border-radius: 50%; }
+.chat-fab-logo { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+.chat-fab-label { font-size: 13.5px; font-weight: 700; color: #fff; white-space: nowrap; }
+
+.chat-panel {
+  position: fixed; right: 22px; bottom: 86px; z-index: 1199;
+  width: 360px; max-width: calc(100vw - 44px);
+  height: 520px; max-height: calc(100vh - 140px);
+  background: var(--sf); border: 1.5px solid var(--bd2); border-radius: 12px;
+  box-shadow: var(--shm); display: flex; flex-direction: column; overflow: hidden;
+}
+
+.chat-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; background: var(--sf2); border-bottom: 1px solid var(--bd);
+  font-size: 13px; font-weight: 700; color: var(--tx);
+}
+.chat-header span { display: flex; align-items: center; gap: 7px; }
+.chat-hdr-logo { width: 20px; height: 20px; object-fit: contain; }
+.chat-header-actions { display: flex; align-items: center; gap: 6px; }
+.chat-hdr-btn { font-size: 10.5px; padding: 4px 8px; }
+.chat-close { background: none; border: none; cursor: pointer; font-size: 14px; color: var(--mu); padding: 2px 4px; }
+
+.chat-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.chat-empty { color: var(--mu); font-size: 12px; text-align: center; margin-top: 20px; }
+
+.chat-msg { display: flex; }
+.chat-msg.user { justify-content: flex-end; }
+.chat-msg.assistant { justify-content: flex-start; }
+
+.chat-bubble {
+  max-width: 84%; padding: 8px 11px; border-radius: 10px; font-size: 12.5px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+}
+.chat-msg.user .chat-bubble { background: var(--ag, #1558b0); color: #fff; border-bottom-right-radius: 2px; }
+.chat-msg.assistant .chat-bubble { background: var(--sf2); color: var(--tx); border: 1px solid var(--bd); border-bottom-left-radius: 2px; }
+
+.chat-csv-btn { margin-top: 6px; font-size: 10.5px; padding: 3px 8px; }
+
+/* Clickable agent/skill name inside an assistant reply — opens detail modal */
+.chat-agent-link { color: var(--ag, #1558b0); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.chat-agent-link:hover { color: #0f4690; }
+
+.chat-thinking { display: flex; gap: 4px; align-items: center; padding: 10px 12px; }
+.chat-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mu); animation: chat-bounce 1.2s infinite ease-in-out; }
+.chat-dot:nth-child(2) { animation-delay: .15s; }
+.chat-dot:nth-child(3) { animation-delay: .3s; }
+@keyframes chat-bounce { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+.chat-input-row { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--bd); background: var(--sf); }
+.chat-input {
+  flex: 1; border: 1.5px solid var(--bd); border-radius: 8px; padding: 7px 10px;
+  font-size: 12.5px; font-family: inherit; background: var(--sf2); color: var(--tx); outline: none;
+}
+.chat-input:focus { border-color: var(--ag, #1558b0); }
+.chat-send-btn { font-size: 12px; padding: 7px 14px; }
+
+@media (max-width: 480px) {
+  .chat-panel { right: 12px; left: 12px; width: auto; bottom: 78px; }
+  .chat-fab { right: 14px; bottom: 14px; }
+}

@@ -1,0 +1,161 @@
+id,agentName,owner,type,aiAgent,skillMd
+pYrXYO5EJZAbrQGPm4jT,AI Agent Library Chat Assistant,Wolfy,Agent,TRUE,FALSE
+tM9BRb0ZGbGrqVpqO39b,AI Agent Library Copilot,Wolfy,Agent,TRUE,FALSE
+agent_0142,AIPhbt - Calculate debt,Ai-Phabet,Agent,TRUE,FALSE
+agent_0143,AIPhbt - Document Anomaly,Ai-Phabet,Agent,TRUE,FALSE
+iCU56M1bHV9FQWTPalyM,Automate Code Review,SIT-TQM,Agent,TRUE,TRUE
+agent_0070,CA: Debt Calculation,Ai-Phabet,Agent,TRUE,FALSE
+agent_0078,CA: Fraud Detection,Ai-Phabet,Agent,TRUE,FALSE
+agent_0071,CA: Income reconcile,Ai-Phabet,Agent,TRUE,FALSE
+agent_0014,Change Impact & Re-work Minimization,PQA,Agent,TRUE,TRUE
+agent_0062,Code Review Assistant,Development,Agent,TRUE,FALSE
+agent_0012,Daily Summary & Progress Report,PQA,Agent,TRUE,TRUE
+4v9TxqdqKTP3t76LxDmj,Defect Manager,SIT-TQM,Agent,TRUE,TRUE
+agent_0017,Detailed Project Tasks Retriever (From JIRA),Delivery Manager,Agent,TRUE,FALSE
+agent_0018,Detailed Project Timeline Generator (by Standard Excel Template),Delivery Manager,Agent,TRUE,TRUE
+agent_0002,Epic Writer,Wolfy,Agent,TRUE,TRUE
+agent_0079,Guardrail Agent,Ohm,Agent,TRUE,FALSE
+agent_0022,JO Deck Generator,Delivery Manager,Agent,TRUE,TRUE
+agent_0013,Knowledge Base Agent,PQA,Agent,TRUE,FALSE
+agent_0083,Nok - Compliance,นกกระซิบ,Agent,TRUE,FALSE
+agent_0086,Nok - document extraction (from document),นกกระซิบ,Agent,TRUE,FALSE
+agent_0084,Nok - document extraction (PDF > TEXT),นกกระซิบ,Agent,TRUE,FALSE
+agent_0088,Nok - Generate 'guide แนะนำคำถามถัดไป',นกกระซิบ,Agent,TRUE,FALSE
+agent_0085,Nok - nudge message,นกกระซิบ,Agent,TRUE,FALSE
+agent_0087,Nok - ตอบคำถาม ให้ตรงกับ scope ตามเอกสารที่อ่าน,นกกระซิบ,Agent,TRUE,FALSE
+agent_0069,Open Issue Tracker,BA,Agent,TRUE,FALSE
+agent_0021,PC Document Control Assistant,Delivery Manager,Agent,TRUE,TRUE
+agent_0004,Product Inquiry Agent (Story Maker Chat agent),Wolfy,Agent,TRUE,TRUE
+agent_0019,Project Stakeholder Directory Assistant,Delivery Manager,Agent,TRUE,TRUE
+qRLgti4F4nbznVZmlYFs,QA Gitlab Publisher,SIT-TQM,Agent,TRUE,TRUE
+LS8MrLyQbdN4x1xMlaUW,QA Orchestration,SIT-TQM,Agent,TRUE,TRUE
+agent_0064,RCA Fix Assistant,Development,Agent,TRUE,FALSE
+agent_0023,Requirement Refiner Assistant,BA,Agent,TRUE,FALSE
+agent_0141,Reseach Insight Agent,Digital Experience Team,Agent,TRUE,TRUE
+53200Ft1fJEp0jQW4OPd,SafeSeed,กลุ่ม 9,Agent,TRUE,FALSE
+agent_0081,Startwolfs - CRM Investment Agent,Starwolfs,Agent,TRUE,FALSE
+agent_0082,Startwolfs - Personalized Investment Agent,Starwolfs,Agent,TRUE,FALSE
+agent_0066,System Impact Analyzer,Development,Agent,TRUE,FALSE
+oQIZEKHLMYeDMNoHllZ6,TC Automate Engineer,SIT-TQM,Agent,TRUE,TRUE
+f49xdgMNLk74oTccyHMn,TC Review,SIT-TQM,Agent,TRUE,TRUE
+yamJvJ4uAr51Ss924Nh5,TC Writer,SIT-TQM,Agent,TRUE,TRUE
+f5yNg00bCPFOQCBbg5Eb,TCM CrossChecker,SIT-TQM,Agent,TRUE,TRUE
+9yMHHwgZwCjOSRS90iDl,TCM Masker,SIT-TQM,Agent,TRUE,TRUE
+G84NXB657ayaXfjx1tix,TCM Reviewer,SIT-TQM,Agent,TRUE,TRUE
+CJeIgO3sdj3tYzPUPbPy,Test Analysis,SIT-TQM,Agent,TRUE,TRUE
+agent_0016,Test Artifact Synchronization,PQA,Agent,TRUE,FALSE
+1dyhqm0ghKasnGm1F8sm,Test Designer,SIT-TQM,Agent,TRUE,TRUE
+IpflViNhAYPRZ3cjmzvc,Test Planner,SIT-TQM,Agent,TRUE,TRUE
+agent_0020,Timeline Change Detector and Risk Validation,Delivery Manager,Agent,TRUE,FALSE
+agent_0015,Update execution results and evidence,PQA,Agent,TRUE,FALSE
+agent_0003,User Story Writer,Wolfy,Agent,TRUE,TRUE
+agent_0005,UX Writer AI Agent,Digital Experience Team,Agent,TRUE,TRUE
+agent_0080,VA Agent (Orchestrator Agent),Ohm,Agent,TRUE,FALSE
+agent_0074,VD/DE:  นส. รับรองหักเงินเดือนนำส่ง,Ai-Phabet,Agent,TRUE,FALSE
+agent_0072,VD/DE:  นส.รับรองสิทธิ MOU,Ai-Phabet,Agent,TRUE,FALSE
+agent_0073,VD/DE: Payslip,Ai-Phabet,Agent,TRUE,FALSE
+agent_0075,VD/DE: ใบเสร็จรับเงินสหกรณ์,Ai-Phabet,Agent,TRUE,FALSE
+agent_0077,VD/DE: สัญญาจ้าง,Ai-Phabet,Agent,TRUE,FALSE
+agent_0076,VD/DE: หนังสือรับรองเงินเดือน,Ai-Phabet,Agent,TRUE,FALSE
+agent_0102,1. knowledge selector,Ohm,Skill,FALSE,TRUE
+agent_0103,1.identity.md,Ohm,Skill,FALSE,TRUE
+agent_0104,2.product-name-normalization.md,Ohm,Skill,FALSE,TRUE
+agent_0105,2.voice.md,Ohm,Skill,FALSE,TRUE
+agent_0106,3.safety.md,Ohm,Skill,FALSE,TRUE
+agent_0107,3.support-escalation.md,Ohm,Skill,FALSE,TRUE
+agent_0108,4.kb-search.md,Ohm,Skill,FALSE,TRUE
+agent_0109,4.orchestrator.md,Ohm,Skill,FALSE,TRUE
+agent_0110,5.query-planner.md,Ohm,Skill,FALSE,TRUE
+agent_0111,5.response-to-user.md,Ohm,Skill,FALSE,TRUE
+agent_0112,6.answer-writer.md,Ohm,Skill,FALSE,TRUE
+agent_0113,6.commodity-price-inquiry.md,Ohm,Skill,FALSE,TRUE
+agent_0114,7.no-citation-fallback.md,Ohm,Skill,FALSE,TRUE
+fSuc9H8StRP0Yw8nNm0W,agent_library_connection_suggest,Wolfy,Skill,FALSE,TRUE
+agent_0089,AIPhbt - Automate dynamic interest rate based on MOU​,Ai-Phabet,Skill,FALSE,TRUE
+agent_0090,"AIPhbt - Calculate suitable credit limit, tenor, and installment",Ai-Phabet,Skill,FALSE,TRUE
+agent_0091,AIPhbt - Document Extraction - MOU,Ai-Phabet,Skill,FALSE,TRUE
+agent_0092,AIPhbt - Document Extraction - Payslip,Ai-Phabet,Skill,FALSE,TRUE
+agent_0093,AIPhbt - Document Extraction - เงินเดือนนำส่ง,Ai-Phabet,Skill,FALSE,TRUE
+agent_0094,AIPhbt - Document Extraction - ใบเสร็จสหกรณ์,Ai-Phabet,Skill,FALSE,TRUE
+agent_0095,AIPhbt - Document Extraction - รับรองเงินเดือน,Ai-Phabet,Skill,FALSE,TRUE
+agent_0096,AIPhbt - Document Extraction - สัญญาจ้าง,Ai-Phabet,Skill,FALSE,TRUE
+agent_0097,AIPhbt - Employment certificate​,Ai-Phabet,Skill,FALSE,TRUE
+agent_0098,AIPhbt - Income document verification​,Ai-Phabet,Skill,FALSE,TRUE
+agent_0100,AIPhbt - NCB patterns​,Ai-Phabet,Skill,FALSE,TRUE
+agent_0099,AIPhbt - Re-use Document Prevention,Ai-Phabet,Skill,FALSE,TRUE
+agent_0101,AIPhbt - Reconcile net income​,Ai-Phabet,Skill,FALSE,TRUE
+agent_0122,ALPHA - Doc Extraction,Wolfy,Skill,FALSE,TRUE
+agent_0123,ALPHA - EPIC Analyzer,Wolfy,Skill,FALSE,TRUE
+agent_0125,ALPHA - Jira Information Retrieval,Wolfy,Skill,FALSE,TRUE
+agent_0127,ALPHA - Jira issue creation,Wolfy,Skill,FALSE,TRUE
+agent_0124,ALPHA - Story analyzer,Wolfy,Skill,FALSE,TRUE
+agent_0126,ALPHA - Summarizer,Wolfy,Skill,FALSE,TRUE
+agent_0065,API Detailed Designer,Development,Skill,FALSE,TRUE
+agent_0010,be-dev (Golang TDD Worker),Development,Skill,FALSE,TRUE
+agent_0034,deploy-to-vercel,arise-devops,Skill,FALSE,TRUE
+QQnDaBJ2K5LlBCUBtozk,duplicate_check,Wolfy,Skill,FALSE,TRUE
+agent_0011,fe-dev (Next.js CSR TDD Worker),Development,Skill,FALSE,TRUE
+1kFtOck4Abf67MO3NvXC,get_agent_detail,Wolfy,Skill,FALSE,TRUE
+agent_0035,git-conventional-commits,arise-devops,Skill,FALSE,TRUE
+agent_0036,git-merge-request,arise-devops,Skill,FALSE,TRUE
+agent_0037,gitlab-cicd,arise-devops,Skill,FALSE,TRUE
+agent_0038,gitlab-repo,arise-devops,Skill,FALSE,TRUE
+agent_0048,golang-cache,arise-perf,Skill,FALSE,TRUE
+agent_0054,golang-contract-testing,arise-reviewer,Skill,FALSE,TRUE
+agent_0039,golang-docker,arise-devops,Skill,FALSE,TRUE
+agent_0055,golang-error-handling,arise-reviewer,Skill,FALSE,TRUE
+agent_0024,golang-idioms,arise-backend,Skill,FALSE,TRUE
+agent_0056,golang-integration-testing,arise-reviewer,Skill,FALSE,TRUE
+agent_0057,golang-lint,arise-reviewer,Skill,FALSE,TRUE
+agent_0049,golang-logging-patterns,arise-perf,Skill,FALSE,TRUE
+agent_0025,golang-messaging,arise-backend,Skill,FALSE,TRUE
+agent_0026,golang-migrations,arise-backend,Skill,FALSE,TRUE
+agent_0050,golang-observability,arise-perf,Skill,FALSE,TRUE
+agent_0058,golang-optimization,arise-reviewer,Skill,FALSE,TRUE
+agent_0027,golang-project-structure,arise-backend,Skill,FALSE,TRUE
+agent_0028,golang-security,arise-backend,Skill,FALSE,TRUE
+agent_0029,golang-sql,arise-backend,Skill,FALSE,TRUE
+agent_0030,golang-swagger,arise-backend,Skill,FALSE,TRUE
+agent_0059,golang-unit-testing,arise-reviewer,Skill,FALSE,TRUE
+agent_0031,http-restful,arise-backend,Skill,FALSE,TRUE
+agent_0051,k6-k8s,arise-perf,Skill,FALSE,TRUE
+agent_0052,k6-performance,arise-perf,Skill,FALSE,TRUE
+agent_0053,k6-scenario-creator,arise-perf,Skill,FALSE,TRUE
+agent_0032,microservice-architecture,arise-backend,Skill,FALSE,TRUE
+agent_0033,microservice-communication,arise-backend,Skill,FALSE,TRUE
+agent_0041,nextjs-typescript,arise-frontend,Skill,FALSE,TRUE
+agent_0132,Nok - CIO doc,นกรู้,Skill,FALSE,TRUE
+agent_0129,Nok - Flash news,นกต่อ,Skill,FALSE,TRUE
+agent_0133,Nok - Fund fact sheet,นกรู้,Skill,FALSE,TRUE
+agent_0134,Nok - Fund information,นกรู้,Skill,FALSE,TRUE
+agent_0135,Nok - General investment knowledge,นกรู้,Skill,FALSE,TRUE
+agent_0136,Nok - Investment knowledge (article and Q&A),นกรู้,Skill,FALSE,TRUE
+agent_0137,Nok - Investment recommendation,นกรู้,Skill,FALSE,TRUE
+agent_0138,Nok - Out of scope,นกรู้,Skill,FALSE,TRUE
+agent_0128,Nok - SEC & KTB internal compliance,นกคุ้ม,Skill,FALSE,TRUE
+agent_0139,Nok - Strategic View,นกรู้,Skill,FALSE,TRUE
+agent_0140,Nok - Suggest,นกรู้,Skill,FALSE,TRUE
+agent_0130,Nok - Weekly CIO,นกต่อ,Skill,FALSE,TRUE
+agent_0131,Nok - ปรับคำให้เข้าใจง่าย พร้อมส่งออก,นกต่อ,Skill,FALSE,TRUE
+agent_0006,po-ba (Product Owner / BA),Development,Skill,FALSE,TRUE
+TugZODmjFodpCOZ0WYXd,search_library,Wolfy,Skill,FALSE,TRUE
+agent_0061,skill-creator,arise-skill-development,Skill,FALSE,TRUE
+agent_0060,sql-optimization,arise-reviewer,Skill,FALSE,TRUE
+agent_0115,Starwolf - CRM ส่งเฉพาะข่าวที่สำคัญ ไม่รบกวน,Starwolfs,Skill,FALSE,TRUE
+agent_0116,Starwolf - Personalize แนะนำข่าวที่นักลงทุนสนใจ,Starwolfs,Skill,FALSE,TRUE
+agent_0117,Starwolf - เข้าใจ Content,Starwolfs,Skill,FALSE,TRUE
+agent_0118,Starwolf - เข้าใจข่าว,Starwolfs,Skill,FALSE,TRUE
+agent_0119,Starwolf - เข้าใจนักลงทุน,Starwolfs,Skill,FALSE,TRUE
+agent_0121,Starwolf - ปรับภาษาให้เข้ากับแต่ละ Style นักลงทุน,Starwolfs,Skill,FALSE,TRUE
+agent_0120,Starwolf - เสนอข่าวที่ใกล้เคียงการลงทุนที่ portfolio เขาถืออยู่,Starwolfs,Skill,FALSE,TRUE
+agent_0007,system-architect,Development,Skill,FALSE,TRUE
+agent_0008,tech-lead (Scrum Master + Code Gatekeeper),Development,Skill,FALSE,TRUE
+agent_0009,tester (QA),Development,Skill,FALSE,TRUE
+agent_0042,typescript-advanced-types,arise-frontend,Skill,FALSE,TRUE
+agent_0063,Unit Test Generator,Development,Skill,FALSE,TRUE
+agent_0040,vercel-cli-with-tokens,arise-devops,Skill,FALSE,TRUE
+agent_0043,vercel-composition-patterns,arise-frontend,Skill,FALSE,TRUE
+agent_0044,vercel-react-best-practices,arise-frontend,Skill,FALSE,TRUE
+agent_0045,vercel-react-native-skills,arise-frontend,Skill,FALSE,TRUE
+agent_0046,vercel-react-view-transitions,arise-frontend,Skill,FALSE,TRUE
+agent_0047,web-design-guidelines,arise-frontend,Skill,FALSE,TRUE

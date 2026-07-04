@@ -1,0 +1,10 @@
+name,type,source,description,exposedToAlphaChat,recordedInLibraryAs,status
+analyzeDuplicate,Agent,functions/index.js (exports.analyzeDuplicate),Cloud Function orchestrator — วิเคราะห์ duplicate/overlap ของ draft ใหม่กับ agent เดิม ตอน pre-registration (Vertex AI Gemini 2.5 Flash),no (called directly from PreRegModal),AI Agent Library Copilot,Recorded
+chatLibrary,Agent,functions/index.js (exports.chatLibrary),Cloud Function orchestrator — ตัดสินใจเรียก tool ไหนหรือตอบข้อความสุดท้ายให้ ALPHA chat,n/a (this IS the orchestrator),AI Agent Library Chat Assistant,Recorded
+search_library,Skill,src/lib/skills.js,ค้นหา Agent/Skill ใกล้เคียง draft (rule-based nearest-neighbour),no — form-check only,search_library,Recorded
+duplicate_check,Skill,src/lib/skills.js,ให้คะแนนความซ้ำของ draft เทียบทั้งไลบรารี (deterministic fallback),no — form-check only,duplicate_check,Recorded
+connection_suggest,Skill,src/lib/skills.js,หา Agent/Skill ที่ ต่อกับตัวนี้ได้ (data handoff/trigger/shared context),YES — chatLibrary TOOL_DECLARATIONS,agent_library_connection_suggest,Recorded
+get_agent_detail,Skill,src/lib/skills.js,ดึงข้อมูลเต็มของ Agent/Skill หนึ่งตัวจากชื่อ,YES — chatLibrary TOOL_DECLARATIONS,get_agent_detail,Recorded
+query_library,Skill,src/lib/skills.js,กรอง/นับ/จัดกลุ่ม Agent/Skill ตามฟิลเตอร์ — ตอบคำถามเชิงตัวเลข/รายการ,YES — chatLibrary TOOL_DECLARATIONS,,MISSING FROM LIBRARY
+query_sdlc,Skill,src/lib/skills.js,ค้นหา SDLC process/use case + coverage gap analysis,YES — chatLibrary TOOL_DECLARATIONS,,MISSING FROM LIBRARY
+capability_search,Skill,src/lib/skills.js,หา Agent/Skill ที่ความสามารถตรงกับคำถามเชิงความหมาย (semantic),YES — chatLibrary TOOL_DECLARATIONS,,MISSING FROM LIBRARY

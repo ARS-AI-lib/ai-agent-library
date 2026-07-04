@@ -1,0 +1,117 @@
+id,agentName,owner,suggested_reusable,suggested_reuseCondition,note
+agent_0024,golang-idioms,arise-backend,Reusable,,
+agent_0025,golang-messaging,arise-backend,Reusable,,
+agent_0026,golang-migrations,arise-backend,Reusable,,
+agent_0027,golang-project-structure,arise-backend,Reusable,,
+agent_0028,golang-security,arise-backend,Reusable,,
+agent_0029,golang-sql,arise-backend,Reusable,,
+agent_0030,golang-swagger,arise-backend,Reusable,,
+agent_0031,http-restful,arise-backend,Reusable,,
+agent_0032,microservice-architecture,arise-backend,Reusable,,
+agent_0033,microservice-communication,arise-backend,Reusable,,
+agent_0034,deploy-to-vercel,arise-devops,Reusable,,
+agent_0035,git-conventional-commits,arise-devops,Reusable,,
+agent_0036,git-merge-request,arise-devops,Reusable,,
+agent_0037,gitlab-cicd,arise-devops,Reusable,,
+agent_0038,gitlab-repo,arise-devops,Reusable,,
+agent_0039,golang-docker,arise-devops,Reusable,,
+agent_0040,vercel-cli-with-tokens,arise-devops,Reusable,,
+agent_0041,nextjs-typescript,arise-frontend,Reusable,,
+agent_0042,typescript-advanced-types,arise-frontend,Reusable,,
+agent_0043,vercel-composition-patterns,arise-frontend,Reusable,,
+agent_0044,vercel-react-best-practices,arise-frontend,Reusable,,
+agent_0045,vercel-react-native-skills,arise-frontend,Reusable,,
+agent_0046,vercel-react-view-transitions,arise-frontend,Reusable,,
+agent_0047,web-design-guidelines,arise-frontend,Reusable,,
+agent_0048,golang-cache,arise-perf,Reusable,,
+agent_0049,golang-logging-patterns,arise-perf,Reusable,,
+agent_0050,golang-observability,arise-perf,Reusable,,
+agent_0051,k6-k8s,arise-perf,Reusable,,
+agent_0052,k6-performance,arise-perf,Reusable,,
+agent_0053,k6-scenario-creator,arise-perf,Reusable,,
+agent_0054,golang-contract-testing,arise-reviewer,Reusable,,
+agent_0055,golang-error-handling,arise-reviewer,Reusable,,
+agent_0056,golang-integration-testing,arise-reviewer,Reusable,,
+agent_0057,golang-lint,arise-reviewer,Reusable,,
+agent_0058,golang-optimization,arise-reviewer,Reusable,,
+agent_0059,golang-unit-testing,arise-reviewer,Reusable,,
+agent_0060,sql-optimization,arise-reviewer,Reusable,,
+agent_0061,skill-creator,arise-skill-development,Reusable,,
+agent_0023,Requirement Refiner Assistant,BA,Reusable,,
+agent_0069,Open Issue Tracker,BA,Reusable,,
+agent_0017,Detailed Project Tasks Retriever (From JIRA),Delivery Manager,Reusable,,
+agent_0018,Detailed Project Timeline Generator (by Standard Excel Template),Delivery Manager,Reusable with Conditions,ต้องใช้ Excel Template รูปแบบมาตรฐาน (Fern Share) ตามที่กำหนดไว้เท่านั้น — ถ้าทีมอื่นมี template คนละแบบ ต้องปรับ mapping ใหม่,
+agent_0019,Project Stakeholder Directory Assistant,Delivery Manager,Reusable,,
+agent_0020,Timeline Change Detector and Risk Validation,Delivery Manager,Reusable,,
+agent_0021,PC Document Control Assistant,Delivery Manager,Reusable with Conditions,Deck โครงสร้าง Roadmap/Business flow/Draft Resource/Timeline ถูกออกแบบตามฟอร์แมตที่ PC (Project Committee) ต้องการ — ทีม/บอร์ดอื่นต้องปรับโครงสร้าง deck ให้ตรงก่อนใช้,
+agent_0022,JO Deck Generator,Delivery Manager,Reusable with Conditions,Deck โครงสร้าง Timeline/Business Journey/Epic/Resource/Cost ถูกออกแบบตามฟอร์แมตที่ DSC ต้องการสำหรับขออนุมัติงบ — บอร์ด/คณะกรรมการอื่นต้องปรับโครงสร้าง deck ให้ตรงก่อนใช้,
+agent_0006,po-ba (Product Owner / BA),Development,Reusable,,
+agent_0007,system-architect,Development,Reusable,,
+agent_0008,tech-lead (Scrum Master + Code Gatekeeper),Development,Reusable,,
+agent_0009,tester (QA),Development,Reusable,,
+agent_0010,be-dev (Golang TDD Worker),Development,Reusable with Conditions,ต้องใช้ Go เป็นภาษา backend และโครงสร้าง services/<name>/ เดียวกัน — โปรเจกต์ stack อื่นต้องปรับ subagent instruction ใหม่,
+agent_0011,fe-dev (Next.js CSR TDD Worker),Development,Reusable with Conditions,"ต้องใช้ Next.js Pages Router แบบ CSR-only + Jest/RTL/MSW และเรียก backend ผ่าน web/lib/api/ เดียวกัน — stack อื่น (เช่น App Router, อื่นที่ไม่ใช่ Next.js) ต้องปรับ subagent instruction ใหม่",
+agent_0062,Code Review Assistant,Development,Reusable,,
+agent_0063,Unit Test Generator,Development,Reusable,,
+agent_0064,RCA Fix Assistant,Development,Reusable,,
+agent_0065,API Detailed Designer,Development,Reusable,,
+agent_0066,System Impact Analyzer,Development,Reusable,,
+agent_0005,UX Writer AI Agent,Digital Experience Team,Reusable with Conditions,"ต้องปรับ Content Style Guide/Brand Personality ให้ตรงกับแอปที่นำไปใช้ — ปัจจุบัน calibrate ไว้เฉพาะ VB, NEXT, เป๋าตัง, lotto, ถุงเงิน เท่านั้น",
+agent_0141,Reseach Insight Agent,Digital Experience Team,Reusable with Conditions,ต้องมี Research Paper/Insight data (Qualitative+Quantitative) ของทีม/โดเมนนั้นสะสมไว้ใน knowledge base ก่อน ถึงจะให้คำตอบที่ตรงบริบท,
+agent_0079,Guardrail Agent,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0080,VA Agent (Orchestrator Agent),Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0102,1. knowledge selector,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0103,1.identity.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0104,2.product-name-normalization.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0105,2.voice.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0106,3.safety.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0107,3.support-escalation.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0108,4.kb-search.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0109,4.orchestrator.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0110,5.query-planner.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0111,5.response-to-user.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0112,6.answer-writer.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0113,6.commodity-price-inquiry.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0114,7.no-citation-fallback.md,Ohm,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0012,Daily Summary & Progress Report,PQA,Reusable,,
+agent_0013,Knowledge Base Agent,PQA,Reusable with Conditions,ต้องมี banking knowledge base เฉพาะทางของทีม/โดเมนนั้นสะสมไว้ก่อน ถึงจะแนะนำจุดโฟกัส Test Case ได้ตรง,
+agent_0014,Change Impact & Re-work Minimization,PQA,Reusable,,
+agent_0015,Update execution results and evidence,PQA,Reusable,,
+agent_0016,Test Artifact Synchronization,PQA,Reusable,,
+agent_0081,Startwolfs - CRM Investment Agent,Starwolfs,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0082,Startwolfs - Personalized Investment Agent,Starwolfs,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0115,Starwolf - CRM ส่งเฉพาะข่าวที่สำคัญ ไม่รบกวน,Starwolfs,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0116,Starwolf - Personalize แนะนำข่าวที่นักลงทุนสนใจ,Starwolfs,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0117,Starwolf - เข้าใจ Content,Starwolfs,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0118,Starwolf - เข้าใจข่าว,Starwolfs,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0119,Starwolf - เข้าใจนักลงทุน,Starwolfs,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0120,Starwolf - เสนอข่าวที่ใกล้เคียงการลงทุนที่ portfolio เขาถืออยู่,Starwolfs,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0121,Starwolf - ปรับภาษาให้เข้ากับแต่ละ Style นักลงทุน,Starwolfs,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0002,Epic Writer,Wolfy,Reusable with Conditions,ต้องปรับ epic-writing guideline (ที่ฝังใน system instruction) ให้ตรงกับมาตรฐานขององค์กรที่จะนำไปใช้,
+agent_0003,User Story Writer,Wolfy,Reusable with Conditions,ต้องปรับ user-story-writing guideline (ที่ฝังใน system instruction) ให้ตรงกับมาตรฐานขององค์กรที่จะนำไปใช้,
+agent_0004,Product Inquiry Agent (Story Maker Chat agent),Wolfy,Reusable with Conditions,ต้องต่อกับระบบ Epic/User Story generation ชุดเดียวกัน (JIRA + Qdrant) และปรับ prompt ให้ตรง domain ขององค์กรที่นำไปใช้,
+agent_0122,ALPHA - Doc Extraction,Wolfy,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0123,ALPHA - EPIC Analyzer,Wolfy,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0124,ALPHA - Story analyzer,Wolfy,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0125,ALPHA - Jira Information Retrieval,Wolfy,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0126,ALPHA - Summarizer,Wolfy,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0127,ALPHA - Jira issue creation,Wolfy,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0083,Nok - Compliance,นกกระซิบ,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0084,Nok - document extraction (PDF > TEXT),นกกระซิบ,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0085,Nok - nudge message,นกกระซิบ,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0086,Nok - document extraction (from document),นกกระซิบ,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0087,Nok - ตอบคำถาม ให้ตรงกับ scope ตามเอกสารที่อ่าน,นกกระซิบ,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0088,Nok - Generate 'guide แนะนำคำถามถัดไป',นกกระซิบ,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0128,Nok - SEC & KTB internal compliance,นกคุ้ม,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0129,Nok - Flash news,นกต่อ,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0130,Nok - Weekly CIO,นกต่อ,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0131,Nok - ปรับคำให้เข้าใจง่าย พร้อมส่งออก,นกต่อ,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0132,Nok - CIO doc,นกรู้,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0133,Nok - Fund fact sheet,นกรู้,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0134,Nok - Fund information,นกรู้,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0135,Nok - General investment knowledge,นกรู้,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0136,Nok - Investment knowledge (article and Q&A),นกรู้,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0137,Nok - Investment recommendation,นกรู้,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0138,Nok - Out of scope,นกรู้,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0139,Nok - Strategic View,นกรู้,,,"SKIPPED — description is ""TBC"", no real content to analyze"
+agent_0140,Nok - Suggest,นกรู้,,,"SKIPPED — description is ""TBC"", no real content to analyze"
