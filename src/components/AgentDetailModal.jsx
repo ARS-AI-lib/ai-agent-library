@@ -200,7 +200,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
           )}
 
           {editing ? (
-            <div style={{ marginTop: 8, padding: 10, background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: 7 }}>
+            <div style={{ marginTop: 8, padding: 10, background: 'var(--sf)', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-sm)' }}>
               {saveError && <div className="msg error" style={{ marginBottom: 8 }}><span className="dot" style={{ background: '#ea4335' }} />{saveError}</div>}
               <div className="fg" style={{ marginBottom: 8 }}>
                 <label>Dev Progress (%) <span className="hint">0-100, สูงสุด 100</span></label>
@@ -216,7 +216,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
               <div className="btn-group" style={{ marginTop: 10 }}>
                 <button className="btn btn-secondary" disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
                 <button className="btn btn-success" disabled={saving} onClick={handleSave}>
-                  {saving ? 'กำลังบันทึก…' : '✅ Save'}
+                  {saving ? 'กำลังบันทึก…' : 'Save'}
                 </button>
               </div>
             </div>
@@ -254,7 +254,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
                       disabled={requesting}
                       onClick={() => setConfirmingDeploy(true)}
                     >
-                      {requesting ? 'กำลังส่งคำขอ…' : '🚀 Deployment Request'}
+                      {requesting ? 'กำลังส่งคำขอ…' : 'Deployment Request'}
                     </button>
                   )}
                 </div>

@@ -14,7 +14,7 @@ const VERDICT_LABEL = {
 const VERDICT_COLOR = {
   clear_duplicate: '#c5221f',
   likely_overlap: '#c96a00',
-  distinct_but_related: '#1558b0',
+  distinct_but_related: '#2f6bff',
   unrelated: '#137333',
 };
 
@@ -214,14 +214,14 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
 
-        <div className="sec-title" style={{ marginTop: 4 }}>📝 New Entry</div>
+        <div className="sec-title" style={{ marginTop: 4 }}>New Entry</div>
         <div className="msub">
           {visible.length} รายการ
           {!fullAccess && pending.length > visible.length && ` (อีก ${pending.length - visible.length} รายการอยู่นอกสิทธิ์ของคุณ)`}
         </div>
 
         {visible.length === 0 ? (
-          <div className="empty-state">ไม่มีรายการรออนุมัติ 🎉</div>
+          <div className="empty-state">ไม่มีรายการรออนุมัติ</div>
         ) : (
           visible.map((agent) => {
             const tier = getTier(agent);
@@ -250,7 +250,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                         style={{ color: '#c96a00', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                         title="กดเพื่อดูรายชื่อ Agent ที่ทับซ้อน"
                       >
-                        ⚠️ ทับซ้อนหลายตัว{overlapAgents ? ` (${overlapAgents})` : ''}
+                        ทับซ้อนหลายตัว{overlapAgents ? ` (${overlapAgents})` : ''}
                       </span>
                     </>
                   )}
@@ -286,14 +286,14 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
           })
         )}
 
-        <div className="sec-title" style={{ marginTop: 16 }}>🚀 Deployment Request</div>
+        <div className="sec-title" style={{ marginTop: 16 }}>Deployment Request</div>
         <div className="msub">
           {visibleDeploy.length} รายการ
           {!fullAccess && deployRequests.length > visibleDeploy.length && ` (อีก ${deployRequests.length - visibleDeploy.length} รายการอยู่นอกสิทธิ์ของคุณ)`}
         </div>
 
         {visibleDeploy.length === 0 ? (
-          <div className="empty-state">ไม่มีคำขอ Deploy รออนุมัติ 🎉</div>
+          <div className="empty-state">ไม่มีคำขอ Deploy รออนุมัติ</div>
         ) : (
           visibleDeploy.map((agent) => {
             const tier = getTier(agent);
@@ -355,7 +355,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                     >
                       {c.agentName}
                     </span>
-                    <span style={{ fontSize: 9.5, fontWeight: 700, color: vColor, background: `${vColor}15`, border: `1px solid ${vColor}40`, padding: '1px 6px', borderRadius: 4 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: vColor, background: `${vColor}15`, border: 'none', padding: '2px 8px', borderRadius: 6 }}>
                       {VERDICT_LABEL[c.verdict] || c.verdict}
                     </span>
                   </div>

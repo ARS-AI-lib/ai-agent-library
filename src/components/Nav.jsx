@@ -81,8 +81,17 @@ export default function Nav({
         )}
 
         <div ref={menuRef} style={{ position: 'relative' }}>
-          <button className="btn-icon" title="Menu" onClick={() => setMenuOpen((o) => !o)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <button
+            title="Menu" onClick={() => setMenuOpen((o) => !o)}
+            style={{
+              width: 32, height: 32, border: 'none', background: 'none', color: 'var(--mu)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 'var(--r-sm)', transition: 'color .15s, background .15s', flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--tx)'; e.currentTarget.style.background = 'var(--sf2)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--mu)'; e.currentTarget.style.background = 'none'; }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
             </svg>
           </button>
@@ -90,7 +99,7 @@ export default function Nav({
             <div
               style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 20,
-                background: 'var(--sf)', border: '1.5px solid var(--bd2)', borderRadius: 8,
+                background: 'var(--sf)', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)',
                 boxShadow: 'var(--shm)', minWidth: 170, overflow: 'hidden',
               }}
             >
@@ -101,7 +110,7 @@ export default function Nav({
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
                   padding: '9px 12px', fontSize: 12.5, fontWeight: myAI ? 700 : 500,
                   color: myAI ? 'var(--ag)' : 'var(--tx)', background: myAI ? 'var(--sf2)' : 'none',
-                  border: 'none', borderBottom: '1px solid var(--bd)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                  border: 'none', borderBottom: '1px solid var(--bd-soft)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 }}
               >
                 My AI {myAI && <span style={{ fontSize: 10 }}>✓ on</span>}
@@ -111,7 +120,7 @@ export default function Nav({
                 onClick={() => { onOpenExport?.(); setMenuOpen(false); }}
                 style={{
                   display: 'block', width: '100%', padding: '9px 12px', fontSize: 12.5, fontWeight: 500,
-                  color: 'var(--tx)', background: 'none', border: 'none', borderBottom: '1px solid var(--bd)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                  color: 'var(--tx)', background: 'none', border: 'none', borderBottom: '1px solid var(--bd-soft)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 }}
               >
                 Export Data
@@ -121,7 +130,7 @@ export default function Nav({
                 onClick={() => { setMenuOpen(false); onSignOut?.(); }}
                 style={{
                   display: 'block', width: '100%', padding: '9px 12px', fontSize: 12.5, fontWeight: 500,
-                  color: 'var(--tx)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                  color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 }}
               >
                 Sign out

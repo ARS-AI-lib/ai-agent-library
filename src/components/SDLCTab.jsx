@@ -8,27 +8,51 @@ import MultiSelect from './MultiSelect';
 import StatusLegend from './StatusLegend';
 import '../styles/SDLCTab.css';
 
+// Stage palette — SINGLE source of truth (2026-07 redesign fix: this used to
+// be duplicated with different values in GROUPS.sub vs STAGE_COLOR, so
+// "Initiation" rendered orange in the Use-Case view but blue in the Process
+// View — same stage, two colors. Also muted/desaturated per user's pick
+// (grill-me A/B comparison) so 6+ stage colors sitting side-by-side in the
+// board don't visually fight each other.
+const STAGE_COLOR = { Initiation: '#a9754a', Discovery: '#4d6b96', Design: '#7d6a9e', Build: '#4d8c7c', Test: '#8c6b45', Deployment: '#a85f5f', 'Post Development': '#9c6478' };
+
 // ── Board structure (faithful port of ADOPT_GROUPS) ──
 const GROUPS = [
   { label: 'Discovery', merged: false, sub: [
-    { label: 'INITIATION', color: '#1558b0', bg: '#1558b020', stage: 'Initiation' },
-    { label: 'DISCOVERY', color: '#1558b0', bg: '#1558b020', stage: 'Discovery' },
+    { label: 'INITIATION', stage: 'Initiation' },
+    { label: 'DISCOVERY', stage: 'Discovery' },
   ]},
   { label: 'Development', merged: false, sub: [
-    { label: 'DESIGN', color: '#6d28d9', bg: '#6d28d915', stage: 'Design' },
-    { label: 'BUILD', color: '#0b7a68', bg: '#0b7a6815', stage: 'Build' },
-    { label: 'TEST', color: '#92400e', bg: '#92400e12', stage: 'Test' },
-    { label: 'DEPLOYMENT', color: '#991b1b', bg: '#991b1b12', stage: 'Deployment' },
+    { label: 'DESIGN', stage: 'Design' },
+    { label: 'BUILD', stage: 'Build' },
+    { label: 'TEST', stage: 'Test' },
+    { label: 'DEPLOYMENT', stage: 'Deployment' },
   ]},
   { label: 'After Development', merged: true, sub: [
-    { label: 'POST DEVELOPMENT', color: '#9d174d', bg: '#9d174d12', stage: 'Post Development' },
+    { label: 'POST DEVELOPMENT', stage: 'Post Development' },
   ]},
 ];
 
 const ALL_STAGES = GROUPS.flatMap((g) => g.sub.map((s) => s.stage));
-const STAGE_COLOR = { Initiation: '#c2590a', Discovery: '#1558b0', Design: '#6d28d9', Build: '#0b7a68', Test: '#92400e', Deployment: '#991b1b', 'Post Development': '#9d174d' };
 const STATUS_ICON = { ns: '○', td: '◦', ip: '●', pilot: '◆', ru: '✓' };
 const PRIORITY = ['ru', 'pilot', 'ip', 'td', 'ns'];
+
+// Owner / relationship-label / role tags for a mini agent row — deduped by
+// visible text (2026-07 fix): owner and relatedRole are different fields
+// that can legitimately hold the same string (e.g. a team literally named
+// "BA" whose related role is also "BA"), which rendered as two identical
+// adjacent pills. Same text only ever shows once, first field wins.
+function tagRow(a, t, rel) {
+  const roleText = a.relatedRole ? (Array.isArray(a.relatedRole) ? a.relatedRole.join(', ') : a.relatedRole) : '';
+  const seen = new Set();
+  const tags = [];
+  if (a.owner && !seen.has(a.owner)) { seen.add(a.owner); tags.push({ key: 'owner', text: a.owner }); }
+  if (rel && !seen.has(rel.label)) { seen.add(rel.label); tags.push({ key: 'rel', text: rel.label, color: t === 'skill' ? 'var(--ag)' : 'var(--sk)' }); }
+  if (roleText && !seen.has(roleText)) { seen.add(roleText); tags.push({ key: 'role', text: roleText }); }
+  return tags.map((tag) => (
+    <span key={tag.key} className="ttag" style={tag.color ? { color: tag.color } : undefined}>{tag.text}</span>
+  ));
+}
 
 // devProgress is a string like "90%" — coerce to number for agentStatus()
 function withProgress(agent) {
@@ -239,12 +263,13 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
             <div className="adopt-sub-row">
               {grp.sub.map((sub) => {
                 const procs = sortProcs(processes.filter((p) => p.stage === sub.stage));
+                const subColor = STAGE_COLOR[sub.stage] || '#7a85a3';
                 return (
                   <div key={sub.stage} className="adopt-subcol" style={{ flex: 1 }}>
                     {grp.merged ? (
                       <div className="adopt-grp-hdr adopt-grp-hdr--merged">{sub.label}</div>
                     ) : (
-                      <div className="adopt-sub-hdr" style={{ background: sub.bg, color: sub.color, borderBottom: `2px solid ${sub.color}40` }}>
+                      <div className="adopt-sub-hdr" style={{ background: `${subColor}18`, color: subColor, borderBottom: `2px solid ${subColor}40` }}>
                         {sub.label}
                       </div>
                     )}
@@ -298,13 +323,11 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
                 <div className="uc-abody">
                   <div className="uc-aname">{a.agentName}</div>
                   <div className="uc-afoot">
-                    {a.owner && <span className="ttag">{a.owner}</span>}
-                    {rel && <span className="ttag" style={{ color: t === 'skill' ? 'var(--ag)' : 'var(--sk)' }}>{rel.label}</span>}
-                    {a.relatedRole && <span className="ttag">{Array.isArray(a.relatedRole) ? a.relatedRole.join(', ') : a.relatedRole}</span>}
+                    {tagRow(a, t, rel)}
                   </div>
-                  <div className="prow">
-                    <div className="pbar"><div className={`pfill ${progressBucket(progress)}`} style={{ width: `${progress}%` }} /></div>
-                    <span className="ppct">{progress}%</span>
+                  <div className="ac-progress-row" style={{ margin: '6px 0 0' }}>
+                    <div className="ac-progress-track"><div className={`ac-progress-fill ${progressBucket(progress)}`} style={{ width: `${progress}%` }} /></div>
+                    <span className="ac-progress-pct">{progress}%</span>
                   </div>
                 </div>
               </div>
@@ -328,13 +351,11 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
           <div className="uc-abody">
             <div className="uc-aname">{a.agentName}</div>
             <div className="uc-afoot">
-              {a.owner && <span className="ttag">{a.owner}</span>}
-              {rel && <span className="ttag" style={{ color: t === 'skill' ? 'var(--ag)' : 'var(--sk)' }}>{rel.label}</span>}
-              {a.relatedRole && <span className="ttag">{Array.isArray(a.relatedRole) ? a.relatedRole.join(', ') : a.relatedRole}</span>}
+              {tagRow(a, t, rel)}
             </div>
-            <div className="prow">
-              <div className="pbar"><div className={`pfill ${progressBucket(progress)}`} style={{ width: `${progress}%` }} /></div>
-              <span className="ppct">{progress}%</span>
+            <div className="ac-progress-row" style={{ margin: '6px 0 0' }}>
+              <div className="ac-progress-track"><div className={`ac-progress-fill ${progressBucket(progress)}`} style={{ width: `${progress}%` }} /></div>
+              <span className="ac-progress-pct">{progress}%</span>
             </div>
           </div>
         </div>

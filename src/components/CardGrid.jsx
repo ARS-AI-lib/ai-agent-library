@@ -1,7 +1,7 @@
 import AgentCard from './AgentCard';
 import { groupAgents } from '../lib/agentUtils';
 
-const GROUP_COLOR = { owner: '#1558b0', ability: '#6d28d9', role: '#0b7a68' };
+const GROUP_COLOR = { owner: '#2f6bff', ability: '#6d28d9', role: '#0b7a68' };
 
 export default function CardGrid({ agents, allAgents, view, onCardClick }) {
   const key = view === 'by-role' ? 'role' : view === 'by-ability' ? 'ability' : 'owner';
@@ -29,7 +29,7 @@ export default function CardGrid({ agents, allAgents, view, onCardClick }) {
             </div>
             <div className="agrid">
               {gAgents.map((a) => (
-                <AgentCard key={a.id} agent={a} allAgents={allAgents} onClick={onCardClick} />
+                <AgentCard key={a.id} agent={a} allAgents={allAgents} onClick={onCardClick} groupKey={key} />
               ))}
             </div>
           </div>
@@ -44,7 +44,7 @@ export default function CardGrid({ agents, allAgents, view, onCardClick }) {
           </div>
           <div className="agrid">
             {unassigned.map((a) => (
-              <AgentCard key={a.id} agent={a} allAgents={allAgents} onClick={onCardClick} />
+              <AgentCard key={a.id} agent={a} allAgents={allAgents} onClick={onCardClick} groupKey={key} />
             ))}
           </div>
         </div>

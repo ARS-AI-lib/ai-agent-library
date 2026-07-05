@@ -104,7 +104,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 2px', borderBottom: '1px solid var(--bd)', marginBottom: 4 }}>
           <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }} disabled={dirSyncing} onClick={handleSyncDirectory}>
-            {dirSyncing ? 'กำลัง sync…' : '🔄 Sync directory now'}
+            {dirSyncing ? 'กำลัง sync…' : 'Sync directory now'}
           </button>
           <span style={{ fontSize: 11, color: 'var(--mu)' }}>
             {dirMeta
@@ -157,5 +157,5 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
 // areas and Save line up on one baseline.
 const UM_ROW = { display: 'grid', gridTemplateColumns: '1fr 110px 150px 62px', gap: 10, alignItems: 'end', padding: '9px 2px', borderBottom: '1px solid var(--bd)' };
 const UM_LABEL = { fontSize: 10, fontWeight: 700, color: 'var(--mu)', marginBottom: 3, letterSpacing: '.03em' };
-const UM_CTRL = { width: '100%', height: 26, padding: '0 8px', border: '1.5px solid var(--bd2)', borderRadius: 6, fontSize: 12, background: 'var(--sf)', color: 'var(--tx)', fontFamily: 'inherit', outline: 'none' };
-const UM_SAVE = (active) => ({ height: 26, padding: '0 12px', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, background: active ? 'var(--ok)' : 'var(--bd2)', color: '#fff', cursor: active ? 'pointer' : 'not-allowed', fontFamily: 'inherit' });
+const UM_CTRL = { width: '100%', height: 26, padding: '0 8px', border: '1.5px solid var(--bd2)', borderRadius: 8, fontSize: 12, background: 'var(--sf)', color: 'var(--tx)', fontFamily: 'inherit', outline: 'none' };
+const UM_SAVE = (active) => ({ height: 26, padding: '0 12px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, background: active ? 'var(--ok)' : 'var(--bd2)', color: '#fff', cursor: active ? 'pointer' : 'not-allowed', fontFamily: 'inherit' });

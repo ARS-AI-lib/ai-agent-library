@@ -88,7 +88,7 @@ export default function CreatorPicker({ selected, onChange, placeholder }) {
               key={p.email}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                background: 'var(--sf2)', border: '1px solid var(--bd)', borderRadius: 20,
+                background: 'var(--sf2)', border: 'none', borderRadius: 20,
                 padding: '3px 6px 3px 11px', fontSize: 11.5,
               }}
             >
@@ -135,7 +135,7 @@ export default function CreatorPicker({ selected, onChange, placeholder }) {
         <div
           style={{
             position: 'absolute', zIndex: 5, top: '100%', left: 0, right: 0, marginTop: 3,
-            background: 'var(--sf)', border: '1.5px solid var(--bd2)', borderRadius: 8,
+            background: 'var(--sf)', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)',
             boxShadow: 'var(--shm)', maxHeight: 220, overflowY: 'auto',
           }}
         >

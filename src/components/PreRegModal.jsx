@@ -561,13 +561,13 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
 
         <div className="tabs">
           <button className={`tab-btn ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>
-            📝 New Entry
+            New Entry
           </button>
           <button
             className={`tab-btn ${tab === 'analysis' ? 'active' : ''} ${ranked === null ? 'locked' : ''}`}
             onClick={() => ranked !== null && setTab('analysis')}
           >
-            📊 Analysis {ranked !== null ? `(${analysisCount})` : ''}
+            Analysis {ranked !== null ? `(${analysisCount})` : ''}
           </button>
         </div>
 
@@ -747,14 +747,14 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
 
             {/* ── Paired sub-skills (Agent+Skill only) ── */}
             {form.type === 'Agent+Skill' && (
-              <div style={{ marginTop: 6, padding: '12px 14px', border: '1.5px solid var(--bd)', borderRadius: 10, background: 'var(--sf2)' }}>
+              <div style={{ marginTop: 6, padding: '12px 14px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf2)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>Type: Agent+Skill — กรุณาให้รายละเอียด skill ที่ใช้ร่วมกับ Agent ดังกล่าวเพิ่มเติม</div>
                   <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }} onClick={addSkill}>+ เพิ่ม Skill</button>
                 </div>
 
                 {form.skills.map((s, idx) => (
-                  <div key={s._id} style={{ marginTop: 12, padding: '12px', border: '1px solid var(--bd)', borderRadius: 8, background: 'var(--sf)' }}>
+                  <div key={s._id} style={{ marginTop: 12, padding: '12px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <strong style={{ fontSize: 12.5, color: 'var(--ag)' }}>Skill #{idx + 1}</strong>
                       {idx > 0 && (
@@ -879,7 +879,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                     kitchen-sink pattern is flagged and routed to the approver. */}
                 {!blockedByHardLimit && breadthFlag && (
                   <div className="msg warn"><span className="dot" style={{ background: '#fbbc04' }} />
-                    ⚠️ ไอเดียนี้ทำงานทับกับ Agent เดิม <strong>{aiStats.overlapAgents} ตัว</strong> —
+                    ไอเดียนี้ทำงานทับกับ Agent เดิม <strong>{aiStats.overlapAgents} ตัว</strong> —
                     เข้าข่าย "ตัวเหมารวม" ที่ขัดกับหลัก Agent เฉพาะทาง แนะนำให้แยกเป็น skill เฉพาะทาง
                     หรือใช้/เชื่อมต่อของเดิมแทน — submit ได้ แต่จะถูกส่งให้ผู้อนุมัติพิจารณาเป็นพิเศษ
                   </div>
@@ -887,7 +887,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
 
                 {aiResult.integration_suggestions?.length > 0 && (
                   <div className="msg info" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 5 }}>
-                    <strong>🔗 ข้อเสนอการเชื่อมต่อ/ทำงานร่วมกับของเดิม:</strong>
+                    <strong>ข้อเสนอการเชื่อมต่อ/ทำงานร่วมกับของเดิม:</strong>
                     {aiResult.integration_suggestions.map((s, i) => (
                       <div key={i} style={{ fontSize: 12 }}>• <strong>{s.agentName}</strong> — {s.how}</div>
                     ))}
@@ -903,8 +903,8 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                   if (!showBlock) return null;
                   return (
                     <div className="msg info" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-                      {aiResult.suggested_matching_agent && <div>💡 ควรผูกเป็น Skill/Agent คู่กับ: <strong>{aiResult.suggested_matching_agent}</strong></div>}
-                      {abilityDiffers && <div>💡 แนะนำ Core Ability: <strong>{aiResult.suggested_ability}</strong></div>}
+                      {aiResult.suggested_matching_agent && <div>ควรผูกเป็น Skill/Agent คู่กับ: <strong>{aiResult.suggested_matching_agent}</strong></div>}
+                      {abilityDiffers && <div>แนะนำ Core Ability: <strong>{aiResult.suggested_ability}</strong></div>}
                     </div>
                   );
                 })()}
@@ -918,12 +918,12 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
             {/* ── Rule-based directional connections ("ต่อกับตัวนี้ได้") ── */}
             {connections.length > 0 && (
               <>
-                <div className="sec-title" style={{ marginTop: 4 }}>🔗 ต่อกับตัวนี้ได้ (rule-based)</div>
+                <div className="sec-title" style={{ marginTop: 4 }}>ต่อกับตัวนี้ได้ (rule-based)</div>
                 <div style={{ fontSize: 11, color: 'var(--mu)', marginBottom: 6 }}>Agent/Skill ที่อาจส่งข้อมูลต่อ, trigger กัน, หรือใช้ context ร่วมกับไอเดียนี้</div>
                 {connections.map((c, i) => {
-                  const tColor = { 'Data Handoff': '#1558b0', Trigger: '#b45309', 'Shared Context/Tool': '#0b7a68' }[c.type] || '#7a85a3';
+                  const tColor = { 'Data Handoff': '#2f6bff', Trigger: '#b45309', 'Shared Context/Tool': '#0b7a68' }[c.type] || '#7a85a3';
                   return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 11px', background: 'var(--sf2)', border: '1px solid var(--bd)', borderRadius: 8, marginBottom: 5 }}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 11px', background: 'var(--sf2)', border: 'none', borderRadius: 'var(--r-sm)', marginBottom: 5 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: tColor, fontFamily: "'IBM Plex Mono',monospace", minWidth: 40 }}>{c.confidence.toFixed(0)}%</span>
                       <span style={{ fontSize: 9.5, fontWeight: 700, color: tColor, background: `${tColor}15`, border: `1px solid ${tColor}40`, padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>{c.type}</span>
                       <span style={{ fontWeight: 600, flex: 1, fontSize: 12 }}>
@@ -937,7 +937,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                           {c.target}
                         </span>
                         {c.direction === 'existing→draft' ? ' → (ไอเดียนี้)' : ''}
-                        {c.dataIncomplete && <span title="Input/Output ไม่ครบ"> ⚠️</span>}
+                        {c.dataIncomplete && <span title="Input/Output ไม่ครบ" style={{ color: "var(--warn)" }}> (ข้อมูลไม่ครบ)</span>}
                       </span>
                       <span style={{ fontSize: 10.5, color: 'var(--mu)' }}>{c.reason}</span>
                     </div>
@@ -947,7 +947,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
             )}
 
             {/* ── Candidate list ── */}
-            {aiCandidates && <div className="sec-title" style={{ marginTop: 10 }}>📋 ความซ้ำซ้อนที่ตรวจพบ</div>}
+            {aiCandidates && <div className="sec-title" style={{ marginTop: 10 }}>ความซ้ำซ้อนที่ตรวจพบ</div>}
             {aiCandidates ? (
               aiCandidates.length === 0 ? (
                 <div className="msg success"><span className="dot" style={{ background: '#34a853' }} />AI ไม่พบ Agent/Skill ที่ทับซ้อนอย่างมีนัยสำคัญ — ปลอดภัยที่จะลงทะเบียนใหม่</div>
@@ -956,7 +956,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                   const rs = ruleScoreFor(c.agentName);
                   const vColor = c.verdict === 'clear_duplicate' ? '#c5221f'
                     : c.verdict === 'likely_overlap' ? '#c96a00'
-                    : c.verdict === 'distinct_but_related' ? '#1558b0' : '#137333';
+                    : c.verdict === 'distinct_but_related' ? '#2f6bff' : '#137333';
                   return (
                     <div className="dup-row" key={i} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 5 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1024,7 +1024,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                 disabled={submitting || analyzing || blockedByHardLimit}
                 title={blockedByHardLimit && blockingCandidate ? `บล็อก: ซ้ำกับ ${blockingCandidate.agentName} ${blockingCandidate.confidence}%` : undefined}
               >
-                {submitting ? 'กำลังบันทึก…' : blockedByHardLimit ? '⛔ ถูกบล็อกเนื่องจากความซ้ำซ้อนสูง' : '✅ Submit for Approval'}
+                {submitting ? 'กำลังบันทึก…' : blockedByHardLimit ? 'ถูกบล็อกเนื่องจากความซ้ำซ้อนสูง' : 'Submit for Approval'}
               </button>
             </div>
           </div>

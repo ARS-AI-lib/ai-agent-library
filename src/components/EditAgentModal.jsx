@@ -196,7 +196,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, abilityO
 
         <div className="btn-group" style={{ marginTop: 12 }}>
           <button className="btn btn-secondary" disabled={saving} onClick={onClose}>Cancel</button>
-          <button className="btn btn-success" disabled={saving} onClick={handleSave}>{saving ? 'กำลังบันทึก…' : '✅ Save'}</button>
+          <button className="btn btn-success" disabled={saving} onClick={handleSave}>{saving ? 'กำลังบันทึก…' : 'Save'}</button>
         </div>
       </div>
     </div>
