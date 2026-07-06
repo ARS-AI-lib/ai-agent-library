@@ -36,10 +36,10 @@ const BREADTH_OVERLAP_COUNT = 3;
 // snake_case values (clear_duplicate, likely_overlap, ...) are fine as an
 // API contract but look unpolished shown directly in the UI.
 const VERDICT_LABEL = {
-  clear_duplicate: 'ซ้ำชัดเจน',
-  likely_overlap: 'ทับซ้อนบางส่วน',
-  distinct_but_related: 'ต่างกันแต่เกี่ยวข้อง',
-  unrelated: 'ไม่เกี่ยวข้อง',
+  clear_duplicate: 'Clear Duplicate',
+  likely_overlap: 'Likely Overlap',
+  distinct_but_related: 'Related, Not Duplicate',
+  unrelated: 'Unrelated',
 };
 
 // A new submission whose draft is at least this rule-based-similar to an
@@ -918,7 +918,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
             {/* ── Rule-based directional connections ("ต่อกับตัวนี้ได้") ── */}
             {connections.length > 0 && (
               <>
-                <div className="sec-title" style={{ marginTop: 4 }}>ต่อกับตัวนี้ได้ (rule-based)</div>
+                <div className="sec-title" style={{ marginTop: 4 }}>Related Connections (rule-based)</div>
                 <div style={{ fontSize: 11, color: 'var(--mu)', marginBottom: 6 }}>Agent/Skill ที่อาจส่งข้อมูลต่อ, trigger กัน, หรือใช้ context ร่วมกับไอเดียนี้</div>
                 {connections.map((c, i) => {
                   const tColor = { 'Data Handoff': '#2f6bff', Trigger: '#b45309', 'Shared Context/Tool': '#0b7a68' }[c.type] || '#7a85a3';
@@ -947,7 +947,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
             )}
 
             {/* ── Candidate list ── */}
-            {aiCandidates && <div className="sec-title" style={{ marginTop: 10 }}>ความซ้ำซ้อนที่ตรวจพบ</div>}
+            {aiCandidates && <div className="sec-title" style={{ marginTop: 10 }}>Detected Overlaps</div>}
             {aiCandidates ? (
               aiCandidates.length === 0 ? (
                 <div className="msg success"><span className="dot" style={{ background: '#34a853' }} />AI ไม่พบ Agent/Skill ที่ทับซ้อนอย่างมีนัยสำคัญ — ปลอดภัยที่จะลงทะเบียนใหม่</div>

@@ -1,0 +1,27 @@
+/* SDLC Timeline page — scoped with .tl-. Uses the shared theme tokens
+   (--accent, --bd-soft, --r-*, --sh) so it matches the main app's look. */
+
+.tl-page { padding: 20px 28px 52px; max-width: 1500px; margin: 0 auto; }
+
+.tl-topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.tl-title { font-size: 22px; font-weight: 700; color: var(--tx); letter-spacing: -.01em; }
+.tl-subtitle { font-size: 12px; color: var(--mu); margin-top: 2px; }
+
+.tl-center { min-height: 70vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 40px 20px; }
+.tl-center h2 { font-size: 18px; font-weight: 700; color: var(--tx); }
+
+.tl-legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; padding: 10px 14px; background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-md); box-shadow: var(--sh); }
+.tl-legend-title { font-size: 10px; font-weight: 700; color: var(--mu); letter-spacing: .06em; }
+.tl-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--tx2); }
+.tl-legend-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+
+.tl-canvas-wrap { background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-md); overflow: hidden; margin-bottom: 14px; box-shadow: var(--sh); }
+.tl-canvas-hdr { background: var(--tx); color: #fff; padding: 11px 18px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+.tl-out-card { background: #fffbf0; border: 1.5px solid #fde68a; border-top: 3px solid #d97706; border-radius: var(--r-md); padding: 13px 16px; box-shadow: var(--sh); cursor: pointer; transition: box-shadow .18s, transform .12s; }
+.tl-out-card:hover { transform: translateY(-1px); box-shadow: var(--shm); }
+.tl-out-card.on { border: 1.5px solid #d97706; border-top: 3px solid #d97706; box-shadow: 0 0 0 2px #d9770633, var(--sh); }
+.tl-out-hdr { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tl-out-title { font-size: 15px; font-weight: 700; color: #d97706; }
+.tl-out-active { font-size: 9px; background: #d97706; color: #fff; padding: 1px 8px; border-radius: 99px; font-weight: 700; }
+.tl-out-team { font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 600; background: #d9770618; color: #d97706; }

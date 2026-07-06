@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from './lib/firebase';
 import { useAuth } from './hooks/useAuth';
 import { useApprovedAgents, usePendingAgents, useDeploymentRequests } from './hooks/useAgents';
 import { useConfigSchema } from './hooks/useConfigSchema';
@@ -73,6 +75,17 @@ export default function App() {
     syncDirectoryToFirestore().catch(() => {});
   }, [isAdmin, user]);
 
+  // Timeline access allowlist (for showing the hamburger menu item only).
+  // Read-only here; the actual page re-checks the same list before rendering.
+  useEffect(() => {
+    if (!role) return;
+    const unsub = onSnapshot(doc(db, 'config', 'timeline'), (snap) => {
+      setTimelineViewers(snap.exists() ? (snap.data().viewers || []) : []);
+    }, () => setTimelineViewers([]));
+    return unsub;
+  }, [role]);
+  const canSeeTimeline = !!user && timelineViewers.map((e) => (e || '').toLowerCase()).includes((user.email || '').toLowerCase());
+
   const [search, setSearch] = useState('');
   const [view, setView] = useState('by-role');
   const [owner, setOwner] = useState(new Set());
@@ -90,6 +103,7 @@ export default function App() {
   const [showExport, setShowExport] = useState(false);
   const [myAI, setMyAI] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
+  const [timelineViewers, setTimelineViewers] = useState([]);
   const [activeTab, setActiveTab] = useState('lib');
   const [signInError, setSignInError] = useState('');
   const [sdlcVisAgents, setSdlcVisAgents] = useState([]);
@@ -239,6 +253,7 @@ export default function App() {
         myAI={myAI}
         onToggleMyAI={() => setMyAI((v) => !v)}
         onOpenExport={() => setShowExport(true)}
+        canSeeTimeline={canSeeTimeline}
       />
 
       <ChatAssistant approvedAgents={agents} onOpenPreReg={() => setShowPreReg(true)} onOpenAgent={setSelectedAgent} />

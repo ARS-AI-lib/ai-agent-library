@@ -5,17 +5,6 @@ import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails } from '../lib/agentUtils';
 
-function fmtLaunchFull(d) {
-  if (!d) return '';
-  try {
-    const dt = d?.toDate ? d.toDate() : new Date(d);
-    if (isNaN(dt)) return String(d);
-    return dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  } catch {
-    return String(d);
-  }
-}
-
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
 function toDateInputValue(d) {
   if (!d) return '';
@@ -28,7 +17,7 @@ function toDateInputValue(d) {
   }
 }
 
-const DEPLOY_STATUS_LABEL = { requested: 'รออนุมัติ Deploy', approved: 'อนุมัติ Deploy แล้ว', rejected: 'ถูกปฏิเสธ Deploy' };
+const DEPLOY_STATUS_LABEL = { requested: 'Deploy Pending', approved: 'Deploy Approved', rejected: 'Deploy Rejected' };
 const DEPLOY_STATUS_COLOR = { requested: '#c96a00', approved: '#137333', rejected: '#c5221f' };
 
 export default function AgentDetailModal({ agent, allAgents, onClose, user, isAdmin, onEditAgent }) {
@@ -50,7 +39,6 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
   const deploymentStatus = agent.deploymentStatus || 'none';
 
   const related = type === 'skill' ? agentsOfSkill(agent) : skillsOfAgent(agent, allAgents);
-  const launchLbl = fmtLaunchFull(agent.launchDate);
   const role = Array.isArray(agent.relatedRole) ? agent.relatedRole.join(', ') : agent.relatedRole;
   const ability = Array.isArray(agent.coreAbility) ? agent.coreAbility.join(', ') : agent.coreAbility;
   const process = Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping.join(', ') : agent.sdlcProcessMapping;
@@ -125,10 +113,6 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
       <div className="mbox">
         <button className="mclose" onClick={onClose}>✕</button>
-
-        {launchLbl && (
-          <div style={{ fontSize: 10.5, color: 'var(--mu)', marginBottom: 6 }}>Launch: {launchLbl}</div>
-        )}
 
         <div className="mtitle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {agent.agentName}

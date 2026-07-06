@@ -6,10 +6,10 @@ import { matchingAgentNames } from '../lib/agentUtils';
 import AgentDetailModal from './AgentDetailModal';
 
 const VERDICT_LABEL = {
-  clear_duplicate: 'ซ้ำชัดเจน',
-  likely_overlap: 'ทับซ้อนบางส่วน',
-  distinct_but_related: 'ต่างกันแต่เกี่ยวข้อง',
-  unrelated: 'ไม่เกี่ยวข้อง',
+  clear_duplicate: 'Clear Duplicate',
+  likely_overlap: 'Likely Overlap',
+  distinct_but_related: 'Related, Not Duplicate',
+  unrelated: 'Unrelated',
 };
 const VERDICT_COLOR = {
   clear_duplicate: '#c5221f',
@@ -32,7 +32,7 @@ async function recordOutcome(agentId, outcome, uid) {
   } catch { /* no KB doc for this agent, or transient — non-fatal */ }
 }
 
-const RISK_LABEL = { high: 'สูง', medium: 'กลาง', low: 'ต่ำ' };
+const RISK_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
 const RISK_COLOR = { high: '#c5221f', medium: '#c96a00', low: '#137333' };
 
 // Visibility + action rights per tier:

@@ -5,7 +5,7 @@ export default function Nav({
   agentCount, skillCount,
   user, onSignOut,
   activeTab, setActiveTab,
-  myAI, onToggleMyAI, onOpenExport,
+  myAI, onToggleMyAI, onOpenExport, canSeeTimeline,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -125,6 +125,18 @@ export default function Nav({
               >
                 Export Data
               </button>
+              {canSeeTimeline && (
+                <button
+                  type="button"
+                  onClick={() => { window.open('/timeline', '_blank'); setMenuOpen(false); }}
+                  style={{
+                    display: 'block', width: '100%', padding: '9px 12px', fontSize: 12.5, fontWeight: 500,
+                    color: 'var(--tx)', background: 'none', border: 'none', borderBottom: '1px solid var(--bd-soft)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                  }}
+                >
+                  SDLC Timeline
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => { setMenuOpen(false); onSignOut?.(); }}

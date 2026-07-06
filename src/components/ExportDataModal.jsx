@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, agentApproveAreas } from '../lib/tier';
-import { isMyAgent, deriveUserTeams } from '../lib/agentUtils';
+import { isMyAgent } from '../lib/agentUtils';
 
 // devProgress may still be a legacy string ("90%") on a handful of docs.
 function progressNum(agent) {
@@ -90,16 +90,16 @@ function downloadCsv(rows, filename, columns = COLUMNS) {
  * (already loaded elsewhere) + Pending + Rejected (fetched here, on-demand —
  * not worth a permanent real-time listener for an occasional export action)
  * into one pool, then offers role-scoped CSV downloads:
- *   user      — My AI, My Team's AI
+ *   user      — My AI
  *   approver  — + My Area's AI
  *   committee/admin — + All Data
- * "My Team's AI" derives team via creator-name↔owner match (NOT
- * creatorEmails) — locked decision, see memory: feedback_team_derivation.
+ * "My Team's AI" was removed (2026-07-05) — too redundant against "My AI"
+ * (same creatorEmails-based ownership, just team-grouped) to justify a
+ * separate button.
  *
  * Status/field scope per button (2026-07-04 decision):
  *   My AI       — every approvalStatus (approved/pending/rejected), trimmed columns
- *   My Team's AI — approved ONLY, trimmed columns (a team roster, not a review queue)
- *   My Area's AI — every approvalStatus, trimmed columns (unchanged)
+ *   My Area's AI — every approvalStatus, trimmed columns
  *   All Data    — every approvalStatus, EVERY field (ALL_COLUMNS/toFullRow)
  */
 export default function ExportDataModal({ onClose, approvedAgents, user, role, isAdmin, isCommittee, approveAreas }) {
@@ -129,16 +129,9 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
     [approvedAgents, pending, rejected]
   );
 
-  const myTeams = useMemo(() => deriveUserTeams(allAgents, user?.displayName), [allAgents, user?.displayName]);
-
   function exportMyAI() {
     const rows = allAgents.filter((a) => isMyAgent(a, user)).map(toRow);
     downloadCsv(rows, 'my-ai.csv');
-  }
-  function exportMyTeam() {
-    const teamSet = new Set(myTeams);
-    const rows = approvedAgents.filter((a) => teamSet.has(a.owner)).map(toRow);
-    downloadCsv(rows, 'my-team-ai.csv');
   }
   function exportMyArea() {
     const areaSet = new Set(approveAreas || []);
@@ -163,7 +156,7 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
       <div className="mbox">
         <button className="mclose" onClick={onClose}>✕</button>
         <div className="mtitle">Export Data</div>
-        <div className="msub">ดาวน์โหลดเป็น CSV — My AI/My Area's AI รวมทุกสถานะ, My Team's AI เฉพาะ Approved, All Data ทุกสถานะ+ทุก field</div>
+        <div className="msub">ดาวน์โหลดเป็น CSV — My AI/My Area's AI รวมทุกสถานะ, All Data ทุกสถานะ+ทุก field</div>
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
         {loading ? (
@@ -172,10 +165,6 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
             <button className="btn btn-secondary" style={{ justifyContent: 'space-between', display: 'flex' }} onClick={exportMyAI}>
               <span>My AI</span><span style={{ color: 'var(--mu)', fontWeight: 400 }}>{allAgents.filter((a) => isMyAgent(a, user)).length} รายการ</span>
-            </button>
-            <button className="btn btn-secondary" style={{ justifyContent: 'space-between', display: 'flex' }} onClick={exportMyTeam} disabled={myTeams.length === 0}>
-              <span>My Team's AI {myTeams.length > 0 && <span style={{ fontSize: 10.5, color: 'var(--mu)' }}>({myTeams.join(', ')})</span>}</span>
-              <span style={{ color: 'var(--mu)', fontWeight: 400 }}>{approvedAgents.filter((a) => new Set(myTeams).has(a.owner)).length} รายการ</span>
             </button>
             {showArea && (
               <button className="btn btn-secondary" style={{ justifyContent: 'space-between', display: 'flex' }} onClick={exportMyArea}>
