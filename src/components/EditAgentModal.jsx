@@ -5,6 +5,7 @@ import { isInternalOrExternal } from '../lib/tier';
 import { developmentPhaseLabel } from '../lib/status';
 import { splitRoles } from '../lib/agentUtils';
 import MultiSelect from './MultiSelect';
+import TagMultiSelect from './TagMultiSelect';
 import CreatorPicker from './CreatorPicker';
 
 const REUSABLE_OPTIONS = ['Reusable', 'Reusable with Conditions', 'Non-reusable'];
@@ -37,7 +38,7 @@ function progressNum(agent) {
  * that's what "New Entry" (PreRegModal) is for; this modal only edits the
  * ONE existing doc it was opened for.
  */
-export default function EditAgentModal({ agent, onClose, onSaved, user, abilityOptions, roleOptions }) {
+export default function EditAgentModal({ agent, onClose, onSaved, user, abilityOptions, roleOptions, onAddRelatedRole, lockProgress = false }) {
   const [form, setForm] = useState(() => ({
     agentName: agent.agentName || '',
     description: agent.description || '',
@@ -92,9 +93,14 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, abilityO
         reuseCondition: form.reusable === 'Reusable with Conditions' ? form.reuseCondition.trim() : '',
         hml: form.hml,
         humanJob: form.hml ? form.humanJob.trim() : '',
-        launchDate: form.launchDate ? new Date(form.launchDate) : null,
-        devProgress: clampedProgress,
-        developmentPhase: developmentPhaseLabel(clampedProgress),
+        // A locked paired sub-skill never owns its progress/launch — those
+        // cascade from the parent Agent, so leave them untouched here
+        // (2026-07-06).
+        ...(lockProgress ? {} : {
+          launchDate: form.launchDate ? new Date(form.launchDate) : null,
+          devProgress: clampedProgress,
+          developmentPhase: developmentPhaseLabel(clampedProgress),
+        }),
         updatedAt: serverTimestamp(),
       });
 
@@ -145,7 +151,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, abilityO
           </div>
           <div className="fg">
             <label>Related Role <span className="req">*</span></label>
-            <MultiSelect label="เลือก Related Role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} />
+            <TagMultiSelect label="เลือก Related Role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
           </div>
         </div>
 
@@ -183,16 +189,23 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, abilityO
           </div>
         )}
 
-        <div className="grid2">
-          <div className="fg">
-            <label>Dev Progress (%)</label>
-            <input type="number" min={0} max={100} value={form.devProgress} onChange={(e) => setField('devProgress', e.target.value)} />
+        {lockProgress ? (
+          <div className="msg info" style={{ fontSize: 11 }}>
+            <span className="dot" style={{ background: '#4a6fa5' }} />
+            Skill นี้ผูกกับ Agent หลัก — Progress และ Launch Date จะไปพร้อมกับ Agent แม่ (แก้แยกไม่ได้)
           </div>
-          <div className="fg">
-            <label>Launch Date</label>
-            <input type="date" value={form.launchDate} onChange={(e) => setField('launchDate', e.target.value)} />
+        ) : (
+          <div className="grid2">
+            <div className="fg">
+              <label>Dev Progress (%)</label>
+              <input type="number" min={0} max={100} value={form.devProgress} onChange={(e) => setField('devProgress', e.target.value)} />
+            </div>
+            <div className="fg">
+              <label>Launch Date</label>
+              <input type="date" value={form.launchDate} onChange={(e) => setField('launchDate', e.target.value)} />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="btn-group" style={{ marginTop: 12 }}>
           <button className="btn btn-secondary" disabled={saving} onClick={onClose}>Cancel</button>

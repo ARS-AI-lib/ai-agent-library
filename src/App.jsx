@@ -4,7 +4,7 @@ import { db } from './lib/firebase';
 import { useAuth } from './hooks/useAuth';
 import { useApprovedAgents, usePendingAgents, useDeploymentRequests } from './hooks/useAgents';
 import { useConfigSchema } from './hooks/useConfigSchema';
-import { buildAgentFilter, uniq, splitRoles, isMyAgent } from './lib/agentUtils';
+import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from './lib/agentUtils';
 import { getType } from './lib/tier';
 import { ALLOWED_DOMAINS_LABEL } from './lib/firebase';
 import { agentStatus } from './lib/status';
@@ -62,7 +62,7 @@ export default function App() {
   const { agents, loading: agentsLoading } = useApprovedAgents(!!role);
   const { pending } = usePendingAgents(!!role);
   const { deployRequests } = useDeploymentRequests(!!role);
-  const { schema } = useConfigSchema();
+  const { schema, addRelatedRoles } = useConfigSchema();
 
   // Admin-only, once-per-login directory sync (see src/lib/directory.js):
   // piggybacks on the admin's own Google OAuth token (captured at sign-in) to
@@ -77,6 +77,9 @@ export default function App() {
 
   // Timeline access allowlist (for showing the hamburger menu item only).
   // Read-only here; the actual page re-checks the same list before rendering.
+  // NOTE: this state MUST be declared before the effect + canSeeTimeline below
+  // that reference it — otherwise the render body hits a const TDZ (crash).
+  const [timelineViewers, setTimelineViewers] = useState([]);
   useEffect(() => {
     if (!role) return;
     const unsub = onSnapshot(doc(db, 'config', 'timeline'), (snap) => {
@@ -84,7 +87,7 @@ export default function App() {
     }, () => setTimelineViewers([]));
     return unsub;
   }, [role]);
-  const canSeeTimeline = !!user && timelineViewers.map((e) => (e || '').toLowerCase()).includes((user.email || '').toLowerCase());
+  const canSeeTimeline = !!user && (isAdmin || timelineViewers.map((e) => (e || '').toLowerCase()).includes((user.email || '').toLowerCase()));
 
   const [search, setSearch] = useState('');
   const [view, setView] = useState('by-role');
@@ -103,13 +106,18 @@ export default function App() {
   const [showExport, setShowExport] = useState(false);
   const [myAI, setMyAI] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
-  const [timelineViewers, setTimelineViewers] = useState([]);
   const [activeTab, setActiveTab] = useState('lib');
   const [signInError, setSignInError] = useState('');
   const [sdlcVisAgents, setSdlcVisAgents] = useState([]);
 
   const ownerOptions = useMemo(() => uniq(agents.map((a) => a.owner)).sort(), [agents]);
-  const roleOptions = useMemo(() => uniq(agents.flatMap((a) => splitRoles(a.relatedRole))).sort(), [agents]);
+  // Merges roles already in use on agents with any newly-typed roles persisted
+  // to /config/schema.relatedRole (2026-07-06) — a role someone just typed
+  // shows up for everyone immediately, even before any agent uses it.
+  const roleOptions = useMemo(
+    () => uniq([...agents.flatMap((a) => splitRoles(a.relatedRole)), ...(schema.relatedRole || [])]).sort(),
+    [agents, schema.relatedRole]
+  );
   const abilityOptions = useMemo(
     () => uniq(agents.flatMap((a) => (Array.isArray(a.coreAbility) ? a.coreAbility : [a.coreAbility]))).sort(),
     [agents]
@@ -117,6 +125,14 @@ export default function App() {
   const reusableOptions = useMemo(
     () => uniq(agents.map((a) => a.reusable).filter(Boolean)).sort(),
     [agents]
+  );
+
+  // Paired sub-skills are cascaded to deploymentStatus 'requested' alongside
+  // their parent Agent, but must never count/show as separate deploy requests
+  // — the parent represents the whole package (2026-07-06).
+  const parentDeployRequests = useMemo(
+    () => deployRequests.filter((a) => !isPairedSubSkill(a, agents)),
+    [deployRequests, agents]
   );
 
   const filtered = useMemo(() => {
@@ -159,7 +175,7 @@ export default function App() {
             <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
           </svg>
           Pending
-          {(pending.length + deployRequests.length) > 0 && <span className="btn-legend-badge">{pending.length + deployRequests.length}</span>}
+          {(pending.length + parentDeployRequests.length) > 0 && <span className="btn-legend-badge">{pending.length + parentDeployRequests.length}</span>}
         </button>
       )}
       {canManageUsers && (
@@ -315,6 +331,8 @@ export default function App() {
           user={user}
           abilityOptions={abilityOptions}
           roleOptions={roleOptions}
+          onAddRelatedRole={addRelatedRoles}
+          lockProgress={isPairedSubSkill(editingAgent, agents)}
         />
       )}
 
@@ -325,13 +343,14 @@ export default function App() {
           schema={schema}
           user={user}
           onSubmitted={() => {}}
+          onAddRelatedRole={addRelatedRoles}
         />
       )}
 
       {showPending && canSubmitIdea && (
         <PendingApprovalModal
           pending={pending}
-          deployRequests={deployRequests}
+          deployRequests={parentDeployRequests}
           onClose={() => setShowPending(false)}
           user={user}
           isAdmin={isAdmin}

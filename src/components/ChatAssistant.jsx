@@ -15,6 +15,9 @@ const TEMPLATE_TOOLS = new Set(['query_library', 'query_sdlc', 'get_agent_detail
 
 const MAX_LOOP = 3;
 const HISTORY_WINDOW = 6;
+const CHAT_W_KEY = 'chatWidth';
+const CHAT_W_MIN = 340;
+const CHAT_W_MAX = 640;
 
 function findAgentByName(library, name) {
   const q = (name || '').toLowerCase().trim();
@@ -157,7 +160,31 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
   const [transcript, setTranscript] = useState([]); // [{role:'user'|'assistant', text, csv?}]
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
+  const [chatWidth, setChatWidth] = useState(() => {
+    const saved = Number(localStorage.getItem(CHAT_W_KEY));
+    return saved >= CHAT_W_MIN && saved <= CHAT_W_MAX ? saved : 360;
+  });
+  const [resizing, setResizing] = useState(false);
   const scrollRef = useRef(null);
+
+  // Drag-to-resize — width only (panel is anchored bottom-right, so we grow
+  // leftward: newWidth = start width + (mouse moved left from start)).
+  useEffect(() => {
+    if (!resizing) return;
+    let startX = null, startW = chatWidth;
+    function onMove(e) {
+      if (startX === null) startX = e.clientX;
+      const next = Math.min(CHAT_W_MAX, Math.max(CHAT_W_MIN, startW + (startX - e.clientX)));
+      setChatWidth(next);
+    }
+    function onUp() {
+      setResizing(false);
+      setChatWidth((w) => { localStorage.setItem(CHAT_W_KEY, String(w)); return w; });
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [resizing]);
 
   // One alternation regex over every library name, longest-first, for
   // turning name mentions in assistant replies into clickable detail links.
@@ -294,7 +321,11 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
       </button>
 
       {open && (
-        <div className="chat-panel">
+        <div className="chat-panel" style={{ '--chat-w': `${chatWidth}px` }}>
+          <div
+            className={`chat-resize-handle ${resizing ? 'active' : ''}`}
+            onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
+          />
           <div className="chat-header">
             <span><img src="/wolfy-logo.png" alt="" className="chat-hdr-logo" /> AI Agent Library Assistant</span>
             <div className="chat-header-actions">

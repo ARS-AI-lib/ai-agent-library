@@ -1,24 +1,29 @@
 /* Chat Assistant — floating icon + panel (2026-07-02). Scoped with .chat- */
 .chat-fab {
   position: fixed; right: 22px; bottom: 22px; z-index: 1200;
-  height: 48px; border-radius: 24px; padding: 0 16px 0 6px;
+  height: 38px; border-radius: 19px; padding: 0 13px 0 5px;
   background: var(--accent); color: #fff; border: none;
-  font-size: 22px; cursor: pointer; box-shadow: var(--shm);
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 18px; cursor: pointer; box-shadow: var(--shm);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
   transition: transform .15s, background .15s;
 }
 .chat-fab:hover { transform: scale(1.04); background: var(--accent-hover); }
-.chat-fab.chat-fab-closed { width: 48px; padding: 0; border-radius: 50%; }
-.chat-fab-logo { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
-.chat-fab-label { font-size: 13.5px; font-weight: 700; color: #fff; white-space: nowrap; }
+.chat-fab.chat-fab-closed { width: 38px; padding: 0; border-radius: 50%; }
+.chat-fab-logo { width: 35px; height: 35px; object-fit: contain; flex-shrink: 0; }
+.chat-fab-label { font-size: 11.5px; font-weight: 700; color: #fff; white-space: nowrap; }
 
 .chat-panel {
   position: fixed; right: 22px; bottom: 86px; z-index: 1199;
-  width: 360px; max-width: calc(100vw - 44px);
+  width: var(--chat-w, 360px); max-width: calc(100vw - 44px); min-width: 340px;
   height: 520px; max-height: calc(100vh - 140px);
   background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-lg);
   box-shadow: var(--shl); display: flex; flex-direction: column; overflow: hidden;
 }
+.chat-resize-handle {
+  position: absolute; left: -3px; top: 0; bottom: 0; width: 7px;
+  cursor: ew-resize; z-index: 5;
+}
+.chat-resize-handle:hover, .chat-resize-handle.active { background: var(--accent); opacity: .25; }
 
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;

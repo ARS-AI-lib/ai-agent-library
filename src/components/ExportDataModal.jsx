@@ -149,7 +149,8 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
   // areas to themselves too (2026-07-04 rule change) and still need the
   // button to show.
   const showArea = (isAdmin || isCommittee || role === 'approver') && (approveAreas || []).length > 0;
-  const showAll = isAdmin || isCommittee;
+  // 'staff' gets All Data too (2026-07-06) — export-only, no approve/edit rights.
+  const showAll = isAdmin || isCommittee || role === 'staff';
 
   return (
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
@@ -164,17 +165,17 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
             <button className="btn btn-secondary" style={{ justifyContent: 'space-between', display: 'flex' }} onClick={exportMyAI}>
-              <span>My AI</span><span style={{ color: 'var(--mu)', fontWeight: 400 }}>{allAgents.filter((a) => isMyAgent(a, user)).length} รายการ</span>
+              <span>My AI</span><span style={{ color: 'var(--mu)', fontWeight: 400 }}>{allAgents.filter((a) => isMyAgent(a, user)).length} items</span>
             </button>
             {showArea && (
               <button className="btn btn-secondary" style={{ justifyContent: 'space-between', display: 'flex' }} onClick={exportMyArea}>
                 <span>My Area's AI</span>
-                <span style={{ color: 'var(--mu)', fontWeight: 400 }}>{allAgents.filter((a) => agentApproveAreas(a).some((ar) => (approveAreas || []).includes(ar))).length} รายการ</span>
+                <span style={{ color: 'var(--mu)', fontWeight: 400 }}>{allAgents.filter((a) => agentApproveAreas(a).some((ar) => (approveAreas || []).includes(ar))).length} items</span>
               </button>
             )}
             {showAll && (
               <button className="btn btn-primary" style={{ justifyContent: 'space-between', display: 'flex' }} onClick={exportAll}>
-                <span>All Data</span><span style={{ fontWeight: 400 }}>{allAgents.length} รายการ</span>
+                <span>All Data</span><span style={{ fontWeight: 400 }}>{allAgents.length} items</span>
               </button>
             )}
           </div>

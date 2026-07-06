@@ -124,6 +124,40 @@ export function agentsOfSkill(skill) {
   return matchingAgentNames(skill);
 }
 
+// ── Paired sub-skill lock (2026-07-06) ───────────────────────────────
+// A skill that was registered AS PART OF an Agent (Agent+Skill flow) is
+// "locked" to that parent: it can't request deploy or edit progress on its
+// own — its progress, launch date and deploy status all cascade from the
+// parent Agent so the pair always moves together. The reliable pairing signal
+// is the same one the cascade-approve logic uses: matchingAgent points at the
+// parent AND both docs share createdBy (same submission batch). matchingAgent
+// alone is NOT enough — an AI-suggested matchingAgent can point a standalone
+// skill at an unrelated approved agent by name, which must stay independent.
+
+// The full skill docs that are paired sub-skills of `agent` (for cascading
+// writes from the parent). `agent` is expected to be an Agent, not a Skill.
+export function pairedSubSkills(agent, allAgents) {
+  if (!agent || getType(agent) !== 'agent') return [];
+  return allAgents.filter((s) =>
+    getType(s) === 'skill'
+    && s.id !== agent.id
+    && s.createdBy && s.createdBy === agent.createdBy
+    && matchingAgentNames(s).includes(agent.agentName)
+  );
+}
+
+// Is THIS skill a locked paired sub-skill of some Agent in the library?
+export function isPairedSubSkill(skill, allAgents) {
+  if (!skill || getType(skill) !== 'skill') return false;
+  const parents = matchingAgentNames(skill);
+  if (!parents.length) return false;
+  return allAgents.some((a) =>
+    getType(a) === 'agent'
+    && a.createdBy && a.createdBy === skill.createdBy
+    && parents.includes(a.agentName)
+  );
+}
+
 export function relationshipLabel(agent, allAgents) {
   if (getType(agent) === 'skill') {
     const n = agentsOfSkill(agent).length;

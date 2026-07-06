@@ -3,7 +3,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
-import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails } from '../lib/agentUtils';
+import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, pairedSubSkills, isPairedSubSkill } from '../lib/agentUtils';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
 function toDateInputValue(d) {
@@ -44,7 +44,12 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
   const process = Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping.join(', ') : agent.sdlcProcessMapping;
   const scope = isInternalOrExternal(agent);
 
-  const canEdit = progress < 100 && canUpdateProgress(agent, user, isAdmin);
+  // A paired sub-skill (registered as part of a parent Agent) is locked: no
+  // own progress-update or deploy-request controls — everything cascades from
+  // its parent Agent so the pair always moves together (2026-07-06).
+  const lockedSubSkill = isPairedSubSkill(agent, allAgents || []);
+
+  const canEdit = !lockedSubSkill && progress < 100 && canUpdateProgress(agent, user, isAdmin);
   // Deploy Approval gate (2026-07-02, revised): no disabled/greyed button —
   // clicking "Deployment Request" always opens a confirm dialog ("tested and
   // ready?"); on Yes the system bumps devProgress to 95 AND files the request
@@ -53,7 +58,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
   // to request in that state.
   const mayEditThisAgent = canUpdateProgress(agent, user, isAdmin);
   const mayEditDetails = canEditDetails(agent, user, isAdmin);
-  const canRequestDeploy = mayEditThisAgent && deploymentStatus !== 'requested' && deploymentStatus !== 'approved';
+  const canRequestDeploy = !lockedSubSkill && mayEditThisAgent && deploymentStatus !== 'requested' && deploymentStatus !== 'approved';
 
   function startEdit() {
     setEditProgress(progress);
@@ -71,12 +76,19 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
     setSaving(true);
     setSaveError('');
     try {
-      await updateDoc(doc(db, 'agents', agent.id), {
+      const patch = {
         devProgress: clamped,
         developmentPhase: developmentPhaseLabel(clamped),
         launchDate: editLaunch ? new Date(editLaunch) : null,
         updatedAt: serverTimestamp(),
-      });
+      };
+      await updateDoc(doc(db, 'agents', agent.id), patch);
+      // Live cascade (2026-07-06): keep paired sub-skills in lock-step with the
+      // parent Agent's progress/launch. Only an Agent has sub-skills; a skill
+      // never reaches this branch because its own edit button is hidden.
+      for (const sk of pairedSubSkills(agent, allAgents || [])) {
+        await updateDoc(doc(db, 'agents', sk.id), patch);
+      }
       setEditing(false);
     } catch (e) {
       setSaveError(e.message || 'บันทึกไม่สำเร็จ');
@@ -95,13 +107,22 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
     setRequesting(true);
     setSaveError('');
     try {
-      await updateDoc(doc(db, 'agents', agent.id), {
+      const patch = {
         devProgress: 95,
         deploymentStatus: 'requested',
         deployRequestedBy: user?.uid || '',
         deployRequestedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      await updateDoc(doc(db, 'agents', agent.id), patch);
+      // Cascade the deploy request onto the paired sub-skills too, so the
+      // approver's single decision on the parent flips the whole package
+      // (the skills are filtered out of the approver's deploy queue — the
+      // parent represents them). Same createdBy ⇒ the deploy-request rule
+      // permits this write.
+      for (const sk of pairedSubSkills(agent, allAgents || [])) {
+        await updateDoc(doc(db, 'agents', sk.id), patch);
+      }
     } catch (e) {
       setSaveError(e.message || 'ขออนุมัติไม่สำเร็จ');
     } finally {
@@ -224,7 +245,13 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
               <div className="mpb">
                 <div className={`mpf ${progressBucket(progress)}`} style={{ width: `${progress}%` }} />
               </div>
-              {mayEditThisAgent && (
+              {lockedSubSkill && (
+                <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 6, display: 'flex', gap: 5, alignItems: 'flex-start' }}>
+                  <span>🔒</span>
+                  <span>Skill นี้ผูกกับ Agent หลัก — progress และการขอ deploy จะไปพร้อมกับ Agent แม่ (แก้แยกไม่ได้)</span>
+                </div>
+              )}
+              {mayEditThisAgent && !lockedSubSkill && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                   {deploymentStatus !== 'none' && (
                     <span style={{ fontSize: 10.5, fontWeight: 700, color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `${DEPLOY_STATUS_COLOR[deploymentStatus]}15`, border: `1px solid ${DEPLOY_STATUS_COLOR[deploymentStatus]}40`, padding: '2px 7px', borderRadius: 4 }}>

@@ -8,16 +8,20 @@
 import { getType } from './tier';
 
 // Status palette for the timeline dots — mirrors the reference TL_ST. These
-// are timeline-forecast statuses (done/pilot/ontime/risk/delay/notstart),
-// DISTINCT from the app's progress-bucket ST_DEF, because the timeline judges
-// "are we on track to hit the launch date", not just raw % complete.
+// are timeline-forecast statuses (done/pilot/ontime/risk/delay), DISTINCT from
+// the app's progress-bucket ST_DEF, because the timeline judges "are we on
+// track to hit the launch date", not just raw % complete.
+// 2026-07-06: 'notstart' retired (a 0%-progress item now just gets forecast
+// on-track/at-risk/delayed by its launch date like everything else). Pilot
+// recolored from olive to the old To-Do blue to stay consistent with the
+// library legend's same-day recolor; On track recolored from blue to the old
+// olive Pilot green so it no longer clashes with Pilot's new blue.
 export const TL_ST = {
   done:     { bg: '#dcfce7', bd: '#16a34a', tx: '#14532d', ic: '✓', lb: 'Done' },
-  pilot:    { bg: '#f4f6e5', bd: '#8ea82a', tx: '#5a6b1c', ic: '◆', lb: 'Pilot' },
-  ontime:   { bg: '#dbeafe', bd: '#2f6bff', tx: '#1e3a8a', ic: '●', lb: 'On track' },
+  pilot:    { bg: '#edf2f9', bd: '#4a6fa5', tx: '#3d5a8e', ic: '◆', lb: 'Pilot' },
+  ontime:   { bg: '#f4f6e5', bd: '#8ea82a', tx: '#5a6b1c', ic: '●', lb: 'On track' },
   risk:     { bg: '#fef3c7', bd: '#d97706', tx: '#78350f', ic: '!', lb: 'At risk' },
   delay:    { bg: '#fee2e2', bd: '#dc2626', tx: '#7f1d1d', ic: '✕', lb: 'Delayed' },
-  notstart: { bg: '#f3f4f6', bd: '#9ca3af', tx: '#4b5563', ic: '○', lb: 'Not started' },
 };
 
 const DAY = 864e5;
@@ -72,10 +76,11 @@ export function timelineStatus(item, axisStart, today = startOfToday()) {
   if (p >= 100) return 'done';
   if (p >= 90) return 'pilot';           // our Pilot bucket (== reference phase==='pilot')
 
-  if (!d) return p > 0 ? 'ontime' : 'notstart';
+  // 2026-07-06: 'notstart' retired — a 0%-progress item is no longer a status
+  // of its own; it's forecast against its launch date like anything else.
+  if (!d) return 'ontime';               // no launch date → nothing to be late against
 
   if (d > today) {                        // launch in the future → forecast
-    if (p === 0) return 'notstart';
     const total = (d - axisStart) / DAY;
     const elapsed = (today - axisStart) / DAY;
     const expected = total > 0 ? Math.min(100, (elapsed / total) * 100) : 100;
@@ -83,10 +88,8 @@ export function timelineStatus(item, axisStart, today = startOfToday()) {
     return gap <= 20 ? 'ontime' : 'risk';
   }
 
-  // launch has passed
-  if (p >= 100) return 'done';
-  if (p === 0) return 'notstart';
-  return 'delay';                         // started but missed the deadline
+  // launch has passed and it's not done → overdue
+  return 'delay';
 }
 
 export function startOfToday() {

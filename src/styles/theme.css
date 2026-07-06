@@ -321,6 +321,28 @@ select.dd:focus { border-color: var(--accent); }
 .combo-item { padding: 6px 12px; font-size: 12.5px; color: var(--tx2); cursor: pointer; }
 .combo-item:hover, .combo-item.sel { background: var(--sf2); color: var(--accent); font-weight: 600; }
 
+/* ── TagMultiSelect: auto-complete + free-add multi-select (Related Role,
+   2026-07-06). Scoped .tms- so it never collides with .ms-/.combo-. ── */
+.tms-wrap { position: relative; width: 100%; }
+.tms-box {
+  display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+  min-height: 36px; padding: 5px 8px; border: 1.5px solid var(--bd2); border-radius: 7px;
+  background: var(--sf); cursor: text; transition: border-color .15s;
+}
+.tms-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tms-tag {
+  display: inline-flex; align-items: center; gap: 5px; background: var(--sf3); color: var(--tx2);
+  font-size: 12px; font-weight: 600; padding: 3px 6px 3px 9px; border-radius: 6px; white-space: nowrap;
+}
+.tms-tag-x { border: none; background: none; color: var(--mu); cursor: pointer; font-size: 10px; padding: 2px; line-height: 1; }
+.tms-tag-x:hover { color: var(--tx); }
+.tms-input { flex: 1; min-width: 80px; border: none; outline: none; background: none; font-family: inherit; font-size: 13px; color: var(--tx); padding: 3px 2px; }
+.tms-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60; background: var(--sf); border: 1.5px solid var(--bd2); border-radius: 7px; box-shadow: 0 4px 16px rgba(0,0,0,.12); max-height: 220px; overflow-y: auto; padding: 4px 0; }
+.tms-item { padding: 6px 12px; font-size: 12.5px; color: var(--tx2); cursor: pointer; }
+.tms-item:hover { background: var(--sf2); }
+.tms-item.sel { color: var(--accent); font-weight: 600; }
+.tms-item.tms-add { color: var(--ok); font-weight: 600; border-top: 1px solid var(--bd-soft); }
+
 /* ── Nav: icon-only buttons (New / Pending) ── */
 .btn-icon { position: relative; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--bd2); background: var(--sf2); color: var(--mu); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; flex-shrink: 0; }
 .btn-icon:hover { border-color: var(--accent); color: var(--accent); }

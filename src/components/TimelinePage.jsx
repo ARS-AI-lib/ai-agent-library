@@ -7,13 +7,24 @@ import {
   TL_ST, toTimelineItem, timelineStatus, autoFitRange, monthTicks,
   inAnyMilestone, toDate, startOfToday,
 } from '../lib/timeline';
-import { uniq } from '../lib/agentUtils';
+import { uniq, fmtDate } from '../lib/agentUtils';
+import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
+import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import AgentDetailModal from './AgentDetailModal';
 import MilestoneEditor from './MilestoneEditor';
+import '../styles/SDLCTab.css';
 import '../styles/TimelinePage.css';
 
 const LW = 200, RH = 76, HH = 36, AH = 52, IR = 12, PAD = 16, DAY = 864e5;
 const DEFAULT_MS_COLORS = ['#0b7a68', '#2f6bff', '#6d28d9', '#c2590a', '#b45309', '#0369a1'];
+
+// devProgress is a string like "90%" — coerce to number for agentStatus()
+// (same helper as SDLCTab.jsx, duplicated here since it's page-local).
+function withProgress(agent) {
+  const prog = agent?.devProgress;
+  const num = typeof prog === 'number' ? prog : parseInt(String(prog || '').replace('%', ''), 10);
+  return { ...agent, devProgress: isNaN(num) ? 0 : num };
+}
 
 export default function TimelinePage() {
   const { user, isAdmin, loading, roleReady, role } = useAuth();
@@ -22,6 +33,7 @@ export default function TimelinePage() {
   const [cfgLoaded, setCfgLoaded] = useState(false);
   const [filter, setFilter] = useState(null);    // milestone id | 'out' | null
   const [detailAgent, setDetailAgent] = useState(null);
+  const [listPopup, setListPopup] = useState(null); // { launch, agents:[timelineItem] } | null
   const [editMs, setEditMs] = useState(false);
   const canvasRef = useRef(null);
 
@@ -49,12 +61,12 @@ export default function TimelinePage() {
   // ── draw ──
   useEffect(() => {
     if (!canView) return;
-    drawTimeline(canvasRef.current, items, milestones, range, filter, setDetailAgent, setFilter);
+    drawTimeline(canvasRef.current, items, milestones, range, filter, setListPopup, setFilter);
   }, [canView, items, milestones, range, filter]);
 
   useEffect(() => {
     if (!canView) return;
-    const onResize = () => drawTimeline(canvasRef.current, items, milestones, range, filter, setDetailAgent, setFilter);
+    const onResize = () => drawTimeline(canvasRef.current, items, milestones, range, filter, setListPopup, setFilter);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [canView, items, milestones, range, filter]);
@@ -81,6 +93,41 @@ export default function TimelinePage() {
   const canEdit = canView; // same allowlist edits milestones (locked decision)
 
   return (
+    <div>
+      <nav className="nav">
+        <div className="nav-brand">
+          <div>
+            <h1>AI Agent Library</h1>
+            <p>Powered by Wolfy</p>
+          </div>
+        </div>
+        <div className="nav-tabs">
+          <button className="nav-tab" onClick={() => { window.location.href = '/'; }}>
+            ← Back to Library
+          </button>
+        </div>
+        <div className="nav-r" style={{ marginLeft: 'auto' }}>
+          {user && (
+            <div className="nav-user">
+              {user.photoURL && <img src={user.photoURL} alt="" />}
+              <div className="nav-user-name">
+                {(() => {
+                  const full = (user.displayName || user.email || '').trim();
+                  const [first, ...rest] = full.split(' ');
+                  const last = rest.join(' ');
+                  return (
+                    <>
+                      <span>{first}</span>
+                      {last && <span>{last}</span>}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+        </div>
+      </nav>
+
     <div className="tl-page">
       <div className="tl-topbar">
         <div>
@@ -125,6 +172,70 @@ export default function TimelinePage() {
 
       <OutOfMilestoneCard items={outItems} allItems={items} filter={filter} setFilter={setFilter} />
 
+      {listPopup && (
+        <div className="sdlc-ovl" onClick={() => setListPopup(null)}>
+          <div className="sdlc-mbox" onClick={(e) => e.stopPropagation()}>
+            <button className="sdlc-mclose" onClick={() => setListPopup(null)}>✕</button>
+            {listPopup.launch && (
+              <div className="sdlc-msub">
+                Launch: {listPopup.launch.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </div>
+            )}
+            <div className="sdlc-mtitle">{listPopup.agents.length} Agent{listPopup.agents.length > 1 ? 's' : ''}/Skill{listPopup.agents.length > 1 ? 's' : ''}</div>
+            <div className="sdlc-msec">Agents &amp; Skills ({listPopup.agents.length})</div>
+            {listPopup.agents.map((item) => {
+              const a = item._raw;
+              const withP = withProgress(a);
+              const st = agentStatus(withP);
+              const sd = ST_DEF[st];
+              const t = getType(a);
+              const progress = withP.devProgress;
+              const ability = Array.isArray(a.coreAbility) ? a.coreAbility.join(', ') : a.coreAbility;
+              const tier = getTier(a);
+              const tierDef = TIER_DEF[tier];
+              const scope = isInternalOrExternal(a);
+              return (
+                <div key={a.id} className="sdlc-mac" style={{ cursor: 'pointer' }} onClick={() => { setListPopup(null); setDetailAgent(a); }}>
+                  <div className="sdlc-machdr">
+                    <span className={`uc-tb ${t === 'agent' ? 'tbag' : 'tbsk'}`}>{t.toUpperCase()}</span>
+                    <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }}>{tier}</span>
+                    <span className="sdlc-macname">{a.agentName}</span>
+                    <span className="scope-badge" style={{ position: 'static', marginLeft: 'auto', color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
+                      {scope === 'External' ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
+                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                        </svg>
+                      ) : (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="4" y="2" width="16" height="20" rx="1" />
+                          <line x1="9" y1="10" x2="9" y2="10" /><line x1="15" y1="10" x2="15" y2="10" />
+                          <line x1="9" y1="14" x2="9" y2="14" /><line x1="15" y1="14" x2="15" y2="14" />
+                          <path d="M9 22v-4h6v4" />
+                        </svg>
+                      )}
+                    </span>
+                  </div>
+                  <div className="sdlc-mrow"><span className="sdlc-mk">Owner</span><span>{a.owner || '—'}</span></div>
+                  <div className="sdlc-mrow"><span className="sdlc-mk">Creator</span><span>{a.creator || '—'}</span></div>
+                  <div className="sdlc-mrow"><span className="sdlc-mk">Ability</span><span>{ability || '—'}</span></div>
+                  <div className="sdlc-mrow"><span className="sdlc-mk">Phase</span>
+                    <span className="sdlc-ph" style={{ background: sd.bg, color: sd.color, border: `1px solid ${sd.bd}` }}>{sd.lb}</span>
+                  </div>
+                  <div className="sdlc-mrow"><span className="sdlc-mk">Launch</span><span>{fmtDate(a.launchDate) || '—'}</span></div>
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--mu)' }}>
+                      <span>Progress</span><strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{progress}%</strong>
+                    </div>
+                    <div className="mpb"><div className={`mpf ${progressBucket(progress)}`} style={{ width: `${progress}%` }} /></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {detailAgent && (
         <AgentDetailModal
           key={detailAgent.id}
@@ -143,6 +254,7 @@ export default function TimelinePage() {
           onClose={() => setEditMs(false)}
         />
       )}
+    </div>
     </div>
   );
 }
@@ -188,7 +300,7 @@ function Stat({ n, l, c }) {
 
 // ── canvas drawing (ported from reference, adapted: auto-fit range, our
 //    theme colors, Firestore-backed milestones) ──
-function drawTimeline(cv, items, milestones, range, filter, onDotClick, onFilter) {
+function drawTimeline(cv, items, milestones, range, filter, onDotsClick, onFilter) {
   if (!cv) return;
   const today = startOfToday();
   const { start: S, end: E } = range;
@@ -218,13 +330,13 @@ function drawTimeline(cv, items, milestones, range, filter, onDotClick, onFilter
   // month header
   ctx.fillStyle = '#f8fafd'; ctx.fillRect(0, 0, W, HH);
   ctx.fillStyle = '#f1f5fb'; ctx.fillRect(0, 0, LW, HH);
-  ctx.fillStyle = '#7784a0'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#7784a0'; ctx.font = `bold 11px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('Owner', 14, HH / 2);
   monthTicks(S, E).forEach((m) => {
     const x1 = Math.max(dx(m.start), LW), x2 = Math.min(dx(new Date(m.end.getTime() + DAY)), LW + tw);
     if (x2 <= x1) return;
     ctx.strokeStyle = '#e8edf6'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1, HH); ctx.stroke();
-    ctx.fillStyle = '#46516d'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#46516d'; ctx.font = `bold 11px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(m.label, (x1 + x2) / 2, HH / 2);
   });
   ctx.strokeStyle = '#c8d0e0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, HH); ctx.lineTo(W, HH); ctx.stroke();
@@ -233,7 +345,7 @@ function drawTimeline(cv, items, milestones, range, filter, onDotClick, onFilter
   const ay = HH;
   ctx.fillStyle = '#f8fafd'; ctx.fillRect(0, ay, W, AH);
   ctx.fillStyle = '#f1f5fb'; ctx.fillRect(0, ay, LW, AH);
-  ctx.fillStyle = '#7784a0'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#7784a0'; ctx.font = `10px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('Milestones', 14, ay + AH / 2);
   const msClicks = [];
   milestones.forEach((m) => {
@@ -243,10 +355,10 @@ function drawTimeline(cv, items, milestones, range, filter, onDotClick, onFilter
     const col = m.color || '#2f6bff';
     ctx.fillStyle = col + (sel ? '55' : '30'); rrect(ctx, x1, ay + 7, w, AH - 14, 5); ctx.fill();
     ctx.strokeStyle = sel ? col : col + '90'; ctx.lineWidth = sel ? 2.5 : 1.5; rrect(ctx, x1, ay + 7, w, AH - 14, 5); ctx.stroke();
-    ctx.fillStyle = col; ctx.font = `bold ${sel ? 12 : 11}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = col; ctx.font = `bold ${sel ? 12 : 11}px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(m.name || m.id, x1 + w / 2, ay + AH / 2 - 7);
     const sL = ms.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), eL = me.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-    ctx.font = '8.5px sans-serif'; ctx.fillStyle = col + 'cc'; ctx.fillText(`${sL}–${eL}`, x1 + w / 2, ay + AH / 2 + 8);
+    ctx.font = `8.5px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.fillStyle = col + 'cc'; ctx.fillText(`${sL}–${eL}`, x1 + w / 2, ay + AH / 2 + 8);
     msClicks.push({ x1, y1: ay, x2, y2: ay + AH, id: m.id });
   });
   ctx.strokeStyle = '#e8edf6'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, ay + AH); ctx.lineTo(W, ay + AH); ctx.stroke();
@@ -261,10 +373,10 @@ function drawTimeline(cv, items, milestones, range, filter, onDotClick, onFilter
     ctx.strokeStyle = '#e8edf6'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, ry + RH); ctx.lineTo(W, ry + RH); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(LW, ry); ctx.lineTo(LW, ry + RH); ctx.stroke();
-    ctx.fillStyle = '#182135'; ctx.font = 'bold 12.5px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = '#182135'; ctx.font = `bold 12.5px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillText(team, 14, ry + 10);
     const rN = tAgs.filter((a) => a.progress >= 70).length;
-    ctx.fillStyle = '#7784a0'; ctx.font = '10px sans-serif'; ctx.fillText(`${tAgs.length} items · ${rN} ≥70%`, 14, ry + 27);
+    ctx.fillStyle = '#7784a0'; ctx.font = `10px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.fillText(`${tAgs.length} items · ${rN} ≥70%`, 14, ry + 27);
 
     // milestone band tint per row
     milestones.forEach((m) => {
@@ -283,18 +395,18 @@ function drawTimeline(cv, items, milestones, range, filter, onDotClick, onFilter
       const dim = (filter === 'out') ? inMs : (filter && (!inMs || !inRange(d, milestones.find((m) => m.id === filter))));
       const cx = dx(d);
       if (dim) { ctx.globalAlpha = .15; ctx.beginPath(); ctx.arc(cx, my, IR, 0, Math.PI * 2); ctx.fillStyle = '#9ca3af'; ctx.fill(); ctx.globalAlpha = 1; return; }
-      const order = ['delay', 'risk', 'ontime', 'pilot', 'done', 'notstart'];
+      const order = ['delay', 'risk', 'ontime', 'pilot', 'done'];
       const statuses = ags.map((a) => timelineStatus(a, S, today));
-      const pr = order.find((s) => statuses.includes(s)) || 'notstart';
+      const pr = order.find((s) => statuses.includes(s)) || 'ontime';
       const st = TL_ST[pr]; const n = ags.length;
       ctx.shadowColor = 'rgba(0,0,0,0.12)'; ctx.shadowBlur = 4;
       ctx.beginPath(); ctx.arc(cx, my, IR, 0, Math.PI * 2); ctx.fillStyle = st.bg; ctx.fill();
       ctx.shadowBlur = 0; ctx.strokeStyle = st.bd; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, my, IR, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = st.tx; ctx.font = `bold ${n > 1 ? 11 : 10}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = st.tx; ctx.font = `bold ${n > 1 ? 11 : 10}px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(n > 1 ? String(n) : st.ic, cx, my);
       const lb = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-      ctx.font = '600 8.5px sans-serif'; ctx.textBaseline = 'top'; ctx.fillText(lb, cx, my + IR + 3);
-      dotClicks.push({ x1: cx - IR - 2, y1: ry, x2: cx + IR + 2, y2: ry + RH, agents: ags });
+      ctx.font = `600 8.5px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textBaseline = 'top'; ctx.fillText(lb, cx, my + IR + 3);
+      dotClicks.push({ x1: cx - IR - 2, y1: ry, x2: cx + IR + 2, y2: ry + RH, agents: ags, launch: d });
     });
   });
 
@@ -308,7 +420,7 @@ function drawTimeline(cv, items, milestones, range, filter, onDotClick, onFilter
     const mh = msClicks.find((a) => mx >= a.x1 && mx <= a.x2 && my >= a.y1 && my <= a.y2);
     if (mh) { onFilter((cur) => (cur === mh.id ? null : mh.id)); return; }
     const ah = dotClicks.find((a) => mx >= a.x1 && mx <= a.x2 && my >= a.y1 && my <= a.y2);
-    if (ah) onDotClick(ah.agents[0]._raw);   // open first agent's detail (reuse library modal)
+    if (ah) onDotsClick({ launch: ah.launch, agents: ah.agents });   // show agent list first, detail is a second click away
   };
   cv.onmousemove = (e) => {
     const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;

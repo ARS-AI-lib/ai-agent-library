@@ -150,6 +150,12 @@ verdict ที่แปลว่าไม่ซ้ำ เช่น 70 คู่�
    ว่าควรเชื่อมแบบไหน (เช่น "ส่ง Output ไปเป็น Input ของตัวนี้", "ใช้เป็น sub-skill",
    "trigger ต่อใน pipeline", "รวมเป็น orchestrator เดียวกัน") — ยึดตาม direction ที่ระบบให้มา
    ถ้าไม่มีให้เป็น []
+2b. tech_stack_hint: คำแนะนำ "วิธี integrate เชิงเทคนิค" แบบ best-practice ทั่วไปสั้นๆ ภาษาไทย
+   1-2 ประโยค (เช่น "เชื่อมผ่าน REST API แบบ request/response", "ใช้ message queue ถ้าต้องทำแบบ async",
+   "expose เป็น MCP tool ให้ orchestrator เรียก", "แชร์ผ่าน shared database/storage")
+   ⛔ เฉพาะหลักการสถาปัตยกรรมทั่วไปเท่านั้น — ห้ามกุ/เดา endpoint จริง, ชื่อ API, credential,
+   หรือ technical spec ของ agent ตัวใดตัวหนึ่ง (ระบบไม่มีข้อมูลระดับนั้น) และห้ามพูดเรื่อง bypass
+   auth/security ถ้าไม่มี integration_suggestions เลย (draft ไม่ควรต่อกับอะไร) ให้เป็น "" (string ว่าง)
 3. suggested_matching_agent: ถ้า Draft เป็น Skill ที่ควรผูกกับ Agent ตัวใดตัวหนึ่ง ใส่ชื่อ ไม่งั้น null
 4. suggested_ability: ถ้า ability ที่ผู้ใช้ระบุไม่ตรงกับ description จริง ใส่ชื่อ ability ที่เหมาะกว่า ไม่งั้น null
    ⚠️ ต้องเลือกจากรายการ Core Ability ที่กำหนดไว้เท่านั้น (ห้ามคิดคำใหม่เอง):
@@ -175,6 +181,7 @@ verdict 4 ระดับ:
 {
   "candidates": [{"agentName": "...", "confidence": 0-100, "verdict": "...", "reason": "..."}, ...],
   "integration_suggestions": [{"agentName": "...", "how": "..."}, ...],
+  "tech_stack_hint": "..." (string ว่างได้),
   "suggested_matching_agent": "..." หรือ null,
   "suggested_ability": "..." หรือ null,
   "overall_risk": "high" | "medium" | "low",
@@ -249,6 +256,11 @@ exports.analyzeDuplicate = onCall(
 
     parsed.candidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
     parsed.integration_suggestions = Array.isArray(parsed.integration_suggestions) ? parsed.integration_suggestions : [];
+    // Tech-stack hint only makes sense when there IS something to integrate with —
+    // suppress it otherwise so the UI never shows integration advice for a draft
+    // that stands alone (2026-07-06).
+    parsed.tech_stack_hint = (typeof parsed.tech_stack_hint === 'string' && parsed.integration_suggestions.length > 0)
+      ? parsed.tech_stack_hint : '';
     parsed.suggested_matching_agent = parsed.suggested_matching_agent || null;
     // Defense in depth: don't trust the model to always obey the prompt's
     // allowlist instruction — drop any suggested_ability that isn't one of
@@ -359,7 +371,7 @@ const TOOL_DECLARATIONS = [
   },
   {
     name: 'connection_suggest',
-    description: 'หา Agent/Skill ที่ agent ตัวหนึ่ง (ที่มีอยู่แล้วในไลบรารี) "ต่อกับได้" — ใช้ตอบ "ตัวนี้ต่อกับอะไรได้บ้าง"',
+    description: 'หา Agent/Skill ที่ agent ตัวหนึ่ง (ที่มีอยู่แล้วในไลบรารี) "ต่อกับได้" — ใช้ตอบ "ตัวนี้ต่อกับอะไรได้บ้าง" รวมถึงคำถามเรื่อง expansion/integration ("อยากต่อกับ agent ที่มีอยู่ ควรต่อกับตัวไหน/จุดไหน") — เรียกก่อนเสมอเมื่อคำถามเจาะจงถึง agent ตัวใดตัวหนึ่งที่มีอยู่จริง',
     parameters: {
       type: Type.OBJECT,
       properties: { agentName: { type: Type.STRING, description: 'ชื่อ agent ที่มีอยู่แล้วในไลบรารี' } },
@@ -399,7 +411,19 @@ const CHAT_SYSTEM_PROMPT = `คุณคือ "ALPHA" ผู้ช่วยส�
      (เช่น Scrum ต่างจาก Kanban ยังไง, sprint planning ควรทำแบบไหน) และเชื่อมโยงกับ
      SDLC catalog จริงขององค์กร (เรียก query_sdlc ประกอบ เมื่อคำถามอ้างถึง process/stage
      ที่มีอยู่จริง เช่น "process 2.2 ควรปรับให้เข้ากับ Agile ยังไง")
-  คำถามอื่นที่ไม่เข้า 5 ข้อนี้และไม่ใช่คำถามเกี่ยวกับข้อมูลไลบรารี ให้ปฏิเสธ (ดูวิธีปฏิเสธด้านล่าง)
+  6) Expansion/Integration (2026-07-06): ผู้ใช้ถามว่าอยากต่อ/ขยายการทำงานกับ agent ที่มีอยู่แล้ว
+     ควรทำยังไง แบ่งเป็น 2 ส่วนที่ต้อง "grounded" ต่างกัน:
+     ก) "ต่อกับตัวไหน / จุดไหนในไลบรารี" — ต้องเรียก connection_suggest({agentName}) ก่อนเสมอ
+        (เหมือนโหมด A) ห้ามเดาชื่อ agent หรือจุดเชื่อมต่อเอง ต้องมาจากผลลัพธ์ tool จริงเท่านั้น
+     ข) "วิธี integrate ทำยังไง / tech stack อะไรดี" — ตอบได้จากความรู้ทั่วไปของคุณ แต่ "เฉพาะ
+        best-practice ระดับสถาปัตยกรรมทั่วไป" เท่านั้น (เช่น REST API, webhook, message queue,
+        shared database, MCP/tool-calling ฯลฯ คืออะไร เหมาะกับสถานการณ์แบบไหน ข้อดีข้อเสียคร่าวๆ)
+        ⛔ ห้ามเด็ดขาด: ห้ามกุ/เดา endpoint จริง, ชื่อ API, โครงสร้างภายใน, credential, หรือ
+        รายละเอียด technical spec ของ agent ตัวใดตัวหนึ่งในไลบรารี เพราะระบบไม่มีข้อมูลระดับนั้นเก็บไว้
+        (schema ปัจจุบันไม่มี field endpoint/API) — ถ้าถูกถามระดับนั้น ให้ตอบตรงๆ ว่าไม่มีข้อมูล
+        technical spec ระดับนั้นในระบบ แนะนำให้ติดต่อ owner/creator ของ agent นั้นแทน (ดึงจาก
+        connection_suggest หรือ get_agent_detail ได้) ห้ามพูดเรื่อง bypass auth/security ใดๆ
+  คำถามอื่นที่ไม่เข้า 6 ข้อนี้และไม่ใช่คำถามเกี่ยวกับข้อมูลไลบรารี ให้ปฏิเสธ (ดูวิธีปฏิเสธด้านล่าง)
 - ⚠️ กันโหมดรั่ว: แม้อยู่ในโหมด B ถ้าจะอ้างว่า "มีของแบบนี้อยู่แล้วในไลบรารี" ต้องเรียก tool เช็คก่อนเสมอ
   ห้ามพูดถึงข้อมูลจริงจากความจำ/การเดา ไม่ว่าอยู่โหมดไหน
 

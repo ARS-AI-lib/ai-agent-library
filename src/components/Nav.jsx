@@ -128,7 +128,7 @@ export default function Nav({
               {canSeeTimeline && (
                 <button
                   type="button"
-                  onClick={() => { window.open('/timeline', '_blank'); setMenuOpen(false); }}
+                  onClick={() => { window.location.href = '/timeline'; setMenuOpen(false); }}
                   style={{
                     display: 'block', width: '100%', padding: '9px 12px', fontSize: 12.5, fontWeight: 500,
                     color: 'var(--tx)', background: 'none', border: 'none', borderBottom: '1px solid var(--bd-soft)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',

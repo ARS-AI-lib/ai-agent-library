@@ -8,19 +8,22 @@ import { setDirectoryToken, warmDirectory } from '../lib/directory';
  * Tracks Firebase Auth state + the matching /users/{uid} role document.
  * Returns { user, role, loading, domainError, signIn, signOut }.
  *
- * role is one of 'user' | 'approver' | 'committee' | 'admin' | null (null
- * while loading or if no /users doc exists yet — treat null as "no access").
+ * role is one of 'user' | 'staff' | 'approver' | 'committee' | 'admin' | null
+ * (null while loading or if no /users doc exists yet — treat null as "no access").
  *
- * Permission model (4 tiers):
+ * Permission model:
  *   admin     — everything, incl. user management.
  *   committee — everything admin can do EXCEPT user management (approve/
  *               reject in any area, not just their own approveAreas).
  *   approver  — approve/reject + progress-update, both scoped to their own
  *               approveAreas; can submit new ideas + (future) chat.
+ *   staff     — same rights as 'user' (submit ideas, chat, own-progress
+ *               update) PLUS the "All Data" export button (2026-07-06) —
+ *               export-only widening, no approve/edit/user-mgmt rights.
  *   user      — base tier: submit new ideas, chat, see/withdraw only their
  *               own pending submissions, update progress on agents they
  *               created (while devProgress < 100).
- * All four tiers can submit an idea — there is no role that can't.
+ * Every tier can submit an idea — there is no role that can't.
  */
 export function useAuth() {
   const [user, setUser] = useState(null);

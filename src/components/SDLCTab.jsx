@@ -34,8 +34,8 @@ const GROUPS = [
 ];
 
 const ALL_STAGES = GROUPS.flatMap((g) => g.sub.map((s) => s.stage));
-const STATUS_ICON = { ns: '○', td: '◦', ip: '●', pilot: '◆', ru: '✓' };
-const PRIORITY = ['ru', 'pilot', 'ip', 'td', 'ns'];
+const STATUS_ICON = { td: '◦', ip: '●', pilot: '◆', ru: '✓' };
+const PRIORITY = ['ru', 'pilot', 'ip', 'td'];
 
 // Owner / relationship-label / role tags for a mini agent row — deduped by
 // visible text (2026-07 fix): owner and relatedRole are different fields
@@ -207,18 +207,17 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     if (hasAgent && !ags.length) return null;
     if (!procOwnerOk(proc?.owner)) return null;
 
-    const counts = { ns: 0, td: 0, ip: 0, pilot: 0, ru: 0 };
+    const counts = { td: 0, ip: 0, pilot: 0, ru: 0 };
     ags.forEach((a) => { counts[agentStatus(withProgress(a))]++; });
 
-    let dominant = 'ns';
+    let dominant = 'td';
     for (const s of PRIORITY) if (counts[s] > 0) { dominant = s; break; }
     const empty = ags.length === 0;
-    const hasProgress = !empty && dominant === 'ns';
     const breakdown = PRIORITY.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${ST_DEF[s].lb}`).join(', ');
 
     return (
       <div
-        className={`aproc ${dominant}${hasProgress ? ' has-progress' : ''}${empty ? ' empty' : ''}`}
+        className={`aproc ${dominant}${empty ? ' empty' : ''}`}
         onClick={() => setModal({ title: `${proc.id} — ${proc.name}`, agents: ags })}
       >
         <div className="aproc-num">{proc.id}</div>
@@ -235,20 +234,20 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   // the shared modal listing the Non-SDLC agents/skills.
   function NonSdlcBoardCard() {
     const ags = nonSdlcBoard;
-    const counts = { ns: 0, td: 0, ip: 0, pilot: 0, ru: 0 };
+    const counts = { td: 0, ip: 0, pilot: 0, ru: 0 };
     ags.forEach((a) => { counts[agentStatus(withProgress(a))]++; });
-    let dominant = 'ns';
+    let dominant = 'td';
     for (const s of PRIORITY) if (counts[s] > 0) { dominant = s; break; }
     const breakdown = PRIORITY.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${ST_DEF[s].lb}`).join(', ');
     return (
       <div
         className={`aproc ${dominant}`}
         style={{ width: '100%', marginTop: 10 }}
-        onClick={() => setModal({ title: 'Non-SDLC — ไม่ผูกกับ SDLC process', agents: ags })}
+        onClick={() => setModal({ title: 'Non-SDLC — not mapped to an SDLC process', agents: ags })}
       >
         <div className="aproc-num">Non-SDLC</div>
-        <div className="aproc-name">Agent / Skill ที่ไม่ได้ map กับ SDLC process — ไม่แสดงในตารางด้านบน</div>
-        <div className="aproc-count">{STATUS_ICON[dominant]} รวม {ags.length} รายการ{breakdown ? ` · ${breakdown}` : ''}</div>
+        <div className="aproc-name">Agent / Skill not mapped to an SDLC process — not shown in the table above</div>
+        <div className="aproc-count">{STATUS_ICON[dominant]} Total {ags.length} items{breakdown ? ` · ${breakdown}` : ''}</div>
       </div>
     );
   }
@@ -412,8 +411,8 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
           <div className="sh">
             <div className="sbar" style={{ background: '#7a85a3' }} />
             <span className="sname" style={{ color: '#7a85a3' }}>Non-SDLC</span>
-            <span className="sbadge">{nonSdlcUC.length} รายการ</span>
-            <span className="scov">Agent/Skill ที่ไม่ผูกกับ Use Case</span>
+            <span className="sbadge">{nonSdlcUC.length} items</span>
+            <span className="scov">Agent/Skill not mapped to a Use Case</span>
           </div>
           <div className="uc-grid">
             {nonSdlcUC.map((a) => <NonSdlcUCCard key={a.id} agent={a} />)}

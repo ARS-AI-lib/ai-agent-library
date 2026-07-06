@@ -6,13 +6,20 @@
 // added ad-hoc in the Console), re-add them; this is a full overwrite, not
 // a patch (per project convention: always replace the whole ruleset).
 //
-// Roles (on /users/{uid}.role): 'user' | 'approver' | 'committee' | 'admin'
+// Roles (on /users/{uid}.role): 'user' | 'staff' | 'approver' | 'committee' | 'admin'
 //   admin     — everything, incl. user management.
 //   committee — everything admin can do on /agents, NOT /users.
 //   approver  — approve/reject + progress-update scoped to own approveAreas
 //               (area matching is enforced in the UI via agentApproveAreas();
 //               these rules only gate role tier + field scope, same pattern
 //               already used for the existing progress-update rule).
+//   staff     — same as 'user' for all /agents write rules (submit ideas,
+//               withdraw own pending idea, update own progress) — the ONLY
+//               difference is UI-side: staff also sees the "All Data" export
+//               button (2026-07-06). Not a security boundary — isKnownUser()
+//               already lets every known-user tier read every agent doc
+//               (pending/rejected included); "All Data" just widens which
+//               export BUTTON shows in the client, gated in ExportDataModal.jsx.
 //   user      — submit ideas, withdraw/reject their own pending idea, update
 //               progress on agents they created.
 //
@@ -40,7 +47,7 @@ service cloud.firestore {
       return isSignedIn() && userRole() in ['approver', 'committee', 'admin'];
     }
     function isKnownUser() {
-      return isSignedIn() && userRole() in ['user', 'approver', 'committee', 'admin'];
+      return isSignedIn() && userRole() in ['user', 'staff', 'approver', 'committee', 'admin'];
     }
     function affectedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
@@ -185,6 +192,24 @@ service cloud.firestore {
       allow read: if isKnownUser();
       allow write: if isAdmin()
         || (isSignedIn() && resource != null && request.auth.token.email in resource.data.viewers);
+    }
+
+    // Related Role — grow-only self-service (2026-07-06): any known user
+    // typing a brand-new role into the New Entry / Edit form can append it
+    // to the shared list, WITHOUT admin rights. Scoped tight so this can't
+    // be used to touch any other schema field or to remove existing roles:
+    //   - affectedKeys().hasOnly(['relatedRole']) — no other field in
+    //     /config/schema is writable this way.
+    //   - hasAll(resource.data.relatedRole) — the new array must be a
+    //     superset of the old one (append-only, never shrinks/reorders away
+    //     existing values). Combined with isKnownUser()'s doc.create being
+    //     admin-only via /config/{id} above, this can only ever grow the list.
+    // ORs with /config/{id} above, so admin retains full-doc write regardless.
+    match /config/schema {
+      allow update: if isKnownUser()
+        && affectedKeys().hasOnly(['relatedRole'])
+        && request.resource.data.relatedRole is list
+        && (!('relatedRole' in resource.data) || request.resource.data.relatedRole.hasAll(resource.data.relatedRole));
     }
 
     // ── /analysisRuns — duplicate-check knowledge base ───────────────

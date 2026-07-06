@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { agentApproveAreas, getTier, TIER_DEF } from '../lib/tier';
-import { matchingAgentNames } from '../lib/agentUtils';
+import { matchingAgentNames, pairedSubSkills, isPairedSubSkill } from '../lib/agentUtils';
 import AgentDetailModal from './AgentDetailModal';
 
 const VERDICT_LABEL = {
@@ -98,43 +98,45 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
   // approval (user's explicit choice, 7th grill-me follow-up) — reuse
   // agentApproveAreas/canApprove as-is, just against a different query.
   const visibleDeploy = useMemo(() => {
-    if (fullAccess) return deployRequests;
-    return deployRequests.filter((a) => agentApproveAreas(a).some((area) => mine.has(area)));
-  }, [deployRequests, fullAccess, mine]);
+    // Paired sub-skills ride along with their parent Agent's deploy request —
+    // they're cascaded to 'requested' but must NOT appear as separate line
+    // items in the approver's queue (the parent represents them). Filter them
+    // out here (2026-07-06); handleApproveDeploy/RejectDeploy cascade the
+    // decision back onto them.
+    const parentsOnly = deployRequests.filter((a) => !isPairedSubSkill(a, agents));
+    if (fullAccess) return parentsOnly;
+    return parentsOnly.filter((a) => agentApproveAreas(a).some((area) => mine.has(area)));
+  }, [deployRequests, fullAccess, mine, agents]);
 
-  async function handleApproveDeploy(agent) {
+  // Deploy decision cascades onto the paired sub-skills too (2026-07-06) — the
+  // approver acts once on the parent Agent and the whole package flips. The
+  // sub-skills are already in 'requested' state (cascaded at request time), so
+  // the deploy-decision firestore rule permits this write.
+  async function decideDeploy(agent, verdict, failMsg) {
     setBusyId(agent.id);
     setError('');
     try {
-      await updateDoc(doc(db, 'agents', agent.id), {
-        deploymentStatus: 'approved',
+      const patch = {
+        deploymentStatus: verdict,
         deployDecidedBy: user?.uid || '',
         deployDecidedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      await updateDoc(doc(db, 'agents', agent.id), patch);
+      for (const sk of pairedSubSkills(agent, agents)) {
+        if ((sk.deploymentStatus || 'none') === 'requested') {
+          await updateDoc(doc(db, 'agents', sk.id), patch);
+        }
+      }
     } catch (e) {
-      setError(e.message || 'Approve deploy failed');
+      setError(e.message || failMsg);
     } finally {
       setBusyId(null);
     }
   }
 
-  async function handleRejectDeploy(agent) {
-    setBusyId(agent.id);
-    setError('');
-    try {
-      await updateDoc(doc(db, 'agents', agent.id), {
-        deploymentStatus: 'rejected',
-        deployDecidedBy: user?.uid || '',
-        deployDecidedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    } catch (e) {
-      setError(e.message || 'Reject deploy failed');
-    } finally {
-      setBusyId(null);
-    }
-  }
+  function handleApproveDeploy(agent) { return decideDeploy(agent, 'approved', 'Approve deploy failed'); }
+  function handleRejectDeploy(agent) { return decideDeploy(agent, 'rejected', 'Reject deploy failed'); }
 
   // Cascade auto-approve (2026-07-03): a paired sub-skill (Agent+Skill flow,
   // at registration or later via "+ เพิ่ม Skill" in the edit form) was

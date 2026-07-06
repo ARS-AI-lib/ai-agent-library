@@ -132,7 +132,7 @@ export const SKILLS = {
         relatedRole: 'array of role strings (optional)',
         coreAbility: 'array of ability strings (optional)',
         reusable: 'array of "Reusable" | "Reusable with Conditions" | "Non-reusable" (optional)',
-        status: 'array of "Not Start" | "To Do" | "In Progress" | "Pilot" | "Ready to Use" (optional)',
+        status: 'array of "To Do" | "In Progress" | "Pilot" | "Ready to Use" (optional)',
         scope: '"Internal" | "External" (optional)',
         sdlcStage: 'array of SDLC stage names (optional, requires ctx.processes)',
         sdlcProcessMapping: 'array of process ids e.g. "2.2" (optional)',

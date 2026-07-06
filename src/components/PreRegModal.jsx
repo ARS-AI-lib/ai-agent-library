@@ -8,6 +8,7 @@ import { warmDirectory } from '../lib/directory';
 import { uniq, splitRoles } from '../lib/agentUtils';
 import ComboInput from './ComboInput';
 import MultiSelect from './MultiSelect';
+import TagMultiSelect from './TagMultiSelect';
 import CreatorPicker from './CreatorPicker';
 import AgentDetailModal from './AgentDetailModal';
 
@@ -102,7 +103,7 @@ function splitOptions(values) {
   return uniq(values.flatMap((v) => splitRoles(v))).sort();
 }
 
-export default function PreRegModal({ onClose, approvedAgents, schema, user, onSubmitted }) {
+export default function PreRegModal({ onClose, approvedAgents, schema, user, onSubmitted, onAddRelatedRole }) {
   const [tab, setTab] = useState('form');
   const [form, setForm] = useState(EMPTY_FORM);
   const [validationMsg, setValidationMsg] = useState('');
@@ -150,7 +151,12 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
     () => (schema.coreAbility?.length ? schema.coreAbility : splitOptions(approvedAgents.map((a) => a.coreAbility))),
     [schema.coreAbility, approvedAgents]
   );
-  const roleOptions = useMemo(() => splitOptions(approvedAgents.map((a) => a.relatedRole)), [approvedAgents]);
+  // Merges roles already in use with any newly-typed roles persisted to
+  // /config/schema.relatedRole (2026-07-06 free-add) — visible immediately.
+  const roleOptions = useMemo(
+    () => uniq([...splitOptions(approvedAgents.map((a) => a.relatedRole)), ...(schema.relatedRole || [])]),
+    [approvedAgents, schema.relatedRole]
+  );
   const stageOptions = schema.sdlcStage?.length ? schema.sdlcStage : [];
   // Process Mapping is cascaded from the selected SDLC Stage(s), using the
   // real stage↔process link from the /sdlcProcesses catalog (source of truth:
@@ -389,7 +395,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
               breadthFlag,
             }
           : null,
-        developmentPhase: 'Not Start',
+        developmentPhase: 'To Do',
         devProgress: 0,
         deploymentStatus: 'none',
         launchDate: null,
@@ -475,7 +481,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
             businessValue: inheritedFromAgent.businessValue,
             matchingAgent: agentName,   // ← link to parent Agent
             analysisResult: null,
-            developmentPhase: 'Not Start',
+            developmentPhase: 'To Do',
             devProgress: 0,
             deploymentStatus: 'none',
             launchDate: null,
@@ -634,7 +640,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
               </div>
               <div className="fg">
                 <label>Related Role <span className="req">*</span></label>
-                <MultiSelect label="เลือก Related Role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} />
+                <TagMultiSelect label="เลือก Related Role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
               </div>
             </div>
 
@@ -791,7 +797,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                       </div>
                       <div className="fg">
                         <label>Related Role <span className="req">*</span></label>
-                        <MultiSelect label="เลือก Related Role…" options={roleOptions} selected={s.relatedRole} onChange={(v) => setSkillField(s._id, 'relatedRole', v)} />
+                        <TagMultiSelect label="เลือก Related Role…" options={roleOptions} selected={s.relatedRole} onChange={(v) => setSkillField(s._id, 'relatedRole', v)} onAddNew={onAddRelatedRole} />
                       </div>
                     </div>
                     <div className="grid2">
@@ -891,6 +897,11 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                     {aiResult.integration_suggestions.map((s, i) => (
                       <div key={i} style={{ fontSize: 12 }}>• <strong>{s.agentName}</strong> — {s.how}</div>
                     ))}
+                    {aiResult.tech_stack_hint && (
+                      <div style={{ fontSize: 12, marginTop: 3, color: 'var(--tx2)' }}>
+                        <strong>แนวทางเทคนิค:</strong> {aiResult.tech_stack_hint}
+                      </div>
+                    )}
                   </div>
                 )}
 
