@@ -46,9 +46,11 @@ export function statusCounts(agents) {
   return c;
 }
 
-// Progress-bar fill color bucket (matches original .pfh/.pfm/.pfl)
+// Progress-bar fill color bucket — 2026-07-06 (improve pass): reuse the same
+// td/ip/pilot/ru bucket as the status badge instead of a separate 70/30%
+// threshold (old pfh/pfm/pfl, whose green/purple/grey carried no relation to
+// status at all). One card previously showed two unrelated colour codings for
+// the same progress number; now the bar and the badge always agree.
 export function progressBucket(p) {
-  if (p >= 70) return 'pfh';
-  if (p >= 30) return 'pfm';
-  return 'pfl';
+  return phaseForProgress(p);
 }

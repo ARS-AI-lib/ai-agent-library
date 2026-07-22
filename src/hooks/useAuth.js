@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut as fbSignOut, GoogleAuthProvider } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut as fbSignOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, googleProvider, db, isAllowedEmail, ALLOWED_DOMAINS_LABEL } from '../lib/firebase';
 import { setDirectoryToken, warmDirectory } from '../lib/directory';
@@ -131,14 +131,10 @@ export function useAuth() {
       setDomainError(true);
       throw new Error(`อีเมลนี้ไม่อยู่ใน domain ที่อนุญาต (${ALLOWED_DOMAINS_LABEL})`);
     }
-    // Google OAuth access token (carries the directory.readonly scope) is only
-    // available right here, right after the popup — Firebase doesn't persist
-    // it. Stash it in memory for the People API directory search to use for
-    // the rest of the session (see src/lib/directory.js).
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    setDirectoryToken(credential?.accessToken || null);
-    // Preload the directory in the background right after login so it's warm
-    // long before the user ever opens the New Entry form.
+    // Preload the Firestore-cached directory in the background right after
+    // login so it's warm before the user opens the New Entry form. No Google
+    // token needed — the directory.readonly scope is only requested on-demand
+    // when an admin runs a sync (see src/lib/directory.js).
     warmDirectory();
   }
 

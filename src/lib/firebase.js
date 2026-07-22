@@ -17,11 +17,12 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-// Requested at every normal sign-in (not a separate popup) so the "Creator /
-// Team member" picker in PreRegModal can search the Workspace directory via
-// the People API — see src/lib/directory.js for how the resulting token is
-// captured and used.
-googleProvider.addScope('https://www.googleapis.com/auth/directory.readonly');
+// NOTE: normal sign-in requests only basic profile/email (non-sensitive) — the
+// People API `directory.readonly` scope is a SENSITIVE scope that made the
+// unverified-app consent screen block some users at login. It's now requested
+// on-demand, only when an admin clicks "Sync directory now" (see
+// acquireDirectoryToken in src/lib/directory.js). Everyone else reads the
+// Firestore-cached directory, which needs no Google token at all.
 
 // ⚠️ Named (non-default) Firestore database — ต้องระบุชื่อ DB ตรงนี้เสมอ
 // (ตามที่บันทึกไว้: getFirestore(app) เปล่าๆ จะไปชี้ default DB ผิดตัว)

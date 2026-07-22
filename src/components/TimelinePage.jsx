@@ -90,6 +90,8 @@ export default function TimelinePage() {
   }
 
   const outItems = items.filter((it) => !inAnyMilestone(it.launch, milestones));
+  const activeMs = filter && filter !== 'out' ? milestones.find((m) => m.id === filter) : null;
+  const msItems = activeMs ? items.filter((it) => it.launch && inRange(it.launch, activeMs)) : [];
   const canEdit = canView; // same allowlist edits milestones (locked decision)
 
   return (
@@ -136,9 +138,13 @@ export default function TimelinePage() {
         </div>
         {canEdit && (
           <button className="btn btn-primary" style={{ fontSize: 12.5, padding: '7px 14px' }} onClick={() => setEditMs(true)}>
-            จัดการ Milestone
+            Manage Milestones
           </button>
         )}
+      </div>
+
+      <div className="tl-mobile-banner">
+        หน้านี้แสดงผลได้ดีที่สุดบนจอกว้าง — บนมือถือกรุณาเลื่อนซ้าย-ขวาเพื่อดู Timeline หรือหมุนจอเป็นแนวนอน
       </div>
 
       <div className="tl-legend">
@@ -170,6 +176,10 @@ export default function TimelinePage() {
         </div>
       </div>
 
+      {activeMs && (
+        <MilestoneSummaryCard milestone={activeMs} items={msItems} onClear={() => setFilter(null)} />
+      )}
+
       <OutOfMilestoneCard items={outItems} allItems={items} filter={filter} setFilter={setFilter} />
 
       {listPopup && (
@@ -198,7 +208,7 @@ export default function TimelinePage() {
                 <div key={a.id} className="sdlc-mac" style={{ cursor: 'pointer' }} onClick={() => { setListPopup(null); setDetailAgent(a); }}>
                   <div className="sdlc-machdr">
                     <span className={`uc-tb ${t === 'agent' ? 'tbag' : 'tbsk'}`}>{t.toUpperCase()}</span>
-                    <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }}>{tier}</span>
+                    <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>{tier}</span>
                     <span className="sdlc-macname">{a.agentName}</span>
                     <span className="scope-badge" style={{ position: 'static', marginLeft: 'auto', color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
                       {scope === 'External' ? (
@@ -284,6 +294,31 @@ function OutOfMilestoneCard({ items, allItems, filter, setFilter }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
         {teams.map((t) => <span key={t} className="tl-out-team">{t}</span>)}
         {!items.length && <span style={{ fontSize: 11, color: 'var(--mu)' }}>ทุก Agent/Skill อยู่ใน milestone แล้ว</span>}
+      </div>
+    </div>
+  );
+}
+
+function MilestoneSummaryCard({ milestone, items, onClear }) {
+  const teams = uniq(items.map((a) => a.team));
+  const agN = items.filter((a) => a.type === 'agent').length;
+  const skN = items.filter((a) => a.type === 'skill').length;
+  const col = milestone.color || '#2f6bff';
+  return (
+    <div className="tl-ms-card" onClick={onClear} style={{ borderTopColor: col, boxShadow: `0 0 0 2px ${col}33, var(--sh)` }}>
+      <div className="tl-out-hdr">
+        <span className="tl-ms-title" style={{ color: col }}>{milestone.name || milestone.id}</span>
+        <span style={{ fontSize: 10, color: 'var(--mu)' }}>Agent/Skill ที่ launch อยู่ใน milestone นี้</span>
+        <span className="tl-ms-active" style={{ background: col }}>Active</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
+          <Stat n={items.length} l="Total" c={col} />
+          <Stat n={agN} l="Agent" c="var(--ag)" />
+          <Stat n={skN} l="Skill" c="var(--sk)" />
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+        {teams.map((t) => <span key={t} className="tl-out-team">{t}</span>)}
+        {!items.length && <span style={{ fontSize: 11, color: 'var(--mu)' }}>ไม่มี Agent/Skill launch ใน milestone นี้</span>}
       </div>
     </div>
   );

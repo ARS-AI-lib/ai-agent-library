@@ -6,6 +6,7 @@
 // editable milestones, and the auto-fitting time axis are new.
 
 import { getType } from './tier';
+import { normalizeProgress } from './agentUtils';
 
 // Status palette for the timeline dots — mirrors the reference TL_ST. These
 // are timeline-forecast statuses (done/pilot/ontime/risk/delay), DISTINCT from
@@ -38,12 +39,6 @@ export function toDate(v) {
   }
 }
 
-function progressNum(a) {
-  const raw = a?.devProgress;
-  const n = typeof raw === 'number' ? raw : parseInt(String(raw || '').replace('%', ''), 10);
-  return isNaN(n) ? 0 : n;
-}
-
 // Firestore agent → flat timeline item. `team` (the row grouping) is the
 // agent's OWNER (dept/team). `creator` is the person. This mirrors the
 // reference's a.team (row) vs a.owner (person) — note the field names are
@@ -56,7 +51,7 @@ export function toTimelineItem(a) {
     team: a.owner || '',
     creator: a.creator || '',
     launch: toDate(a.launchDate),
-    progress: progressNum(a),
+    progress: normalizeProgress(a?.devProgress),
     ability: Array.isArray(a.coreAbility) ? a.coreAbility.join(', ') : (a.coreAbility || ''),
     role: Array.isArray(a.relatedRole) ? a.relatedRole.join(', ') : (a.relatedRole || ''),
     useCase: a.useCase || '',

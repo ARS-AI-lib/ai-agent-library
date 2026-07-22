@@ -36,6 +36,27 @@ const GROUPS = [
 const ALL_STAGES = GROUPS.flatMap((g) => g.sub.map((s) => s.stage));
 const STATUS_ICON = { td: '◦', ip: '●', pilot: '◆', ru: '✓' };
 const PRIORITY = ['ru', 'pilot', 'ip', 'td'];
+// Weight per status (To Do lowest → Ready-to-Use highest) and the inverse map,
+// used only for the tie-break average below.
+const WEIGHT_STATUS = { 1: 'td', 2: 'ip', 3: 'pilot', 4: 'ru' };
+
+// The colour a process card takes = the status holding the LARGEST share of the
+// card's agents (plurality/mode), NOT the most-advanced status present. The old
+// rule picked the highest status with any count at all, so a card of 3 To-Do +
+// 1 Pilot looked blue (Pilot) instead of grey. On a TIE for the top count, fall
+// back to the weighted average across every agent and round HALF DOWN
+// (conservative — an evenly-split card shouldn't read as more mature than it
+// is), then map that middle value back to a status.
+function dominantStatus(counts) {
+  const total = counts.td + counts.ip + counts.pilot + counts.ru;
+  if (total === 0) return 'td';
+  const max = Math.max(counts.td, counts.ip, counts.pilot, counts.ru);
+  const top = ['td', 'ip', 'pilot', 'ru'].filter((s) => counts[s] === max);
+  if (top.length === 1) return top[0];
+  const avg = ((counts.td * 1) + (counts.ip * 2) + (counts.pilot * 3) + (counts.ru * 4)) / total;
+  const idx = Math.max(1, Math.min(4, Math.ceil(avg - 0.5)));  // round half down
+  return WEIGHT_STATUS[idx];
+}
 
 // Owner / relationship-label / role tags for a mini agent row — deduped by
 // visible text (2026-07 fix): owner and relatedRole are different fields
@@ -85,6 +106,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   const [procOwner, setProcOwner] = useState(new Set());
   const [reusable, setReusable] = useState(new Set());
   const [hasAgent, setHasAgent] = useState(false);
+  const [nonSdlcOnly, setNonSdlcOnly] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState(new Set());
   const [modal, setModal] = useState(null);
 
@@ -117,7 +139,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   }
   function changeAdoptView(v) { setAdoptView(v); if (v !== 'by-stage') setStage('all'); }
   function clearFilters() {
-    setShowUseCases(false); setHasAgent(false); setAdoptView('by-stage');
+    setShowUseCases(false); setHasAgent(false); setNonSdlcOnly(false); setAdoptView('by-stage');
     setStage('all'); setOwner(new Set()); setRole(new Set()); setProcOwner(new Set()); setReusable(new Set()); setSelectedStatus(new Set());
   }
 
@@ -139,7 +161,9 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     if (selectedStatus.size > 0 && !selectedStatus.has(agentStatus(withProgress(a)))) return false;
     if (search) {
       const q = search.toLowerCase();
-      if (!`${a.agentName || ''} ${a.owner || ''}`.toLowerCase().includes(q)) return false;
+      const coreAbility = Array.isArray(a.coreAbility) ? a.coreAbility.join(' ') : (a.coreAbility || '');
+      const hay = `${a.agentName || ''} ${a.owner || ''} ${a.description || ''} ${coreAbility} ${a.relatedRole || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
     }
     return true;
   }), [agents, owner, role, reusable, selectedStatus, search]);
@@ -163,10 +187,29 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     return visAgents.filter((a) => !agentProcessIds(a).some((id) => procIdSet.has(id)));
   }, [visAgents, processes]);
 
-  const nonSdlcUC = useMemo(() => {
+  // UC view splits its leftover agents into two distinct groups (2026-07-xx —
+  // "Non-SDLC" was misleadingly catching agents that DO have a real Stage/
+  // Process, just no Use Case picked yet): "missing Use Case only" (has a
+  // valid process mapping) vs true "Non-SDLC" (no process mapping at all,
+  // same definition as nonSdlcBoard above).
+  const noUseCaseOnly = useMemo(() => {
     const ucNameSet = new Set(useCases.map((u) => (u.name || '').toLowerCase()));
-    return visAgents.filter((a) => !(a.useCase && ucNameSet.has(a.useCase.toLowerCase())));
-  }, [visAgents, useCases]);
+    const procIdSet = new Set(processes.map((p) => p.id));
+    return visAgents.filter((a) =>
+      !(a.useCase && ucNameSet.has(a.useCase.toLowerCase()))
+      && agentProcessIds(a).some((id) => procIdSet.has(id))
+    );
+  }, [visAgents, useCases, processes]);
+
+  // "Non-SDLC" must mean the exact same thing everywhere in this tab — an
+  // agent with no matching process — regardless of its (possibly stale/
+  // inconsistent) useCase field. This is deliberately the SAME set as
+  // nonSdlcBoard (not filtered by useCase at all), so the count reconciles
+  // between the always-visible board card and the Non-SDLC filter view
+  // (2026-07 bug: a handful of agents have no valid process match yet still
+  // carry a useCase string that happens to match the catalog — they used to
+  // fall out of this bucket silently, undercounting it vs. nonSdlcBoard).
+  const nonSdlcUC = nonSdlcBoard;
 
   // Only surface the Non-SDLC group when no Process-Owner filter is active —
   // that filter narrows the legend to process-owned agents (which excludes the
@@ -210,8 +253,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     const counts = { td: 0, ip: 0, pilot: 0, ru: 0 };
     ags.forEach((a) => { counts[agentStatus(withProgress(a))]++; });
 
-    let dominant = 'td';
-    for (const s of PRIORITY) if (counts[s] > 0) { dominant = s; break; }
+    const dominant = dominantStatus(counts);
     const empty = ags.length === 0;
     const breakdown = PRIORITY.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${ST_DEF[s].lb}`).join(', ');
 
@@ -236,8 +278,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     const ags = nonSdlcBoard;
     const counts = { td: 0, ip: 0, pilot: 0, ru: 0 };
     ags.forEach((a) => { counts[agentStatus(withProgress(a))]++; });
-    let dominant = 'td';
-    for (const s of PRIORITY) if (counts[s] > 0) { dominant = s; break; }
+    const dominant = dominantStatus(counts);
     const breakdown = PRIORITY.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${ST_DEF[s].lb}`).join(', ');
     return (
       <div
@@ -252,7 +293,52 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     );
   }
 
+  // "Non-SDLC" filter view — shared by both Board and Use Case view (2026-07-xx:
+  // toggling this filter should surface BOTH incomplete-SDLC-info groups no
+  // matter which view you're on, since "Missing Use Case" only exists as a
+  // concept in the UC view otherwise and would silently vanish from Board view).
+  function renderNonSdlcFilter() {
+    if (noUseCaseOnly.length === 0 && nonSdlcUC.length === 0) {
+      return <div className="sdlc-empty">ไม่มี Agent/Skill ที่อยู่นอก SDLC</div>;
+    }
+    return (
+      <>
+        {noUseCaseOnly.length > 0 && (
+          <div className="sb">
+            <div className="sh">
+              <div className="sbar" style={{ background: '#8c6b45' }} />
+              <span className="sname" style={{ color: '#8c6b45' }}>Missing Use Case</span>
+              <span className="sbadge">{noUseCaseOnly.length} items</span>
+              <span className="scov">มี Stage/Process แล้ว แต่ยังไม่ระบุ Use Case</span>
+            </div>
+            <div className="uc-grid">
+              {noUseCaseOnly.map((a) => <NonSdlcUCCard key={a.id} agent={a} />)}
+            </div>
+          </div>
+        )}
+        {nonSdlcUC.length > 0 && (
+          <div className="sb">
+            <div className="sh">
+              <div className="sbar" style={{ background: '#7a85a3' }} />
+              <span className="sname" style={{ color: '#7a85a3' }}>Non-SDLC</span>
+              <span className="sbadge">{nonSdlcUC.length} items</span>
+              <span className="scov">Agent/Skill not mapped to an SDLC process</span>
+            </div>
+            <div className="uc-grid">
+              {nonSdlcUC.map((a) => <NonSdlcUCCard key={a.id} agent={a} />)}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
   function renderBoard() {
+    // "Non-SDLC" filter isolates the process-less agents — hide the whole
+    // stage/process board and show only the Non-SDLC summary card.
+    if (nonSdlcOnly) {
+      return renderNonSdlcFilter();
+    }
     return (
       <>
       <div className="adopt-board">
@@ -363,6 +449,11 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   }
 
   function renderUseCaseView() {
+    // "Non-SDLC" filter — same shared view as Board (see renderNonSdlcFilter).
+    if (nonSdlcOnly) {
+      return renderNonSdlcFilter();
+    }
+
     const procToStage = {};
     processes.forEach((p) => { procToStage[p.id] = p.stage; });
     const dim = adoptView === 'by-process' ? 'process' : 'stage';
@@ -403,8 +494,27 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
       );
     }).filter(Boolean);
 
-    // Non-SDLC group — agents/skills with no matching use case, shown as their
-    // own section at the bottom so the UC view total reconciles with the legend.
+    // "Missing Use Case" group — agents/skills that DO have a real Stage/
+    // Process mapping but no Use Case picked yet. Kept separate from true
+    // "Non-SDLC" below so it isn't mislabeled as having no SDLC info at all.
+    if (showNonSdlc && noUseCaseOnly.length > 0) {
+      out.push(
+        <div key="__no_use_case__" className="sb">
+          <div className="sh">
+            <div className="sbar" style={{ background: '#8c6b45' }} />
+            <span className="sname" style={{ color: '#8c6b45' }}>Missing Use Case</span>
+            <span className="sbadge">{noUseCaseOnly.length} items</span>
+            <span className="scov">มี Stage/Process แล้ว แต่ยังไม่ระบุ Use Case</span>
+          </div>
+          <div className="uc-grid">
+            {noUseCaseOnly.map((a) => <NonSdlcUCCard key={a.id} agent={a} />)}
+          </div>
+        </div>
+      );
+    }
+
+    // Non-SDLC group — agents/skills with NO process mapping at all, shown as
+    // their own section at the bottom so the UC view total reconciles with the legend.
     if (showNonSdlc && nonSdlcUC.length > 0) {
       out.push(
         <div key="__non_sdlc__" className="sb">
@@ -478,6 +588,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
         </div>
         <div className="csep" />
         <button className={`pill ${hasAgent ? 'on' : ''}`} onClick={() => setHasAgent((v) => !v)}>Has agent</button>
+        <button className={`pill ${nonSdlcOnly ? 'on' : ''}`} onClick={() => setNonSdlcOnly((v) => !v)}>Non-SDLC</button>
         <button className="btnclr" title="Clear filters" onClick={clearFilters}>✕</button>
       </div>
 
@@ -509,7 +620,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
                 <div key={a.id} className="sdlc-mac" style={{ cursor: 'pointer' }} onClick={() => onAgentClick?.(a)}>
                   <div className="sdlc-machdr">
                     <span className={`uc-tb ${t === 'agent' ? 'tbag' : 'tbsk'}`}>{t.toUpperCase()}</span>
-                    <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }}>{tier}</span>
+                    <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>{tier}</span>
                     <span className="sdlc-macname">{a.agentName}</span>
                     <span className="scope-badge" style={{ position: 'static', marginLeft: 'auto', color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
                       {scope === 'External' ? (

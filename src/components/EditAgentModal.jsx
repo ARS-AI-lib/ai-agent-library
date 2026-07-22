@@ -1,14 +1,22 @@
-import { useState } from 'react';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useEffect, useMemo, useState } from 'react';
+import { doc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { isInternalOrExternal } from '../lib/tier';
+import { isInternalOrExternal, isSkill } from '../lib/tier';
 import { developmentPhaseLabel } from '../lib/status';
-import { splitRoles } from '../lib/agentUtils';
+import { splitRoles, normalizeProgress, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC } from '../lib/agentUtils';
+import { lookupDirectoryNames } from '../lib/directory';
 import MultiSelect from './MultiSelect';
 import TagMultiSelect from './TagMultiSelect';
+import AgentMultiSelect from './AgentMultiSelect';
+import ComboInput from './ComboInput';
 import CreatorPicker from './CreatorPicker';
+import useEscapeKey from '../hooks/useEscapeKey';
 
 const REUSABLE_OPTIONS = ['Reusable', 'Reusable with Conditions', 'Non-reusable'];
+// <fieldset disabled> natively disables every form control inside it — used to
+// lock a whole field group for a user who lacks that group's edit right, with
+// zero per-component wiring. This resets the browser's default fieldset chrome.
+const FS = { border: 0, padding: 0, margin: 0, minInlineSize: 'auto' };
 
 function toDateInputValue(d) {
   if (!d) return '';
@@ -20,28 +28,31 @@ function toDateInputValue(d) {
   }
 }
 
-function progressNum(agent) {
-  const raw = agent?.devProgress;
-  const num = typeof raw === 'number' ? raw : parseInt(String(raw || '').replace('%', ''), 10);
-  return isNaN(num) ? 0 : num;
-}
-
 /**
- * Edit an already-approved agent/skill's details (2026-07-03 feature) — a
- * broader field set than AgentDetailModal's inline progress/launch-date
- * editor. Gated by canEditDetails() (creatorEmails or admin, locked the
- * moment a deployment request is filed — no admin bypass) both here and in
- * firestore.rules.
- *
- * Type (Agent/Skill) is NOT editable here — locked permanently once
- * approved. Adding a new paired sub-skill is also NOT part of this form —
- * that's what "New Entry" (PreRegModal) is for; this modal only edits the
- * ONE existing doc it was opened for.
+ * Edit an already-approved agent/skill's details (2026-07-03). Three
+ * independently-gated field groups (2026-07-xx):
+ *   - Tier A details (name/description/scope/ability/role/reusable/hml/input/
+ *     output/compatibleAgents): canEditDetails — staff/committee/owner/creator/admin
+ *   - Sensitive (creator list, launch date, progress): canUpdateProgress —
+ *     admin/owner(createdBy)/creator(email)/approver(approvedBy)
+ *   - SDLC (stage/process/useCase): canEditSDLC — createdBy/staff/approver/admin
+ * Each group is locked (fieldset disabled) when the user lacks its right, and
+ * the save omits any group the user can't edit so the write's affectedKeys
+ * matches exactly one firestore.rules branch. All groups also freeze once a
+ * deployment request is filed. Type (Agent/Skill) is never editable here.
  */
-export default function EditAgentModal({ agent, onClose, onSaved, user, abilityOptions, roleOptions, onAddRelatedRole, lockProgress = false }) {
+export default function EditAgentModal({ agent, onClose, onSaved, user, userRole, isAdmin = false, schema = {}, abilityOptions, roleOptions, onAddRelatedRole, lockProgress = false, allAgents = [] }) {
+  const canEditTierA = canEditDetails(agent, user, userRole, isAdmin);
+  const canEditSensitive = canUpdateProgress(agent, user, isAdmin);
+  const canEditSDLCFlag = canEditSDLC(agent, user, userRole, isAdmin);
+  const lockTierA = !canEditTierA;
+  const lockSensitive = lockProgress || !canEditSensitive;
+
   const [form, setForm] = useState(() => ({
     agentName: agent.agentName || '',
     description: agent.description || '',
+    input: agent.input || '',
+    output: agent.output || '',
     scope: isInternalOrExternal(agent) === 'External' ? 'External' : 'Internal',
     coreAbility: new Set(Array.isArray(agent.coreAbility) ? agent.coreAbility : [agent.coreAbility].filter(Boolean)),
     relatedRole: new Set(splitRoles(agent.relatedRole)),
@@ -53,56 +64,160 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, abilityO
     hml: !!agent.hml,
     humanJob: agent.humanJob || '',
     launchDate: toDateInputValue(agent.launchDate),
-    devProgress: progressNum(agent),
+    devProgress: normalizeProgress(agent?.devProgress),
+    compatibleAgents: Array.isArray(agent.compatibleAgents) ? agent.compatibleAgents : [],
+    sdlcStage: new Set(Array.isArray(agent.sdlcStage) ? agent.sdlcStage : [agent.sdlcStage].filter(Boolean)),
+    sdlcProcessMapping: new Set(Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping : [agent.sdlcProcessMapping].filter(Boolean)),
+    useCase: agent.useCase || '',
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [processes, setProcesses] = useState([]);
+  const [useCases, setUseCases] = useState([]);   // full sdlcUseCases docs (processId, name)
+  useEscapeKey(onClose);
+
+  // Load the authoritative SDLC catalogs (same source as PreRegModal) so the
+  // Stage/Process/Use Case pickers mirror the New Entry form.
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      getDocs(collection(db, 'sdlcUseCases')),
+      getDocs(collection(db, 'sdlcProcesses')),
+    ]).then(([ucSnap, procSnap]) => {
+      if (!alive) return;
+      setUseCases(ucSnap.docs.map((d) => d.data()).filter((u) => u.name));
+      setProcesses(procSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setCatalogLoaded(true);
+    }).catch(() => { if (alive) { setUseCases([]); setProcesses([]); setCatalogLoaded(true); } });
+    return () => { alive = false; };
+  }, []);
+
+  const stageOptions = schema.sdlcStage?.length ? schema.sdlcStage : [];
+  // Process Mapping is cascaded from the selected Stage(s) via the real
+  // stage↔process link in /sdlcProcesses (same rule as PreRegModal).
+  const processOptions = useMemo(() => {
+    if (form.sdlcStage.size === 0) return [];
+    return uniq(processes.filter((p) => form.sdlcStage.has(p.stage)).map(processLabel)).sort();
+  }, [processes, form.sdlcStage]);
+
+  // Use Case is scoped to the selected Process Mapping(s) — same join as
+  // PreRegModal (sdlcUseCases.processId against each mapping's id prefix).
+  // Falls back to every use case when no process is selected yet.
+  const useCaseOptions = useMemo(() => {
+    if (form.sdlcProcessMapping.size === 0) return uniq(useCases.map((u) => u.name)).sort();
+    const selectedIds = new Set([...form.sdlcProcessMapping].map(extractProcessId));
+    return uniq(useCases.filter((u) => selectedIds.has(u.processId)).map((u) => u.name)).sort();
+  }, [useCases, form.sdlcProcessMapping]);
+
+  // Drop any selected process that no longer belongs to the chosen stages —
+  // but ONLY after the catalog has actually loaded. Without this guard, the
+  // effect fires on mount while `processes` is still [] (fetch is async), so
+  // processOptions is empty and it wipes the agent's pre-existing selection
+  // before the real catalog arrives (2026-07 bug: Edit form showed Process
+  // Mapping as blank even though the agent had one saved).
+  useEffect(() => {
+    if (!catalogLoaded) return;
+    setForm((f) => {
+      if (f.sdlcProcessMapping.size === 0) return f;
+      const valid = new Set(processOptions);
+      const kept = new Set([...f.sdlcProcessMapping].filter((p) => valid.has(p)));
+      if (kept.size === f.sdlcProcessMapping.size) return f;
+      return { ...f, sdlcProcessMapping: kept };
+    });
+  }, [processOptions]);
+
+  // Re-hydrate creator chips (loaded from creatorEmails with no name) from the
+  // directory cache so `creator` display can be rewritten correctly on save.
+  useEffect(() => {
+    if (!canEditSensitive) return;
+    const emails = (Array.isArray(agent.creatorEmails) ? agent.creatorEmails : []).filter(Boolean);
+    if (!emails.length) return;
+    let cancelled = false;
+    lookupDirectoryNames(emails).then((resolved) => {
+      if (cancelled) return;
+      const nameByEmail = new Map(resolved.map((r) => [(r.email || '').toLowerCase(), r.name]));
+      setForm((f) => ({
+        ...f,
+        creatorPicks: f.creatorPicks.map((p) => (
+          p.name ? p : { ...p, name: nameByEmail.get((p.email || '').toLowerCase()) || '' }
+        )),
+      }));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [agent.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function setField(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
   async function handleSave() {
-    const agentName = form.agentName.trim();
-    if (!agentName || !form.description.trim() || form.coreAbility.size === 0 || form.relatedRole.size === 0 || !form.reusable) {
-      setError('กรอกข้อมูลที่จำเป็น (ชื่อ, Description, Core Ability, Related Role, Reusable) ให้ครบ');
-      return;
-    }
-    if (form.reusable === 'Reusable with Conditions' && !form.reuseCondition.trim()) {
-      setError('กรุณาระบุ Reuse Conditions');
-      return;
+    // Validate the Tier A required set only when the user can actually edit it
+    // (a pure approver-role edits SDLC only and leaves Tier A untouched).
+    if (canEditTierA) {
+      const agentName = form.agentName.trim();
+      if (!agentName || !form.description.trim() || !form.input.trim() || !form.output.trim() || form.coreAbility.size === 0 || form.relatedRole.size === 0 || !form.reusable) {
+        setError('กรอกข้อมูลที่จำเป็น (ชื่อ, Description, Input, Output, Core Ability, Related Role, Reusable) ให้ครบ');
+        return;
+      }
+      if (form.reusable === 'Reusable with Conditions' && !form.reuseCondition.trim()) {
+        setError('กรุณาระบุ Reuse Conditions');
+        return;
+      }
     }
     setSaving(true);
     setError('');
     try {
       const isExternal = form.scope === 'External';
       const clampedProgress = Math.max(0, Math.min(100, Math.round(Number(form.devProgress) || 0)));
-      const creatorEmails = [
-        ...new Map(form.creatorPicks.map((p) => p.email).filter(Boolean).map((e) => [e.toLowerCase(), e])).values(),
-      ];
 
-      await updateDoc(doc(db, 'agents', agent.id), {
-        agentName,
-        description: form.description.trim(),
-        coreAbility: [...form.coreAbility],
-        relatedRole: [...form.relatedRole],
-        customerFacing: isExternal,
-        internalUse: !isExternal,
-        creatorEmails,
-        reusable: form.reusable,
-        reuseCondition: form.reusable === 'Reusable with Conditions' ? form.reuseCondition.trim() : '',
-        hml: form.hml,
-        humanJob: form.hml ? form.humanJob.trim() : '',
-        // A locked paired sub-skill never owns its progress/launch — those
-        // cascade from the parent Agent, so leave them untouched here
-        // (2026-07-06).
-        ...(lockProgress ? {} : {
-          launchDate: form.launchDate ? new Date(form.launchDate) : null,
-          devProgress: clampedProgress,
-          developmentPhase: developmentPhaseLabel(clampedProgress),
-        }),
-        updatedAt: serverTimestamp(),
-      });
+      // Write 1 — Tier A (+ sensitive) fields. Skipped entirely for a user who
+      // can only edit SDLC, so its affectedKeys never leaks into the SDLC rule
+      // branch. The sensitive sub-blocks are included only when permitted.
+      if (canEditTierA) {
+        await updateDoc(doc(db, 'agents', agent.id), {
+          agentName: form.agentName.trim(),
+          description: form.description.trim(),
+          input: form.input.trim(),
+          output: form.output.trim(),
+          compatibleAgents: form.compatibleAgents,
+          coreAbility: [...form.coreAbility],
+          relatedRole: [...form.relatedRole],
+          customerFacing: isExternal,
+          internalUse: !isExternal,
+          reusable: form.reusable,
+          reuseCondition: form.reusable === 'Reusable with Conditions' ? form.reuseCondition.trim() : '',
+          hml: form.hml,
+          humanJob: form.hml ? form.humanJob.trim() : '',
+          // Sensitive: creator list — writes `creator` display alongside
+          // creatorEmails so the card/detail reflect new names immediately.
+          ...(canEditSensitive ? {
+            creatorEmails: [
+              ...new Map(form.creatorPicks.map((p) => p.email).filter(Boolean).map((e) => [e.toLowerCase(), e])).values(),
+            ],
+            creator: form.creatorPicks.map((p) => (p.name || p.email)).filter(Boolean).join(', '),
+          } : {}),
+          // Sensitive: launch/progress — locked for a paired sub-skill (cascades
+          // from parent) or when the user lacks sensitive rights.
+          ...(lockSensitive ? {} : {
+            launchDate: form.launchDate ? new Date(form.launchDate) : null,
+            devProgress: clampedProgress,
+            developmentPhase: developmentPhaseLabel(clampedProgress),
+          }),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Write 2 — SDLC metadata (separate write ⇒ its own affectedKeys, matching
+      // the dedicated sdlc rule branch: createdBy/staff/approver/admin).
+      if (canEditSDLCFlag) {
+        await updateDoc(doc(db, 'agents', agent.id), {
+          sdlcStage: isExternal ? [] : [...form.sdlcStage],
+          sdlcProcessMapping: isExternal ? [] : [...form.sdlcProcessMapping],
+          useCase: isExternal ? '' : form.useCase.trim(),
+          updatedAt: serverTimestamp(),
+        });
+      }
 
       onSaved?.();
       onClose();
@@ -113,6 +228,8 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, abilityO
     }
   }
 
+  const internalShown = form.scope === 'Internal';
+
   return (
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
       <div className="mbox">
@@ -122,77 +239,152 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, abilityO
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
 
-        <div className="fg">
-          <label>Agent / Skill Name <span className="req">*</span></label>
-          <input value={form.agentName} onChange={(e) => setField('agentName', e.target.value)} />
-        </div>
-
-        <div className="fg">
-          <label>Scope <span className="req">*</span></label>
-          <div className="radio-row">
-            {[['Internal', 'Internal Use'], ['External', 'Customer Facing']].map(([v, lbl]) => (
-              <label key={v}>
-                <input type="radio" name="edit-scope" value={v} checked={form.scope === v} onChange={() => setField('scope', v)} />
-                {lbl}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="fg">
-          <label>Description <span className="req">*</span></label>
-          <textarea rows={3} value={form.description} onChange={(e) => setField('description', e.target.value)} />
-        </div>
-
-        <div className="grid2">
+        {/* ── Tier A details — locked as one group for a user without detail rights ── */}
+        <fieldset disabled={lockTierA} style={{ ...FS, opacity: lockTierA ? 0.6 : 1 }}>
+          {lockTierA && (
+            <div className="msg info" style={{ fontSize: 11 }}>
+              <span className="dot" style={{ background: '#4a6fa5' }} />
+              คุณมีสิทธิ์แก้ไขเฉพาะ SDLC (Stage / Process / Use Case) เท่านั้น
+            </div>
+          )}
           <div className="fg">
-            <label>Core Ability <span className="req">*</span></label>
-            <MultiSelect label="เลือก Core Ability…" options={abilityOptions} selected={form.coreAbility} onChange={(s) => setField('coreAbility', s)} />
+            <label>Agent / Skill Name <span className="req">*</span></label>
+            <input value={form.agentName} onChange={(e) => setField('agentName', e.target.value)} />
           </div>
-          <div className="fg">
-            <label>Related Role <span className="req">*</span></label>
-            <TagMultiSelect label="เลือก Related Role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
-          </div>
-        </div>
 
+          <div className="fg">
+            <label>Scope <span className="req">*</span></label>
+            <div className="radio-row">
+              {[['Internal', 'Internal Use'], ['External', 'Customer Facing']].map(([v, lbl]) => (
+                <label key={v}>
+                  <input type="radio" name="edit-scope" value={v} checked={form.scope === v} onChange={() => setField('scope', v)} />
+                  {lbl}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="fg">
+            <label>Description <span className="req">*</span></label>
+            <textarea rows={3} value={form.description} onChange={(e) => setField('description', e.target.value)} />
+          </div>
+
+          <div className="grid2">
+            <div className="fg">
+              <label>Input <span className="req">*</span></label>
+              <textarea rows={2} value={form.input} onChange={(e) => setField('input', e.target.value)} placeholder="ข้อมูลที่ Agent/Skill รับ" />
+            </div>
+            <div className="fg">
+              <label>Output <span className="req">*</span></label>
+              <textarea rows={2} value={form.output} onChange={(e) => setField('output', e.target.value)} placeholder="ผลลัพธ์ที่สร้าง" />
+            </div>
+          </div>
+
+          {isSkill(agent) && (
+            <div className="fg">
+              <label>Compatible Agents <span style={{ fontWeight: 400, color: 'var(--mu)' }}>(optional)</span></label>
+              <AgentMultiSelect
+                label="เลือก Agent ที่ใช้ร่วมกันได้..."
+                agents={allAgents}
+                excludeId={agent.id}
+                selected={new Set(form.compatibleAgents)}
+                onChange={(s) => setField('compatibleAgents', [...s])}
+              />
+            </div>
+          )}
+
+          <div className="grid2">
+            <div className="fg">
+              <label>Core Ability <span className="req">*</span></label>
+              <MultiSelect label="เลือก Core Ability…" options={abilityOptions} selected={form.coreAbility} onChange={(s) => setField('coreAbility', s)} />
+            </div>
+            <div className="fg">
+              <label>Related Role <span className="req">*</span></label>
+              <TagMultiSelect label="เลือก Related Role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
+            </div>
+          </div>
+
+          <div className="grid2">
+            <div className="fg">
+              <label>Reusable <span className="req">*</span></label>
+              <ComboInput value={form.reusable} onChange={(v) => setField('reusable', v)} options={REUSABLE_OPTIONS} placeholder="— เลือก —" readOnly />
+            </div>
+            {form.reusable === 'Reusable with Conditions' && (
+              <div className="fg">
+                <label>Reuse Conditions <span className="req">*</span></label>
+                <input value={form.reuseCondition} onChange={(e) => setField('reuseCondition', e.target.value)} placeholder="เงื่อนไขในการนำกลับมาใช้" />
+              </div>
+            )}
+          </div>
+
+          <div className="fg">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <input type="checkbox" checked={form.hml} onChange={(e) => setField('hml', e.target.checked)} />
+              HML (Human-in-the-Loop)
+            </label>
+          </div>
+          {form.hml && (
+            <div className="fg">
+              <label>Human Job <span className="req">*</span></label>
+              <input value={form.humanJob} onChange={(e) => setField('humanJob', e.target.value)} placeholder="หน้าที่ของ Human ใน loop" />
+            </div>
+          )}
+        </fieldset>
+
+        {/* ── SDLC metadata — own edit right (createdBy/staff/approver/admin) ── */}
+        {internalShown && (
+          <fieldset disabled={!canEditSDLCFlag} style={{ ...FS, opacity: !canEditSDLCFlag ? 0.6 : 1 }}>
+            <div className="grid2">
+              <div className="fg">
+                <label>SDLC Stage</label>
+                <MultiSelect label="เลือก SDLC Stage…" options={stageOptions} selected={form.sdlcStage} onChange={(s) => setField('sdlcStage', s)} />
+              </div>
+              <div className="fg">
+                <label>SDLC Process Mapping</label>
+                {form.sdlcStage.size === 0 ? (
+                  <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Stage ก่อน เพื่อดูรายการ Process ที่ผูกกับ Stage นั้น</div>
+                ) : (
+                  <MultiSelect label="เลือก Process…" options={processOptions} selected={form.sdlcProcessMapping} onChange={(s) => setField('sdlcProcessMapping', s)} />
+                )}
+              </div>
+            </div>
+            <div className="fg">
+              <label>Use Case</label>
+              <ComboInput value={form.useCase} onChange={(v) => setField('useCase', v)} options={useCaseOptions} placeholder="— เลือก Use Case —" />
+            </div>
+          </fieldset>
+        )}
+
+        {/* ── Sensitive: creator list ── */}
         <div className="fg">
           <label>Creator / Team member <span className="hint">(รายชื่อสมาชิกในทีม / ชื่อ Key contact หลัก)</span></label>
-          <CreatorPicker selected={form.creatorPicks} onChange={(v) => setField('creatorPicks', v)} placeholder="พิมพ์ชื่อหรืออีเมล…" />
-        </div>
-
-        <div className="grid2">
-          <div className="fg">
-            <label>Reusable <span className="req">*</span></label>
-            <select value={form.reusable} onChange={(e) => setField('reusable', e.target.value)}>
-              <option value="">— เลือก —</option>
-              {REUSABLE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </div>
-          {form.reusable === 'Reusable with Conditions' && (
-            <div className="fg">
-              <label>Reuse Conditions <span className="req">*</span></label>
-              <input value={form.reuseCondition} onChange={(e) => setField('reuseCondition', e.target.value)} placeholder="เงื่อนไขในการนำกลับมาใช้" />
-            </div>
+          {canEditSensitive ? (
+            <CreatorPicker selected={form.creatorPicks} onChange={(v) => setField('creatorPicks', v)} placeholder="พิมพ์ชื่อหรืออีเมล…" />
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {form.creatorPicks.length === 0 && <span style={{ fontSize: 12, color: 'var(--mu)' }}>—</span>}
+                {form.creatorPicks.map((p) => (
+                  <span key={p.email} style={{ display: 'inline-flex', alignItems: 'center', background: 'var(--sf2)', borderRadius: 20, padding: '3px 11px', fontSize: 11.5 }}>
+                    {p.name ? `${p.name} (${p.email})` : p.email}
+                  </span>
+                ))}
+              </div>
+              <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 4 }}>แก้ไขรายชื่อ Creator ได้เฉพาะ admin, owner และ creator</div>
+            </>
           )}
         </div>
 
-        <div className="fg">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <input type="checkbox" checked={form.hml} onChange={(e) => setField('hml', e.target.checked)} />
-            HML (Human-in-the-Loop)
-          </label>
-        </div>
-        {form.hml && (
-          <div className="fg">
-            <label>Human Job <span className="req">*</span></label>
-            <input value={form.humanJob} onChange={(e) => setField('humanJob', e.target.value)} placeholder="หน้าที่ของ Human ใน loop" />
-          </div>
-        )}
-
+        {/* ── Sensitive: progress / launch ── */}
         {lockProgress ? (
           <div className="msg info" style={{ fontSize: 11 }}>
             <span className="dot" style={{ background: '#4a6fa5' }} />
-            Skill นี้ผูกกับ Agent หลัก — Progress และ Launch Date จะไปพร้อมกับ Agent แม่ (แก้แยกไม่ได้)
+            Status และ Progress ของ Skill นี้จะปรับตาม Agent หลัก
+          </div>
+        ) : !canEditSensitive ? (
+          <div className="msg info" style={{ fontSize: 11 }}>
+            <span className="dot" style={{ background: '#4a6fa5' }} />
+            Progress และ Launch Date แก้ไขได้เฉพาะ admin, owner และ creator
           </div>
         ) : (
           <div className="grid2">

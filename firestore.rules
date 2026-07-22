@@ -62,6 +62,15 @@ service cloud.firestore {
         && agentData.creatorEmails is list
         && request.auth.token.email in agentData.creatorEmails;
     }
+    // Tier B identity (sensitive edits: launch/progress/creator) — mirrors the
+    // client's canUpdateProgress(): a creator (by email), the registrant
+    // (createdBy), or the approver (approvedBy). admin is covered separately by
+    // the blanket isAdmin() branch.
+    function isOwnerCreatorOrApprover(agentData) {
+      return isCreatorEmail(agentData)
+        || agentData.createdBy == request.auth.uid
+        || agentData.approvedBy == request.auth.uid;
+    }
 
     // ── /agents ──────────────────────────────────────────────────
     match /agents/{agentId} {
@@ -79,11 +88,11 @@ service cloud.firestore {
       allow update: if
         // Admin: any field, any doc.
         isAdmin()
-        // Committee: same as admin on /agents (just not /users).
-        || isCommittee()
         // Approver: approve/reject action only (area scoping is UI-side).
+        // Reject may additionally stamp a reason (rejectionReason/rejectedBy/
+        // rejectedAt) so the creator knows why — approve simply omits them.
         || (isApproverOrAbove()
-            && affectedKeys().hasOnly(['approvalStatus', 'approvedBy', 'updatedAt']))
+            && affectedKeys().hasOnly(['approvalStatus', 'approvedBy', 'updatedAt', 'rejectionReason', 'rejectedBy', 'rejectedAt']))
         // Self-withdraw: creator can reject (never approve) their OWN
         // still-pending idea — covers the base "user" tier's "reject idea
         // ของตัวเอง" requirement.
@@ -114,25 +123,42 @@ service cloud.firestore {
             && resource.data.deploymentStatus in ['none', 'rejected', null]
             && request.resource.data.devProgress == 95
             && request.resource.data.deploymentStatus == 'requested')
-        // Detail edit (2026-07-03): any of the agent's creators (by email)
-        // may edit the broader detail set on an already-approved doc —
-        // name/description/scope/ability/role/creator list/reusable/hml/
-        // launchDate/devProgress — but ONLY until a deployment request is
-        // filed (harder cutoff than plain progress-update above, since the
-        // record is meant to be frozen once deploy review starts). Type
-        // (aiAgent/skillMd) is deliberately NOT editable here — locked
-        // permanently once approved, to prevent gaming approval scope by
-        // relabeling an Agent↔Skill after the fact (2026-07-03 decision).
-        // Admin/committee already have unconditional access via the
-        // branches above, so this only needs to cover the creator case.
+        // Detail edit — Tier A (2026-07-xx): staff/committee may edit the
+        // NON-sensitive detail set on a doc that isn't under deploy review.
+        // This branch deliberately EXCLUDES creator/creatorEmails/launchDate/
+        // devProgress/developmentPhase — those are Tier B (below). Committee
+        // lost its former blanket write in this same change; approve/reject and
+        // deploy-decision stay available via the isApproverOrAbove branches.
+        || (userRole() in ['staff', 'committee']
+            && affectedKeys().hasOnly([
+                 'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing',
+                 'internalUse', 'coreAbility', 'relatedRole', 'reusable', 'reuseCondition', 'hml',
+                 'humanJob', 'updatedAt',
+               ])
+            && !(resource.data.deploymentStatus in ['requested', 'approved']))
+        // Detail edit — Tier B (2026-07-03, widened): the agent's owner
+        // (createdBy), a creator (by email), or the approver (approvedBy) may
+        // edit the broader detail set INCLUDING the sensitive fields (creator
+        // list, launchDate, devProgress) — but ONLY until a deployment request
+        // is filed. Type (aiAgent/skillMd) is still NOT editable — locked once
+        // approved. admin has unconditional access via the isAdmin() branch.
         || (affectedKeys().hasOnly([
-              'agentName', 'description', 'customerFacing', 'internalUse',
-              'coreAbility', 'relatedRole', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
+              'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing', 'internalUse',
+              'coreAbility', 'relatedRole', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
               'humanJob', 'launchDate', 'devProgress', 'developmentPhase', 'updatedAt',
             ])
-            && isCreatorEmail(resource.data)
+            && isOwnerCreatorOrApprover(resource.data)
             && !(resource.data.deploymentStatus in ['requested', 'approved'])
             && (request.resource.data.devProgress <= 95 || resource.data.deploymentStatus == 'approved'))
+        // SDLC metadata edit (2026-07-xx): the 3 SDLC fields are editable by a
+        // DIFFERENT set than the detail tiers — the registrant (createdBy) or
+        // anyone with the staff/approver/admin role. Deliberately excludes
+        // committee and creator-by-email. Written as its own single-field-group
+        // update by EditAgentModal so this branch matches exactly. Frozen once a
+        // deployment request is filed, same as the detail edits.
+        || (affectedKeys().hasOnly(['sdlcStage', 'sdlcProcessMapping', 'useCase', 'updatedAt'])
+            && (userRole() in ['staff', 'approver', 'admin'] || resource.data.createdBy == request.auth.uid)
+            && !(resource.data.deploymentStatus in ['requested', 'approved']))
         // Deployment decision: approver-or-above approves/rejects a pending
         // deployment request (area scoping is UI-side, same pattern as the
         // new-entry approve/reject action above).

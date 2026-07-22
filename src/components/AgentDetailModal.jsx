@@ -3,7 +3,8 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
-import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, pairedSubSkills, isPairedSubSkill } from '../lib/agentUtils';
+import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, pairedSubSkills, isPairedSubSkill } from '../lib/agentUtils';
+import useEscapeKey from '../hooks/useEscapeKey';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
 function toDateInputValue(d) {
@@ -20,7 +21,7 @@ function toDateInputValue(d) {
 const DEPLOY_STATUS_LABEL = { requested: 'Deploy Pending', approved: 'Deploy Approved', rejected: 'Deploy Rejected' };
 const DEPLOY_STATUS_COLOR = { requested: '#c96a00', approved: '#137333', rejected: '#c5221f' };
 
-export default function AgentDetailModal({ agent, allAgents, onClose, user, isAdmin, onEditAgent }) {
+export default function AgentDetailModal({ agent, allAgents, onClose, user, userRole, isAdmin, onEditAgent }) {
   const [editing, setEditing] = useState(false);
   const [editProgress, setEditProgress] = useState(0);
   const [editLaunch, setEditLaunch] = useState('');
@@ -28,6 +29,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
   const [saveError, setSaveError] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
+  useEscapeKey(onClose);
 
   if (!agent) return null;
   const type = getType(agent);
@@ -57,7 +59,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
   // once a request is already in flight or already approved — nothing left
   // to request in that state.
   const mayEditThisAgent = canUpdateProgress(agent, user, isAdmin);
-  const mayEditDetails = canEditDetails(agent, user, isAdmin);
+  // Show the Edit button if the user may edit EITHER the Tier A detail set OR
+  // the SDLC metadata fields (a pure approver-role has only the latter).
+  const mayEditDetails = canEditDetails(agent, user, userRole, isAdmin) || canEditSDLC(agent, user, userRole, isAdmin);
   const canRequestDeploy = !lockedSubSkill && mayEditThisAgent && deploymentStatus !== 'requested' && deploymentStatus !== 'approved';
 
   function startEdit() {
@@ -155,7 +159,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
         <div className="mac">
           <div className="machdr">
             <span className={`tb ${type === 'agent' ? 'tbag' : 'tbsk'}`}>{type === 'agent' ? 'AGENT' : 'SKILL'}</span>
-            <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }}>
+            <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
               {tier}
             </span>
             <span className="macname">{agent.agentName}</span>
@@ -192,6 +196,17 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
             <div className="mrow">
               <span className="mk">{type === 'skill' ? 'Agent' : 'Skill'}</span>
               <span style={{ color: type === 'skill' ? 'var(--ag)' : 'var(--sk)', fontSize: 11, fontWeight: 600 }}>{related.join(', ')}</span>
+            </div>
+          )}
+          {type === 'skill' && Array.isArray(agent.compatibleAgents) && agent.compatibleAgents.length > 0 && (
+            <div className="mrow">
+              <span className="mk">Compatible</span>
+              <span style={{ color: 'var(--ag)', fontSize: 11, fontWeight: 600 }}>
+                {agent.compatibleAgents
+                  .map((id) => (allAgents || []).find((a) => a.id === id)?.agentName)
+                  .filter(Boolean)
+                  .join(', ')}
+              </span>
             </div>
           )}
           <div className="mrow"><span className="mk">Role</span><span>{role || '—'}</span></div>
@@ -246,9 +261,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, isAd
                 <div className={`mpf ${progressBucket(progress)}`} style={{ width: `${progress}%` }} />
               </div>
               {lockedSubSkill && (
-                <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 6, display: 'flex', gap: 5, alignItems: 'flex-start' }}>
-                  <span>🔒</span>
-                  <span>Skill นี้ผูกกับ Agent หลัก — progress และการขอ deploy จะไปพร้อมกับ Agent แม่ (แก้แยกไม่ได้)</span>
+                <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 6 }}>
+                  Status และ Progress ของ Skill นี้จะปรับตาม Agent หลัก
                 </div>
               )}
               {mayEditThisAgent && !lockedSubSkill && (

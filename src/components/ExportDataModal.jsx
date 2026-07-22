@@ -2,14 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, agentApproveAreas } from '../lib/tier';
-import { isMyAgent } from '../lib/agentUtils';
-
-// devProgress may still be a legacy string ("90%") on a handful of docs.
-function progressNum(agent) {
-  const raw = agent?.devProgress;
-  const num = typeof raw === 'number' ? raw : parseInt(String(raw || '').replace('%', ''), 10);
-  return isNaN(num) ? 0 : num;
-}
+import { isMyAgent, normalizeProgress } from '../lib/agentUtils';
+import useEscapeKey from '../hooks/useEscapeKey';
 
 const COLUMNS = ['agentName', 'type', 'owner', 'creator', 'creatorEmails', 'approvalStatus', 'devProgress', 'reusable', 'description'];
 
@@ -40,7 +34,7 @@ function toRow(agent) {
     creator: agent.creator || '',
     creatorEmails: Array.isArray(agent.creatorEmails) ? agent.creatorEmails.join('; ') : '',
     approvalStatus: agent.approvalStatus || '',
-    devProgress: progressNum(agent),
+    devProgress: normalizeProgress(agent?.devProgress),
     reusable: agent.reusable || '',
     description: agent.description || '',
   };
@@ -107,6 +101,7 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
   const [rejected, setRejected] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  useEscapeKey(onClose);
 
   useEffect(() => {
     let alive = true;

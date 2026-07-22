@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { getDirectoryMeta, hasDirectoryToken, syncDirectoryToFirestore } from '../lib/directory';
+import { getDirectoryMeta, syncDirectoryToFirestore } from '../lib/directory';
 import MultiSelect from './MultiSelect';
+import useEscapeKey from '../hooks/useEscapeKey';
 
 function fmtSyncTime(ts) {
   if (!ts) return '';
@@ -26,7 +27,9 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
   const [error, setError] = useState('');
   const [dirMeta, setDirMeta] = useState(null);      // { count, updatedAt } | null
   const [dirSyncing, setDirSyncing] = useState(false);
+  useEscapeKey(onClose);
   const [dirError, setDirError] = useState('');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     getDirectoryMeta().then(setDirMeta).catch(() => {});
@@ -40,10 +43,13 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
       const meta = await getDirectoryMeta();
       setDirMeta(meta);
     } catch (e) {
+      // The sync now asks Google for the directory scope via a popup at click
+      // time; the common failure is the admin closing/denying that popup.
+      const code = e?.code || '';
       setDirError(
-        hasDirectoryToken()
-          ? (e.message || 'Sync ไม่สำเร็จ')
-          : 'ไม่มี Google token ใน session นี้ — sign out แล้ว sign in ใหม่ก่อน sync'
+        code.includes('popup') || code.includes('cancelled')
+          ? 'ยกเลิก/ปิดหน้าต่างให้สิทธิ์ Google — ลอง Sync ใหม่แล้วกด Allow เพื่อเข้าถึง directory'
+          : (e.message || 'Sync ไม่สำเร็จ')
       );
     } finally {
       setDirSyncing(false);
@@ -92,6 +98,10 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
   }
 
   const sorted = [...users].sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+  const q = search.trim().toLowerCase();
+  const visible = q
+    ? sorted.filter((u) => `${u.displayName || ''} ${u.email || ''}`.toLowerCase().includes(q))
+    : sorted;
 
   return (
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
@@ -101,6 +111,14 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
         <div className="msub">{users.length} ผู้ใช้ · กำหนด role และ approve area</div>
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
+
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="ค้นหาชื่อหรืออีเมล…"
+          style={{ width: '100%', height: 32, padding: '0 10px', border: '1.5px solid var(--bd2)', borderRadius: 8, fontSize: 12.5, background: 'var(--sf)', color: 'var(--tx)', fontFamily: 'inherit', outline: 'none', margin: '2px 2px 8px' }}
+        />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 2px', borderBottom: '1px solid var(--bd)', marginBottom: 4 }}>
           <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }} disabled={dirSyncing} onClick={handleSyncDirectory}>
@@ -114,7 +132,9 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
         </div>
         {dirError && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{dirError}</div>}
 
-        {sorted.map((u) => {
+        {q && visible.length === 0 && <div className="empty-state" style={{ padding: '20px 0' }}>ไม่พบผู้ใช้ที่ตรงกับ "{search}"</div>}
+
+        {visible.map((u) => {
           const d = draftFor(u);
           const dirty = !!drafts[u.uid];
           const isSelf = u.uid === currentUid;

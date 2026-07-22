@@ -3,7 +3,9 @@ import { useState, useRef, useEffect } from 'react';
 // Text input with a dropdown of existing suggestions — user can pick one or
 // type a new value. Used for fields like Owner where most submissions reuse
 // an existing team name but the long tail of one-off teams shouldn't block.
-export default function ComboInput({ value, onChange, options = [], placeholder }) {
+// readOnly=true: click-to-open list only (no free-text), used for fixed-choice
+// fields like Reusable where the valid set is known in advance.
+export default function ComboInput({ value, onChange, options = [], placeholder, readOnly = false }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 
@@ -15,7 +17,7 @@ export default function ComboInput({ value, onChange, options = [], placeholder 
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  const q = (value || '').toLowerCase().trim();
+  const q = readOnly ? '' : (value || '').toLowerCase().trim();
   const filtered = q
     ? options.filter((o) => o.toLowerCase().includes(q))
     : options;
@@ -25,9 +27,12 @@ export default function ComboInput({ value, onChange, options = [], placeholder 
       <input
         type="text"
         value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
+        readOnly={readOnly}
+        onChange={readOnly ? undefined : (e) => onChange(e.target.value)}
         onFocus={() => setOpen(true)}
+        onClick={readOnly ? () => setOpen((o) => !o) : undefined}
         placeholder={placeholder}
+        style={readOnly ? { cursor: 'pointer' } : undefined}
       />
       {open && filtered.length > 0 && (
         <div className="combo-list">

@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "wolfy-481609"
+  },
+  "targets": {
+    "wolfy-481609": {
+      "hosting": {
+        "main": ["wolfy-481609"],
+        "pretty": ["wolfy-ai-library"]
+      }
+    }
   }
 }

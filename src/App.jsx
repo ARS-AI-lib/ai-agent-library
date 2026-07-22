@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { useAuth } from './hooks/useAuth';
@@ -8,7 +8,6 @@ import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from 
 import { getType } from './lib/tier';
 import { ALLOWED_DOMAINS_LABEL } from './lib/firebase';
 import { agentStatus } from './lib/status';
-import { hasDirectoryToken, syncDirectoryToFirestore } from './lib/directory';
 
 import Nav from './components/Nav';
 import StatusLegend from './components/StatusLegend';
@@ -22,6 +21,7 @@ import UserManagementModal from './components/UserManagementModal';
 import ExportDataModal from './components/ExportDataModal';
 import EditAgentModal from './components/EditAgentModal';
 import SDLCTab from './components/SDLCTab';
+import DashboardTab from './components/DashboardTab';
 
 function GoogleGlyph() {
   return (
@@ -39,6 +39,11 @@ function LoginScreen({ onSignIn, error }) {
     <div className="signin-page">
       <div className="signin-bgpattern" aria-hidden="true" />
       <div className="signin-card">
+        <div className="signin-logos">
+          <img src="/logo1.png" alt="Infinitas by Krungthai" />
+          <span className="signin-logos-sep" aria-hidden="true" />
+          <img src="/logo2.png" alt="Arise by Infinitas" />
+        </div>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>AI Agent Library</h1>
         {error && <div className="msg error" style={{ maxWidth: 380 }}><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
         <button className="signin-google-btn" onClick={onSignIn}>
@@ -64,16 +69,10 @@ export default function App() {
   const { deployRequests } = useDeploymentRequests(!!role);
   const { schema, addRelatedRoles } = useConfigSchema();
 
-  // Admin-only, once-per-login directory sync (see src/lib/directory.js):
-  // piggybacks on the admin's own Google OAuth token (captured at sign-in) to
-  // pull the Workspace directory and cache it in Firestore for everyone else
-  // to read — no-op (silently) for non-admins or if the token's unavailable.
-  const directorySyncedRef = useRef(false);
-  useEffect(() => {
-    if (!isAdmin || !user || directorySyncedRef.current || !hasDirectoryToken()) return;
-    directorySyncedRef.current = true;
-    syncDirectoryToFirestore().catch(() => {});
-  }, [isAdmin, user]);
+  // Directory sync is no longer auto-run at login: the People API scope is now
+  // requested on-demand only when an admin clicks "Sync directory now" in User
+  // Management (src/lib/directory.js). Everyone reads the Firestore-cached
+  // directory, so nothing needs to happen here at startup.
 
   // Timeline access allowlist (for showing the hamburger menu item only).
   // Read-only here; the actual page re-checks the same list before rendering.
@@ -88,6 +87,23 @@ export default function App() {
     return unsub;
   }, [role]);
   const canSeeTimeline = !!user && (isAdmin || timelineViewers.map((e) => (e || '').toLowerCase()).includes((user.email || '').toLowerCase()));
+
+  // Dashboard access (2026-07-07): high roles see it automatically; regular
+  // users can be granted via /config/dashboard.viewers[] (same pattern as
+  // Timeline). Rules already cover /config/dashboard via the /config/{id}
+  // block (read: known user, write: admin) — no rules change needed.
+  const [dashboardViewers, setDashboardViewers] = useState([]);
+  useEffect(() => {
+    if (!role) return;
+    const unsub = onSnapshot(doc(db, 'config', 'dashboard'), (snap) => {
+      setDashboardViewers(snap.exists() ? (snap.data().viewers || []) : []);
+    }, () => setDashboardViewers([]));
+    return unsub;
+  }, [role]);
+  const canSeeDashboard = !!user && (
+    ['staff', 'approver', 'committee', 'admin'].includes(role)
+    || dashboardViewers.map((e) => (e || '').toLowerCase()).includes((user.email || '').toLowerCase())
+  );
 
   const [search, setSearch] = useState('');
   const [view, setView] = useState('by-role');
@@ -270,6 +286,7 @@ export default function App() {
         onToggleMyAI={() => setMyAI((v) => !v)}
         onOpenExport={() => setShowExport(true)}
         canSeeTimeline={canSeeTimeline}
+        canSeeDashboard={canSeeDashboard}
       />
 
       <ChatAssistant approvedAgents={agents} onOpenPreReg={() => setShowPreReg(true)} onOpenAgent={setSelectedAgent} />
@@ -309,6 +326,10 @@ export default function App() {
         />
       )}
 
+      {activeTab === 'dash' && canSeeDashboard && (
+        <DashboardTab agents={agents} onAgentClick={setSelectedAgent} />
+      )}
+
       {/* key=agent.id forces a full remount on every agent switch — without
           it, local edit-mode state (editing/editProgress/confirmingDeploy…)
           survives across agents and can render a stale edit form the newly
@@ -319,16 +340,21 @@ export default function App() {
         allAgents={agents}
         onClose={() => setSelectedAgent(null)}
         user={user}
-        isAdmin={isAdmin || isCommittee}
+        userRole={role}
+        isAdmin={isAdmin}
         onEditAgent={setEditingAgent}
       />
 
       {editingAgent && (
         <EditAgentModal
           agent={editingAgent}
+          allAgents={agents}
           onClose={() => setEditingAgent(null)}
           onSaved={() => setSelectedAgent(null)}
           user={user}
+          userRole={role}
+          isAdmin={isAdmin}
+          schema={schema}
           abilityOptions={abilityOptions}
           roleOptions={roleOptions}
           onAddRelatedRole={addRelatedRoles}

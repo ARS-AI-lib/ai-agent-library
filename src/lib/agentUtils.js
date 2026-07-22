@@ -29,13 +29,32 @@ export function canUpdateProgress(agent, user, isAdmin) {
 // Checked first, before the admin/creator branch. `rejected` (and `none`)
 // stay editable — only `requested`/`approved` lock it (2026-07-03, revised
 // same day to close the admin-bypass gap found in testing).
-export function canEditDetails(agent, user, isAdmin) {
+export function canEditDetails(agent, user, userRole, isAdmin) {
   if (!user) return false;
   const ds = agent?.deploymentStatus || 'none';
   if (ds === 'requested' || ds === 'approved') return false;
-  if (isAdmin) return true;
-  const email = (user.email || '').toLowerCase();
-  return !!(email && Array.isArray(agent?.creatorEmails) && agent.creatorEmails.some((e) => (e || '').toLowerCase() === email));
+  // Tier A (2026-07-xx): staff/committee may edit the NON-sensitive detail
+  // set (name/description/scope/ability/role/reusable/hml/input/output/
+  // compatibleAgents) — but NOT launch date, progress, or creator. Those
+  // sensitive fields stay Tier B (canUpdateProgress: admin/owner/creator/
+  // approver), enforced both in EditAgentModal's payload and firestore.rules.
+  if (userRole === 'staff' || userRole === 'committee') return true;
+  // Tier B identities can also edit details (superset).
+  return canUpdateProgress(agent, user, isAdmin);
+}
+
+// Who may edit the 3 SDLC metadata fields (sdlcStage/sdlcProcessMapping/
+// useCase) on a doc that isn't under deploy review (2026-07-xx): the registrant
+// (createdBy), or anyone with the staff/approver/admin role. Deliberately a
+// DIFFERENT set from Tier A details — it EXCLUDES committee and creator-by-
+// email (per explicit request). Enforced client-side (locks the fields) and in
+// firestore.rules (dedicated sdlc branch).
+export function canEditSDLC(agent, user, userRole, isAdmin) {
+  if (!user) return false;
+  const ds = agent?.deploymentStatus || 'none';
+  if (ds === 'requested' || ds === 'approved') return false;
+  if (isAdmin || userRole === 'staff' || userRole === 'approver') return true;
+  return !!(agent?.createdBy && agent.createdBy === user.uid);
 }
 
 // "Is this MY agent?" (personal ownership, e.g. for the "My AI" filter/export)
@@ -92,6 +111,28 @@ export function agentProcessIds(agent) {
   return String(agent.sdlcProcessMapping).split(',').map(extractProcessId).filter(Boolean);
 }
 
+// "4.1 High-Level Design" for a process with a real numeric SDLC id, but just
+// "Performance Test Scripting" (no duplication) for the ~18 /sdlcProcesses
+// docs added without one, where `id` was back-filled equal to `name` (2026-07
+// data gap, not a code bug) — `${p.id} ${p.name}` would otherwise show the
+// name twice for those. Single source of truth for every process-picker label.
+export function processLabel(p) {
+  if (!p) return '';
+  const id = (p.id || '').trim();
+  const name = (p.name || '').trim();
+  if (!id || id.toLowerCase() === name.toLowerCase()) return name;
+  return `${id} ${name}`.trim();
+}
+
+// devProgress is stored as a plain number since the 2026-07-02 migration —
+// the old string format ("90%") is kept as a defensive fallback only, in
+// case any doc was missed. Single source of truth (2026-07-06 improve pass):
+// previously copy-pasted into useAgents.js, timeline.js and EditAgentModal.jsx.
+export function normalizeProgress(raw) {
+  const num = typeof raw === 'number' ? raw : parseInt(String(raw || '').replace('%', ''), 10);
+  return isNaN(num) ? 0 : num;
+}
+
 export function fmtDate(d) {
   if (!d) return '';
   try {
@@ -128,11 +169,30 @@ export function agentsOfSkill(skill) {
 // A skill that was registered AS PART OF an Agent (Agent+Skill flow) is
 // "locked" to that parent: it can't request deploy or edit progress on its
 // own — its progress, launch date and deploy status all cascade from the
-// parent Agent so the pair always moves together. The reliable pairing signal
-// is the same one the cascade-approve logic uses: matchingAgent points at the
-// parent AND both docs share createdBy (same submission batch). matchingAgent
-// alone is NOT enough — an AI-suggested matchingAgent can point a standalone
-// skill at an unrelated approved agent by name, which must stay independent.
+// parent Agent so the pair always moves together. matchingAgent pointing at
+// the parent is required either way (an AI-suggested matchingAgent can point
+// a standalone skill at an unrelated approved agent by name — that must stay
+// independent). On top of that we need a "same submission batch" signal, and
+// we accept EITHER same createdBy (uid) OR same creator (display name) —
+// not createdBy alone. Some pairs (e.g. entries added via a Firestore
+// console/script edit, or where the two docs' createdBy wasn't backfilled
+// identically) have a blank/mismatched createdBy but an identical creator
+// name; requiring only createdBy silently failed to lock/cascade those pairs
+// (found 2026-07-06 testing the ALPHA chat assistant + capability_search
+// pair). creator is the same free-text field relationshipLabel/deriveUserTeams
+// already trust for identity, so this isn't a new trust boundary.
+function sameSubmitter(a, b) {
+  // OR, not "trust createdBy exclusively when present": two docs can each have
+  // a createdBy yet differ (registered in separate sessions, or one backfilled
+  // and one not) while still being the same person's paired submission. So a
+  // createdBy match confirms the pair, but a createdBy MISMATCH must still fall
+  // through to the creator-name check rather than reject outright (this was the
+  // silent cascade failure found 2026-07-06: identical creator, different uid).
+  if (a?.createdBy && b?.createdBy && a.createdBy === b.createdBy) return true;
+  const ca = (a?.creator || '').trim().toLowerCase();
+  const cb = (b?.creator || '').trim().toLowerCase();
+  return !!ca && ca === cb;
+}
 
 // The full skill docs that are paired sub-skills of `agent` (for cascading
 // writes from the parent). `agent` is expected to be an Agent, not a Skill.
@@ -141,7 +201,7 @@ export function pairedSubSkills(agent, allAgents) {
   return allAgents.filter((s) =>
     getType(s) === 'skill'
     && s.id !== agent.id
-    && s.createdBy && s.createdBy === agent.createdBy
+    && sameSubmitter(s, agent)
     && matchingAgentNames(s).includes(agent.agentName)
   );
 }
@@ -153,7 +213,7 @@ export function isPairedSubSkill(skill, allAgents) {
   if (!parents.length) return false;
   return allAgents.some((a) =>
     getType(a) === 'agent'
-    && a.createdBy && a.createdBy === skill.createdBy
+    && sameSubmitter(skill, a)
     && parents.includes(a.agentName)
   );
 }
@@ -187,7 +247,8 @@ export function buildAgentFilter({ type, owner, role, ability, tier, reusable, s
     if (reusable && reusable.size > 0 && !reusable.has(agent.reusable || '')) return false;
     if (search) {
       const q = search.toLowerCase();
-      const hay = `${agent.agentName || ''} ${agent.owner || ''}`.toLowerCase();
+      const coreAbility = Array.isArray(agent.coreAbility) ? agent.coreAbility.join(' ') : (agent.coreAbility || '');
+      const hay = `${agent.agentName || ''} ${agent.owner || ''} ${agent.description || ''} ${coreAbility} ${agent.relatedRole || ''}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;

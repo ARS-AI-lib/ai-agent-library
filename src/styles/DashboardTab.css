@@ -1,0 +1,69 @@
+/* Dashboard tab — scoped with .dash- (per CLAUDE.md §6: never redefine
+   theme.css classes). Uses shared theme tokens so it matches the app. */
+
+.dash-page { max-width: 1500px; margin: 0 auto; padding: 18px 28px 52px; display: flex; flex-direction: column; gap: 14px; }
+
+/* ── KPI row ── */
+.dash-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.dash-kpi { background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-md); box-shadow: var(--sh); padding: 14px 16px; }
+.dash-kpi-n { font-size: 26px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--tx); line-height: 1.1; }
+.dash-kpi-l { font-size: 11px; font-weight: 600; color: var(--mu); margin-top: 3px; }
+.dash-kpi-sub { font-size: 10px; color: var(--mu2); margin-top: 2px; }
+
+/* ── cards ── */
+.dash-card { background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-md); box-shadow: var(--sh); padding: 14px 16px; }
+.dash-card-hdr { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.dash-card-title { font-size: 13px; font-weight: 700; color: var(--tx); }
+.dash-card-sub { font-size: 10.5px; color: var(--mu); }
+.dash-empty { font-size: 12px; color: var(--mu); padding: 14px 0; text-align: center; flex: 1; display: flex; align-items: center; justify-content: center; }
+
+.dash-grid-flag { display: grid; grid-template-columns: 60% 1fr; gap: 14px; align-items: stretch; }
+.dash-grid-flag .dash-card { display: flex; flex-direction: column; }
+.dash-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: start; }
+
+/* ── Delay/Risk board ── */
+.dash-flag-counts { margin-left: auto; display: flex; gap: 6px; }
+.dash-flag-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.dash-flag-list { display: flex; flex-direction: column; flex: 1; max-height: 420px; overflow-y: auto; }
+.dash-flag-row { display: grid; grid-template-columns: 74px 1fr 110px 78px 44px; gap: 8px; align-items: center; padding: 7px 2px; border-bottom: 1px solid var(--bd-soft); cursor: pointer; font-size: 12px; }
+.dash-flag-row:last-child { border-bottom: none; }
+.dash-flag-row:hover { background: var(--sf2); }
+.dash-flag-name { font-weight: 600; color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-flag-meta { font-size: 11px; color: var(--mu); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-flag-prog { font-size: 11px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--tx2); text-align: right; }
+
+/* ── bar rows (status/tier/reusable/owner) ── */
+.dash-bar-row { display: grid; grid-template-columns: minmax(90px, 150px) 1fr 30px 36px; gap: 8px; align-items: center; padding: 4px 0; }
+.dash-bar-label { font-size: 11px; color: var(--tx2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-bar-track { height: 8px; background: var(--sf2); border-radius: 4px; overflow: hidden; }
+.dash-bar-fill { height: 100%; border-radius: 4px; min-width: 0; }
+.dash-bar-n { font-size: 11px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--tx); text-align: right; }
+.dash-bar-pct { font-size: 10px; color: var(--mu); text-align: right; }
+
+/* ── SDLC coverage ── */
+.dash-stages { display: flex; flex-direction: column; gap: 10px; }
+.dash-stage-hdr { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--tx2); margin-bottom: 5px; }
+.dash-stage-gap { font-size: 9.5px; font-weight: 600; color: var(--mu); }
+.dash-procs { display: flex; flex-wrap: wrap; gap: 5px; }
+.dash-proc { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; color: var(--tx2); background: var(--sf2); border: 1px solid var(--bd-soft); border-radius: 6px; padding: 2px 7px; cursor: default; }
+.dash-proc b { font-size: 9.5px; color: #fff; background: var(--accent); border-radius: 999px; min-width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; padding: 0 3px; }
+.dash-proc.gap { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+.dash-proc.clickable { cursor: pointer; }
+.dash-proc.clickable:hover { border-color: var(--accent); background: var(--sf); }
+
+/* ── Owner workload ── */
+.dash-owner-list { display: flex; flex-direction: column; flex: 1; max-height: 420px; overflow-y: auto; }
+.dash-owner-row { display: grid; grid-template-columns: minmax(110px, 200px) 1fr 34px 64px; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--bd-soft); }
+.dash-owner-row:last-child { border-bottom: none; }
+.dash-owner-name { font-size: 11.5px; font-weight: 600; color: var(--tx2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-owner-bar { height: 10px; background: var(--sf2); border-radius: 5px; overflow: hidden; }
+.dash-owner-fill { height: 100%; background: var(--accent); border-radius: 5px; }
+.dash-owner-n { font-size: 11.5px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--tx); text-align: right; }
+.dash-owner-avg { font-size: 10px; color: var(--mu); text-align: right; }
+
+@media (max-width: 900px) {
+  .dash-kpis { grid-template-columns: repeat(2, 1fr); }
+  .dash-grid-flag { grid-template-columns: 1fr; }
+  .dash-grid3 { grid-template-columns: 1fr; }
+  .dash-page { padding: 14px 14px 40px; }
+}

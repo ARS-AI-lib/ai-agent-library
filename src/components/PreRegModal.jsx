@@ -5,10 +5,12 @@ import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
-import { uniq, splitRoles } from '../lib/agentUtils';
+import { uniq, splitRoles, extractProcessId, processLabel } from '../lib/agentUtils';
+import useEscapeKey from '../hooks/useEscapeKey';
 import ComboInput from './ComboInput';
 import MultiSelect from './MultiSelect';
 import TagMultiSelect from './TagMultiSelect';
+import AgentMultiSelect from './AgentMultiSelect';
 import CreatorPicker from './CreatorPicker';
 import AgentDetailModal from './AgentDetailModal';
 
@@ -48,6 +50,11 @@ const VERDICT_LABEL = {
 // again (avoids piling up redundant analysis records).
 const KB_DEDUP_THRESHOLD = 80;
 
+// Minimum length for the free-text quality fields (Description, Business
+// Value). Enforced only at submit-time in validate() — no live counter/hint
+// on the field, by design (2026-07-xx request).
+const MIN_DETAIL_LEN = 120;
+
 const EMPTY_FORM = {
   agentName: '',
   type: 'Agent',          // Agent | Skill | Agent+Skill
@@ -71,6 +78,7 @@ const EMPTY_FORM = {
   sdlcProcessMapping: new Set(),
   useCase: '',
   skills: [],             // paired sub-skills when type === 'Agent+Skill' (each → its own Skill doc)
+  compatibleAgents: [],   // agent doc IDs this Skill can be used with (type === 'Skill' only, reference-only, no cascade)
 };
 
 let skillSeq = 0;
@@ -113,9 +121,10 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const [useCaseOptions, setUseCaseOptions] = useState([]);
+  const [useCases, setUseCases] = useState([]);   // full sdlcUseCases docs (processId, name)
   const [processes, setProcesses] = useState([]);
   const [detailAgent, setDetailAgent] = useState(null);   // click-through preview from analysis results
+  useEscapeKey(onClose);
 
   // In-memory, session-only analysis cache: keyed on the exact payload sent to
   // the AI. Re-running the check on an UNCHANGED draft returns the same result
@@ -139,10 +148,10 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
     ])
       .then(([ucSnap, procSnap]) => {
         if (!alive) return;
-        setUseCaseOptions(uniq(ucSnap.docs.map((d) => d.data().name).filter(Boolean)).sort());
+        setUseCases(ucSnap.docs.map((d) => d.data()).filter((u) => u.name));
         setProcesses(procSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
       })
-      .catch(() => { if (alive) { setUseCaseOptions([]); setProcesses([]); } });
+      .catch(() => { if (alive) { setUseCases([]); setProcesses([]); } });
     return () => { alive = false; };
   }, []);
 
@@ -167,9 +176,19 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
     return uniq(
       processes
         .filter((p) => form.sdlcStage.has(p.stage))
-        .map((p) => `${p.id} ${p.name}`.trim())
+        .map(processLabel)
     ).sort();
   }, [processes, form.sdlcStage]);
+
+  // Use Case is scoped to the selected Process Mapping(s) — sdlcUseCases.processId
+  // joins directly against the process id prefix of each selected mapping
+  // string (e.g. "4.1 High-Level Design" → "4.1"). Falls back to every use
+  // case when no process is selected yet, same permissive default as before.
+  const useCaseOptions = useMemo(() => {
+    if (form.sdlcProcessMapping.size === 0) return uniq(useCases.map((u) => u.name)).sort();
+    const selectedIds = new Set([...form.sdlcProcessMapping].map(extractProcessId));
+    return uniq(useCases.filter((u) => selectedIds.has(u.processId)).map((u) => u.name)).sort();
+  }, [useCases, form.sdlcProcessMapping]);
 
   // If the user changes Stage after already picking Process(es), drop any
   // selected process that no longer belongs to the (new) selected stages.
@@ -203,11 +222,21 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
   function validate() {
     if (!form.agentName.trim()) return 'กรุณากรอกชื่อ Agent/Skill';
     if (!form.description.trim()) return 'กรุณากรอก Description';
+    // Quality gate (deliberately NOT surfaced on the field itself — enforced
+    // only after the user hits submit, so it reads as a nudge to elaborate
+    // rather than an upfront hurdle): Description & Business Value must be
+    // substantial enough to be useful for dedup/review.
+    if (form.description.trim().length < MIN_DETAIL_LEN) {
+      return `Description สั้นเกินไป — ช่วยขยายความให้ครบถ้วน (อย่างน้อย ${MIN_DETAIL_LEN} ตัวอักษร, ตอนนี้ ${form.description.trim().length})`;
+    }
     if (form.coreAbility.size === 0) return 'กรุณาเลือก Core Ability อย่างน้อย 1 ค่า';
     if (form.relatedRole.size === 0) return 'กรุณาเลือก Related Role อย่างน้อย 1 ค่า';
     if (!form.input.trim()) return 'กรุณากรอก Input';
     if (!form.output.trim()) return 'กรุณากรอก Output';
     if (!form.businessValue.trim()) return 'กรุณากรอก Business Value';
+    if (form.businessValue.trim().length < MIN_DETAIL_LEN) {
+      return `Business Value สั้นเกินไป — ช่วยอธิบายคุณค่าทางธุรกิจให้ชัด (อย่างน้อย ${MIN_DETAIL_LEN} ตัวอักษร, ตอนนี้ ${form.businessValue.trim().length})`;
+    }
     if (!form.owner.trim()) return 'กรุณาระบุ Owner';
     if (!form.reusable) return 'กรุณาเลือก Reusable';
     if (form.reusable === 'Reusable with Conditions' && !form.reuseCondition.trim()) {
@@ -335,7 +364,6 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
       const { aiAgent, skillMd } = typeToFlags(form.type);
       const isExternal = form.scope === 'External';
       const agentName = form.agentName.trim();
-      const creator = user?.displayName || user?.email || '';
       const createdBy = user?.uid || '';
       // Submitter's own email is always included, deduped against whoever
       // else was picked in the Creator/Team member field (case-insensitive —
@@ -347,6 +375,19 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
             .map((e) => [e.toLowerCase(), e])
         ).values(),
       ];
+      // `creator` (display) must list ALL creators, not just the submitter, so
+      // the card/detail show the whole team (2026-07-xx fix). Submitter's name
+      // first, then each picked member's display name, deduped.
+      const creator = [
+        ...new Map(
+          [
+            { name: user?.displayName || user?.email || '', email: (user?.email || '').toLowerCase() },
+            ...form.creatorPicks.map((p) => ({ name: p.name || p.email, email: (p.email || '').toLowerCase() })),
+          ]
+            .filter((p) => p.name)
+            .map((p) => [p.email || p.name, p.name])
+        ).values(),
+      ].join(', ');
 
       // Fields the paired sub-skills inherit verbatim from the parent Agent.
       const inheritedFromAgent = {
@@ -379,6 +420,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
         useCase: isExternal ? '' : form.useCase.trim(),
         input: form.input.trim(),
         output: form.output.trim(),
+        compatibleAgents: form.type === 'Skill' ? form.compatibleAgents : [],
         businessValue: inheritedFromAgent.businessValue,
         matchingAgent: aiResult?.suggested_matching_agent || '',
         // Snapshot of the duplicate-check result at submit time, so the
@@ -628,6 +670,18 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
               </div>
             </div>
 
+            {form.type === 'Skill' && (
+              <div className="fg">
+                <label>Compatible Agents <span style={{ fontWeight: 400, color: 'var(--mu)' }}>(optional)</span></label>
+                <AgentMultiSelect
+                  label="เลือก Agent ที่ใช้ร่วมกันได้..."
+                  agents={approvedAgents}
+                  selected={new Set(form.compatibleAgents)}
+                  onChange={(s) => setField('compatibleAgents', [...s])}
+                />
+              </div>
+            )}
+
             <div className="fg">
               <label>Description <span className="req">*</span></label>
               <textarea rows={3} value={form.description} onChange={(e) => setField('description', e.target.value)} placeholder="อธิบายว่า Agent/Skill นี้ทำอะไร" />
@@ -680,10 +734,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
             <div className="grid2">
               <div className="fg">
                 <label>Reusable <span className="req">*</span></label>
-                <select value={form.reusable} onChange={(e) => setField('reusable', e.target.value)}>
-                  <option value="">— เลือก —</option>
-                  {REUSABLE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
+                <ComboInput value={form.reusable} onChange={(v) => setField('reusable', v)} options={REUSABLE_OPTIONS} placeholder="— เลือก —" readOnly />
               </div>
               {form.reusable === 'Reusable with Conditions' && (
                 <div className="fg">
@@ -726,10 +777,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                 </div>
                 <div className="fg">
                   <label>Use Case</label>
-                  <select value={form.useCase} onChange={(e) => setField('useCase', e.target.value)}>
-                    <option value="">— เลือก Use Case —</option>
-                    {useCaseOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-                  </select>
+                  <ComboInput value={form.useCase} onChange={(v) => setField('useCase', v)} options={useCaseOptions} placeholder="— เลือก Use Case —" />
                 </div>
               </>
             )}
@@ -813,10 +861,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                     <div className="grid2">
                       <div className="fg">
                         <label>Reusable <span className="req">*</span></label>
-                        <select value={s.reusable} onChange={(e) => setSkillField(s._id, 'reusable', e.target.value)}>
-                          <option value="">— เลือก —</option>
-                          {REUSABLE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                        </select>
+                        <ComboInput value={s.reusable} onChange={(v) => setSkillField(s._id, 'reusable', v)} options={REUSABLE_OPTIONS} placeholder="— เลือก —" readOnly />
                       </div>
                       {s.reusable === 'Reusable with Conditions' && (
                         <div className="fg">

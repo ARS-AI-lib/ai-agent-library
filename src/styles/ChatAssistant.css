@@ -13,7 +13,7 @@
 .chat-fab-label { font-size: 11.5px; font-weight: 700; color: #fff; white-space: nowrap; }
 
 .chat-panel {
-  position: fixed; right: 22px; bottom: 86px; z-index: 1199;
+  position: fixed; right: 22px; bottom: 68px; z-index: 1199;
   width: var(--chat-w, 360px); max-width: calc(100vw - 44px); min-width: 340px;
   height: 520px; max-height: calc(100vh - 140px);
   background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-lg);

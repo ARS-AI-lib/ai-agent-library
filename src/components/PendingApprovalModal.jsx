@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useEffect, useMemo, useState } from 'react';
+import { collection, doc, getDoc, onSnapshot, query, updateDoc, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { agentApproveAreas, getTier, TIER_DEF } from '../lib/tier';
-import { matchingAgentNames, pairedSubSkills, isPairedSubSkill } from '../lib/agentUtils';
+import { matchingAgentNames, pairedSubSkills, isPairedSubSkill, fmtDate } from '../lib/agentUtils';
 import AgentDetailModal from './AgentDetailModal';
+import useEscapeKey from '../hooks/useEscapeKey';
 
 const VERDICT_LABEL = {
   clear_duplicate: 'Clear Duplicate',
@@ -44,6 +45,30 @@ const RISK_COLOR = { high: '#c5221f', medium: '#c96a00', low: '#137333' };
 export default function PendingApprovalModal({ pending, deployRequests = [], onClose, user, isAdmin, isCommittee, approveAreas = [], agents = [] }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
+  const [rejectModal, setRejectModal] = useState(null); // { agent, reason } | null — approver reject-with-reason
+  const [myRejected, setMyRejected] = useState([]);      // creator's own items rejected WITH a reason (feature B)
+  useEscapeKey(onClose);
+
+  // Feature B (2026-07-xx): let a creator see their OWN submissions that were
+  // rejected by a reviewer, together with the reason — rejected docs are hidden
+  // from both the dashboard and the pending queue, so without this the reason
+  // has nowhere to surface. Single-field equality query (no composite index);
+  // filter to reason-bearing rejects client-side, which also excludes the
+  // creator's own self-withdrawals (those carry no rejectionReason).
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(collection(db, 'agents'), where('createdBy', '==', user.uid));
+    const unsub = onSnapshot(
+      q,
+      (snap) => setMyRejected(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((a) => a.approvalStatus === 'rejected' && a.rejectionReason)
+      ),
+      () => setMyRejected([]),
+    );
+    return unsub;
+  }, [user?.uid]);
   const fullAccess = isAdmin || isCommittee;
   const mine = useMemo(() => new Set(approveAreas), [approveAreas]);
 
@@ -181,14 +206,23 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
     }
   }
 
-  async function handleReject(agent) {
+  // reason: required when an approver/admin rejects someone else's idea (so the
+  // creator knows why); empty for a base user's self-withdraw of their OWN
+  // idea (no explanation owed, and the self-withdraw firestore rule only allows
+  // approvalStatus+updatedAt — so we deliberately DON'T write reason fields
+  // there).
+  async function handleReject(agent, reason = '') {
     setBusyId(agent.id);
     setError('');
     try {
+      const rejectFields = reason.trim()
+        ? { rejectionReason: reason.trim(), rejectedBy: user?.uid || '', rejectedAt: serverTimestamp() }
+        : {};
       // Soft reject — keep the record for audit trail, hide it from the dashboard.
       await updateDoc(doc(db, 'agents', agent.id), {
         approvalStatus: 'rejected',
         updatedAt: serverTimestamp(),
+        ...rejectFields,
       });
       await recordOutcome(agent.id, 'rejected', user?.uid);
 
@@ -198,9 +232,11 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
         await updateDoc(doc(db, 'agents', sib.id), {
           approvalStatus: 'rejected',
           updatedAt: serverTimestamp(),
+          ...rejectFields,
         });
         await recordOutcome(sib.id, 'rejected', user?.uid);
       }
+      setRejectModal(null);
     } catch (e) {
       setError(e.message || 'Reject failed');
     } finally {
@@ -241,7 +277,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                   {' · '}<span style={{ color: 'var(--uc)' }}>{agentApproveAreas(agent).join(', ') || 'ไม่ระบุ area'}</span>
                   {' · '}<span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                   {risk && (
-                    <>{' · '}ความเสี่ยง: <span style={{ color: RISK_COLOR[risk] || 'var(--mu)', fontWeight: 700 }}>{RISK_LABEL[risk] || risk}</span></>
+                    <>{' · '}เสี่ยงทับซ้อน/คล้าย: <span style={{ color: RISK_COLOR[risk] || 'var(--mu)', fontWeight: 700 }}>{RISK_LABEL[risk] || risk}</span></>
                   )}
                   {breadthFlag && (
                     <>{' · '}
@@ -273,7 +309,11 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
               </div>
               <div className="queue-actions">
                 {canReject(agent) && (
-                  <button className="btn btn-danger" disabled={busyId === agent.id} onClick={() => handleReject(agent)}>
+                  <button
+                    className="btn btn-danger"
+                    disabled={busyId === agent.id}
+                    onClick={() => (canApprove(agent) ? setRejectModal({ agent, reason: '' }) : handleReject(agent))}
+                  >
                     {canApprove(agent) ? 'Reject' : 'Withdraw'}
                   </button>
                 )}
@@ -303,12 +343,22 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
             return (
               <div className="queue-row" key={agent.id}>
                 <div>
-                  <div className="dup-name">{agent.agentName}</div>
+                  <div
+                    className="dup-name"
+                    style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                    onClick={() => setDetailAgent(agent)}
+                    title="คลิกเพื่อดูรายละเอียด"
+                  >
+                    {agent.agentName}
+                  </div>
                   <div className="queue-meta">
                     {' '}โดย {agent.creator || '—'}
                     {' · '}<span style={{ color: 'var(--uc)' }}>{agentApproveAreas(agent).join(', ') || 'ไม่ระบุ area'}</span>
                     {' · '}<span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                     {' · '}Progress: <strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{agent.devProgress}%</strong>
+                    {agent.launchDate && (
+                      <>{' · '}Launch: <strong>{fmtDate(agent.launchDate)}</strong></>
+                    )}
                   </div>
                 </div>
                 <div className="queue-actions">
@@ -327,7 +377,58 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
             );
           })
         )}
+
+        {myRejected.length > 0 && (
+          <>
+            <div className="sec-title" style={{ marginTop: 16 }}>ถูก Reject (ของฉัน)</div>
+            <div className="msub">{myRejected.length} รายการ · เหตุผลจากผู้ตรวจ</div>
+            {myRejected.map((agent) => (
+              <div className="queue-row" key={agent.id}>
+                <div>
+                  <div className="dup-name">{agent.agentName}</div>
+                  <div className="queue-meta">
+                    {agent.aiAgent ? 'Agent' : ''}{agent.aiAgent && agent.skillMd ? ' + ' : ''}{agent.skillMd ? 'Skill' : ''}
+                    {agent.rejectedAt && <>{' · '}{fmtDate(agent.rejectedAt)}</>}
+                  </div>
+                  <div
+                    style={{ fontSize: 11.5, color: '#c5221f', marginTop: 5, maxWidth: 520, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '6px 10px' }}
+                  >
+                    <strong>เหตุผล:</strong> {agent.rejectionReason}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </div>
+
+      {rejectModal && (
+        <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setRejectModal(null)}>
+          <div className="mbox" style={{ padding: 18, maxWidth: 440 }}>
+            <button className="mclose" onClick={() => setRejectModal(null)}>✕</button>
+            <h3 style={{ fontSize: 15, marginBottom: 4 }}>เหตุผลในการ Reject</h3>
+            <div style={{ fontSize: 12, color: 'var(--mu)', marginBottom: 10 }}>{rejectModal.agent.agentName}</div>
+            <textarea
+              rows={4}
+              autoFocus
+              value={rejectModal.reason}
+              onChange={(e) => setRejectModal((m) => ({ ...m, reason: e.target.value }))}
+              placeholder="ระบุเหตุผลให้ creator ทราบ เช่น ทับซ้อนกับ Agent เดิม / ขอบเขตยังไม่ชัด…"
+              style={{ width: '100%', resize: 'vertical' }}
+            />
+            <div className="btn-group" style={{ marginTop: 12 }}>
+              <button className="btn btn-secondary" disabled={busyId === rejectModal.agent.id} onClick={() => setRejectModal(null)}>Cancel</button>
+              <button
+                className="btn btn-danger"
+                disabled={busyId === rejectModal.agent.id || !rejectModal.reason.trim()}
+                onClick={() => handleReject(rejectModal.agent, rejectModal.reason)}
+              >
+                {busyId === rejectModal.agent.id ? 'กำลังบันทึก…' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {overlapFor && (
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setOverlapFor(null)}>

@@ -16,7 +16,10 @@
 // ktbgs.co.th show up in the same Workspace directory but aren't part of this
 // app's user base, so they're just noise in the picker.
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './firebase';
+import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth';
+import { db, auth } from './firebase';
+
+const DIRECTORY_SCOPE = 'https://www.googleapis.com/auth/directory.readonly';
 
 const ALLOWED_DOMAINS = ['arise.tech', 'infinitaskt.com'];
 const DIRECTORY_DOC = doc(db, 'config', 'directory');
@@ -65,10 +68,28 @@ async function fetchFromPeopleApi() {
   return people;
 }
 
-// Admin-only: pull the live directory from the People API (using the admin's
-// own token) and persist it to /config/directory for everyone else to read.
-// Returns { count, updatedAt } on success.
+// Acquire a Google OAuth token carrying the sensitive directory.readonly scope
+// ON DEMAND — only when an admin actually runs a sync. reauthenticateWithPopup
+// (not signInWithPopup) keeps the current signed-in account, just prompting for
+// the extra scope. This is the ONLY place the sensitive scope is requested, so
+// regular sign-in stays friction-free (see firebase.js note).
+async function acquireDirectoryToken() {
+  const current = auth.currentUser;
+  if (!current) throw new Error('ต้อง sign in ก่อนจึงจะ sync directory ได้');
+  const provider = new GoogleAuthProvider();
+  provider.addScope(DIRECTORY_SCOPE);
+  const result = await reauthenticateWithPopup(current, provider);
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  accessToken = credential?.accessToken || null;
+  if (!accessToken) throw new Error('ไม่ได้รับสิทธิ์เข้าถึง directory จาก Google');
+  return accessToken;
+}
+
+// Admin-only: pull the live directory from the People API (using an on-demand
+// token acquired right here) and persist it to /config/directory for everyone
+// else to read. Returns { count } on success.
 export async function syncDirectoryToFirestore() {
+  await acquireDirectoryToken();
   const people = await fetchFromPeopleApi();
   await setDoc(DIRECTORY_DOC, { people, updatedAt: serverTimestamp() });
   cachedPeople = people; // refresh this session's own cache too
@@ -108,6 +129,24 @@ async function loadCache() {
 export function warmDirectory() {
   if (cachedPeople || cacheLoadPromise) return;
   loadCache().catch(() => {});
+}
+
+// Resolve a list of emails to their directory display names (case-insensitive),
+// reading the same Firestore-cached directory as searchDirectory. Used by
+// EditAgentModal to re-hydrate creator chips (which load from creatorEmails
+// with no name) so the `creator` display field can be rewritten on save.
+// Returns [{ email, name }] — name is '' if the email isn't in the cache.
+export async function lookupDirectoryNames(emails) {
+  const list = (emails || []).filter(Boolean);
+  if (!list.length) return [];
+  let people = [];
+  try {
+    people = await loadCache();
+  } catch {
+    people = [];
+  }
+  const byEmail = new Map(people.map((p) => [(p.email || '').toLowerCase(), p.name || '']));
+  return list.map((e) => ({ email: e, name: byEmail.get((e || '').toLowerCase()) || '' }));
 }
 
 // Returns up to `limit` {name, email} matches for a free-text query (matches

@@ -34,6 +34,13 @@ function progressNum(agent) {
   return isNaN(num) ? 0 : num;
 }
 
+// capability_search cache — keyed by the library array's own identity (a new
+// array is produced on every Firestore onSnapshot, so this auto-invalidates
+// whenever the underlying data changes) then by query+limit. Same chat
+// question asked twice within one session reuses the scored result instead
+// of re-scanning the whole library.
+const capabilitySearchCache = new WeakMap();
+
 function matchesKeyword(agent, keyword) {
   if (!keyword) return true;
   const q = keyword.toLowerCase().trim();
@@ -289,18 +296,28 @@ export const SKILLS = {
     // natural-language query still surfaces enough candidates for the LLM to
     // judge; the LLM (not this function) makes the final semantic call.
     run: ({ query, limit = 20 }, ctx) => {
+      const cacheKey = `${(query || '').trim().toLowerCase()}::${limit}`;
+      let byQuery = capabilitySearchCache.get(ctx.library);
+      if (!byQuery) {
+        byQuery = new Map();
+        capabilitySearchCache.set(ctx.library, byQuery);
+      }
+      if (byQuery.has(cacheKey)) return byQuery.get(cacheKey);
+
       const scored = ctx.library.map((a) => {
         const hay = norm([a.agentName, a.description, a.input, a.output, a.businessValue, a.coreAbility].join(' '));
         return { a, score: scoreText(hay, query) };
       }).filter((x) => x.score > 0)
         .sort((x, y) => y.score - x.score)
         .slice(0, limit);
-      return scored.map(({ a }) => ({
+      const result = scored.map(({ a }) => ({
         agentName: a.agentName,
         description: (a.description || '').slice(0, 300),
         input: a.input || '', output: a.output || '', businessValue: (a.businessValue || '').slice(0, 200),
         coreAbility: a.coreAbility,
       }));
+      byQuery.set(cacheKey, result);
+      return result;
     },
   },
 };

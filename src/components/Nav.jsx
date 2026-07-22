@@ -5,7 +5,7 @@ export default function Nav({
   agentCount, skillCount,
   user, onSignOut,
   activeTab, setActiveTab,
-  myAI, onToggleMyAI, onOpenExport, canSeeTimeline,
+  myAI, onToggleMyAI, onOpenExport, canSeeTimeline, canSeeDashboard,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -33,27 +33,37 @@ export default function Nav({
         >
           Agent Library
         </button>
-        <button 
+        <button
           className={`nav-tab ${activeTab === 'sdlc' ? 'active' : ''}`}
           onClick={() => setActiveTab('sdlc')}
         >
           SDLC AI Adoption
         </button>
+        {canSeeDashboard && (
+          <button
+            className={`nav-tab ${activeTab === 'dash' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dash')}
+          >
+            Dashboard
+          </button>
+        )}
       </div>
-      <div className="nav-search">
-        <div className="nav-search-wrap">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="text"
-            className="nav-search-inp"
-            placeholder="Search name or owner…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      {activeTab !== 'dash' && (
+        <div className="nav-search">
+          <div className="nav-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              className="nav-search-inp"
+              placeholder="Search name, owner, description, ability, role…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="nav-r">
         <div className="chips">

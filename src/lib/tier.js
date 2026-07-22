@@ -37,11 +37,14 @@ export function getTier(agent) {
   return 'T4';
 }
 
+// Tier display names (2026-07-07) — shown as the full tooltip/label wherever
+// space allows; the compact "T1"–"T4" badge alone remains fine in tight UI
+// (cards, timeline dots) per user's explicit sign-off.
 export const TIER_DEF = {
-  T1: { label: 'T1 · Skill / Internal', color: '#0b7a68', bg: '#0b7a6815', bd: '#0b7a6840' },
-  T2: { label: 'T2 · Agent / Internal', color: '#2f6bff', bg: '#2f6bff15', bd: '#2f6bff40' },
-  T3: { label: 'T3 · Skill / External', color: '#6d28d9', bg: '#6d28d915', bd: '#6d28d940' },
-  T4: { label: 'T4 · Agent / External', color: '#b45309', bg: '#b4530915', bd: '#b4530940' },
+  T1: { label: 'T1 · Alpha Skill', color: '#0b7a68', bg: '#0b7a6815', bd: '#0b7a6840' },
+  T2: { label: 'T2 · Incubate Agent', color: '#2f6bff', bg: '#2f6bff15', bd: '#2f6bff40' },
+  T3: { label: 'T3 · Certified Skill', color: '#6d28d9', bg: '#6d28d915', bd: '#6d28d940' },
+  T4: { label: 'T4 · Enterprise Agent', color: '#b45309', bg: '#b4530915', bd: '#b4530940' },
 };
 
 export const TIER_ORDER = ['T1', 'T2', 'T3', 'T4'];

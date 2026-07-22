@@ -21,7 +21,7 @@
      not clarifying. Skill/phase hues stay distinct from this blue and from
      each other; only the two blues were merged. */
   --ag: var(--accent); --sk: #0b7a68;
-  --ph: #15803d; --pm: #6d28d9; --pl: #9ca3af; --uc: #b45309;
+  --uc: #b45309;
   --ok: #15803d; --warn: #d97706; --late: #dc2626;
   /* Softer, larger-blur shadows + tighter radius scale (cards read too round
      at 18px, dialed back). */
@@ -143,8 +143,12 @@ select.dd:focus { border-color: var(--accent); }
 .ac-meta-label { font-size: 10px; color: var(--mu2); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-bottom: 3px; }
 .ac-meta-value { font-size: 12px; color: var(--tx2); font-weight: 500; line-height: 1.35; word-break: break-word; }
 
-/* Progress-fill colors — legend-locked phase hues (unchanged). */
-.pfh { background: var(--ph); } .pfm { background: var(--pm); } .pfl { background: var(--pl); }
+/* Progress-fill colors — same bucket + dot color as the status badge
+   (td/ip/pilot/ru), so the bar and the badge always agree (2026-07-06). */
+.ac-progress-fill.td, .mpf.td { background: #9ca3af; }
+.ac-progress-fill.ip, .mpf.ip { background: #f5a623; }
+.ac-progress-fill.pilot, .mpf.pilot { background: #4a6fa5; }
+.ac-progress-fill.ru, .mpf.ru { background: #15803d; }
 
 /* Type/tier eyebrow badges — soft rgba tint, rounded-rect (6px). Text color
    is the exact legend hex; only the background treatment changed. */
@@ -200,6 +204,8 @@ select.dd:focus { border-color: var(--accent); }
   font-family: inherit; font-size: 13px; color: var(--tx); background: var(--sf); outline: none; transition: all .15s;
 }
 .fg input:focus, .fg select:focus, .fg textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.fg input::placeholder, .fg textarea::placeholder { color: var(--mu2); opacity: 1; }
+.fg .tms-input::placeholder { color: var(--mu2); opacity: 1; }
 .fg select[multiple] { height: 92px; }
 .fg textarea { resize: vertical; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -258,6 +264,12 @@ select.dd:focus { border-color: var(--accent); }
   background-repeat: repeat; background-size: 220px 220px;
 }
 .signin-card { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 40px 20px; }
+/* Company logos above the title — normalized to a common height so the tall
+   Infinitas mark and the wide Arise wordmark sit balanced side by side. */
+.signin-logos { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 4px; }
+.signin-logos img { height: 52px; width: auto; object-fit: contain; display: block; }
+.signin-logos img:first-of-type { height: 60px; }
+.signin-logos-sep { width: 1px; height: 40px; background: var(--bd2); }
 .signin-google-btn {
   display: flex; align-items: center; gap: 10px; background: #fff; color: var(--tx);
   border: 1.5px solid var(--bd2); border-radius: 7px; padding: 9px 18px; font-size: 13px;
@@ -306,9 +318,13 @@ select.dd:focus { border-color: var(--accent); }
 /* ── MultiSelect inside a form group: render full-width like other inputs.
    Scoped to .fg so the compact SDLCTab control-bar variant (.cbar) is untouched. ── */
 .fg .ms-wrap { display: block; width: 100%; }
-.fg .ms-btn { width: 100%; max-width: none; min-height: 36px; padding: 8px 22px 8px 10px; font-size: 13px; border-radius: 7px; background: var(--sf); color: var(--tx); }
+.fg .combo-wrap { display: block; width: 100%; }
+.fg .combo-wrap input { width: 100%; height: 36px; }
+.fg .ms-btn { width: 100%; max-width: none; height: 36px; min-height: 36px; padding: 0 22px 0 10px; font-size: 13px; border-radius: 7px; background: var(--sf); color: var(--mu2); display: flex; align-items: center; }
 .fg .ms-btn.has-sel { color: var(--tx); border-color: var(--accent); }
 .fg .ms-list { width: 100%; min-width: 0; }
+.fg .tms-box { min-height: 36px; padding: 3px 8px; }
+.fg .tms-input { height: 28px !important; padding: 0 2px !important; line-height: 28px !important; }
 
 /* ── Analysis section titles (Pre-Reg) ── */
 .sec-title { font-size: 11.5px; font-weight: 700; color: var(--mu); margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--bd); text-transform: uppercase; letter-spacing: .04em; }
@@ -336,7 +352,7 @@ select.dd:focus { border-color: var(--accent); }
 }
 .tms-tag-x { border: none; background: none; color: var(--mu); cursor: pointer; font-size: 10px; padding: 2px; line-height: 1; }
 .tms-tag-x:hover { color: var(--tx); }
-.tms-input { flex: 1; min-width: 80px; border: none; outline: none; background: none; font-family: inherit; font-size: 13px; color: var(--tx); padding: 3px 2px; }
+.tms-input { flex: 1; min-width: 80px; border: none !important; outline: none !important; background: none !important; box-shadow: none !important; font-family: inherit; font-size: 13px; color: var(--tx); padding: 3px 2px !important; }
 .tms-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60; background: var(--sf); border: 1.5px solid var(--bd2); border-radius: 7px; box-shadow: 0 4px 16px rgba(0,0,0,.12); max-height: 220px; overflow-y: auto; padding: 4px 0; }
 .tms-item { padding: 6px 12px; font-size: 12.5px; color: var(--tx2); cursor: pointer; }
 .tms-item:hover { background: var(--sf2); }
