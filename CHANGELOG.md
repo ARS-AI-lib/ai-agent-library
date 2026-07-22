@@ -160,10 +160,13 @@
 - Helpers: `isAdmin()`, `isCommittee()`, `isApproverOrAbove()`, `isKnownUser()`, `isCreatorEmail()`, `isOwnerCreatorOrApprover()`, `userRole()`
 - Rule branches ปัจจุบัน: new-entry, approve/reject, self-withdraw, deploy-request, progress-update, Tier A detail, Tier B detail, SDLC metadata, deployment decision, deploy cascade
 
-### Deploy Workflow
-- Source จริงอยู่ใน Cloud Shell (`~/agent-library`)
-- แก้โค้ด local (`/Users/tinpato/Downloads/claude_AIApp/agent-library/`) → Upload ผ่าน Cloud Shell Upload file → `npm run build` → `firebase deploy --only hosting --project=wolfy-481609`
-- Cloud Functions: `firebase deploy --only functions --project=wolfy-481609`
+### Deploy Workflow (เปลี่ยนวิธี 2026-07-22 — deploy ตรงจาก local, เลิกใช้ Cloud Shell)
+- Source เดียว = **local + git** (`origin = github.com/ARS-AI-lib/ai-agent-library`, branch `main`). Cloud Shell retired (local diff-verified == deployed ก่อนสลับ)
+- **Hosting:** `npm run build && npx firebase-tools deploy --only hosting --project wolfy-481609` (targets `main`=`wolfy-481609` + `pretty`=`wolfy-ai-library`)
+- **Preview ก่อน promote (แนะนำ):** `npx firebase-tools hosting:channel:deploy <name> --project wolfy-481609` → URL ชั่วคราว ไม่แตะ live
+- **⚠️ Functions — shared project กับ Portfolio:** ห้าม `deploy --only functions` เปล่าๆ (จะลบ functions ของ Portfolio) — scope เสมอ: `--only functions:analyzeDuplicate,chatLibrary`
+- **Firestore rules:** ยัง publish ผ่าน Console (named DB `ai-agent-lib`) — `firebase.json` ไม่มี firestore block โดยตั้งใจ
+- Rollback: Firebase เก็บ release เดิม → Console → Hosting → release history
 
 ### Key Files
 | ไฟล์ | หน้าที่ |
