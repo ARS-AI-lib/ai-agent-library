@@ -16,15 +16,186 @@
 //     composes the final answer — it never sees the raw library data except
 //     for whatever a skill's result includes.
 
-import { rankCandidates, findDuplicates } from './similarity';
+import { rankCandidates, findDuplicates, scoreDraftAgainst } from './similarity';
 import { findConnectionSuggestions } from './connections';
 import { getType, getTier, isInternalOrExternal } from './tier';
 import { agentStatus, ST_DEF } from './status';
-import { splitRoles, agentProcessIds } from './agentUtils';
+import { splitRoles, agentProcessIds, agentUseCaseNames } from './agentUtils';
 
 function norm(s) {
   return (Array.isArray(s) ? s.join(' ') : (s || '')).toString().toLowerCase().trim();
 }
+
+// ── Archive-awareness (2026-07-22) ───────────────────────────────────
+// Archived entries must never be RECOMMENDED, but they are valuable as
+// BACKGROUND: "someone built this and retired it because X" prevents a
+// rebuild. So the split is by tool intent, not by one global filter:
+//
+//   recommendLib(ctx) — tools that answer "what should I use / what exists"
+//                       (query_library, capability_search, get_agent_detail).
+//                       Archived excluded outright.
+//   analysisLib(ctx)  — tools that reason about overlap and history
+//                       (search_library, duplicate_check, connection_suggest*).
+//                       Archived included, and tagged so the caller can warn
+//                       instead of suggest.
+//
+// * connection_suggest is called with an already-active-only library by
+//   PreRegModal, since you cannot integrate with something that is gone.
+function recommendLib(ctx) {
+  return (ctx.library || []).filter((a) => a.archived !== true);
+}
+function analysisLib(ctx) {
+  return ctx.libraryAll?.length ? ctx.libraryAll : (ctx.library || []);
+}
+
+// ── Fuzzy name resolution (2026-07-30) ───────────────────────────────
+// Users type agent names from memory, so exact matching fails constantly:
+// "Nok-Suggest" never matched the real "Nok - Suggest" (identical except the
+// spaces around the hyphen), and the assistant reported "not found" on an
+// entry that plainly exists. Names in this library also mix Thai/English,
+// hyphens, parentheses and inconsistent spacing, so punctuation and spacing
+// must never decide a match.
+//
+// Resolution ladder, most-confident first — the first rung that hits wins:
+//   exact    — identical once punctuation/spacing is normalised away
+//   spacing  — identical with ALL whitespace removed ("NokSuggest")
+//   tokens   — every word typed appears somewhere in the name (order-free,
+//              so "suggest nok" and partial names work)
+//   typo     — closest by edit distance, within a length-scaled tolerance
+// Anything looser stays unmatched but returns `suggestions` so the assistant
+// can ask "did you mean…" instead of dead-ending the user.
+function looseNorm(s) {
+  return String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+}
+function squash(s) {
+  return looseNorm(s).replace(/\s/g, '');
+}
+function editDistance(a, b) {
+  const m = a.length;
+  const n = b.length;
+  if (!m || !n) return Math.max(m, n);
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : 1 + Math.min(prev[j], cur[j - 1], prev[j - 1]);
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+export function resolveAgentByName(library, name) {
+  const lib = library || [];
+  const q = looseNorm(name);
+  const qs = squash(name);
+  if (!q) return { match: null, matchedBy: 'none', suggestions: [] };
+
+  let m = lib.find((a) => looseNorm(a.agentName) === q);
+  if (m) return { match: m, matchedBy: 'exact', suggestions: [] };
+
+  m = lib.find((a) => squash(a.agentName) === qs);
+  if (m) return { match: m, matchedBy: 'spacing', suggestions: [] };
+
+  const qTokens = q.split(' ').filter(Boolean);
+  const tokenHits = lib.filter((a) => {
+    const n = looseNorm(a.agentName);
+    return qTokens.every((t) => n.includes(t));
+  });
+  if (tokenHits.length === 1) return { match: tokenHits[0], matchedBy: 'tokens', suggestions: [] };
+  // Several plausible names — don't silently pick one, let the caller ask.
+  if (tokenHits.length > 1) {
+    return { match: null, matchedBy: 'ambiguous', suggestions: tokenHits.slice(0, 5).map((a) => a.agentName) };
+  }
+
+  const scored = lib
+    .map((a) => ({ a, d: editDistance(qs, squash(a.agentName)) }))
+    .sort((x, y) => x.d - y.d);
+  const best = scored[0];
+  // Scale tolerance with query length: ~30% of the typed characters may be
+  // wrong, but always allow at least 2 so short names stay correctable.
+  const tolerance = Math.max(2, Math.floor(qs.length * 0.3));
+  if (best && best.d <= tolerance) return { match: best.a, matchedBy: 'typo', suggestions: [] };
+
+  return {
+    match: null,
+    matchedBy: 'none',
+    suggestions: scored.slice(0, 5).filter((s) => s.d < Math.max(qs.length, 4)).map((s) => s.a.agentName),
+  };
+}
+
+// ── Readiness gate (2026-07-30) ──────────────────────────────────────
+// Every tool result that names an Agent/Skill MUST carry its readiness, or
+// the assistant cannot honour its disclaimer rules (it would be guessing).
+// Three buckets drive three different behaviours in CHAT_SYSTEM_PROMPT:
+//   'ready'  (Ready to Use, 100%) — recommend freely
+//   'pilot'  (Pilot, 90-99%)      — recommend, but MUST carry the
+//                                   "under real-world testing" disclaimer
+//   'in_dev' (In Progress / To Do)— may appear as context, but MUST be
+//                                   flagged as not usable yet
+// `endpoint` rides along for the same reason: the assistant can only hand out
+// a link if the tool actually told it one exists.
+export function readinessOf(agent) {
+  const status = ST_DEF[agentStatus({ devProgress: progressNum(agent) })].lb;
+  const readiness = status === 'Ready to Use' ? 'ready' : status === 'Pilot' ? 'pilot' : 'in_dev';
+  return { status, readiness, endpoint: agent?.endpoint || '' };
+}
+
+// Sort helper: Ready to Use first, then Pilot, then everything still in
+// development — the order the user asked recommendations to appear in.
+const READINESS_RANK = { ready: 0, pilot: 1, in_dev: 2 };
+
+// ── Semantic similarity (2026-08-04) ─────────────────────────────────
+// Vectors are produced by the reindexAgentVectors function and read from
+// /agentVectors; the query vector comes from the embedQuery callable (the
+// browser has no Vertex credentials and must not). Both arrive through ctx so
+// every skill here stays a pure, synchronous function over its context.
+export function cosine(a, b) {
+  if (!a || !b || a.length !== b.length) return 0;
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  if (!na || !nb) return 0;
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+
+// How many candidates each retrieval arm contributes before the union.
+// Calibrated against the real 244-entry index: correct answers cluster in the
+// top ~5 for embeddings, so 12 leaves headroom without flooding the model.
+// The lexical arm stays because it measurably wins when wording overlaps
+// literally — an English draft "Test Case Generator" ranked #1 lexically but
+// only #2 by embedding — so the union is strictly better than either alone.
+const SEM_TOP_K = 12;
+const LEX_TOP_K = 8;
+
+// Entries flagged `internalTool` are implementation fragments of other agents
+// (the "N.something.md" prompt files), not tools a person can pick up. They are
+// deliberately DEMOTED rather than excluded — they remain findable if someone
+// genuinely asks about one, and they stay fully visible in the web UI.
+//
+// Why demote at all: measured on the real library, "เขียน code" ranked
+// 6.answer-writer.md #1 at 0.773, above every actual development agent. Short
+// generic queries land near these files because their text is generic, so they
+// crowd out real answers on exactly the questions users ask most.
+//
+// The penalty is applied to the RANKING score only; the `similarity` reported
+// to the model stays the true cosine, so nothing downstream is misled.
+const INTERNAL_RANK_PENALTY = 0.85;
+const rankScore = (agent, sem) => (agent?.internalTool === true ? sem * INTERNAL_RANK_PENALTY : sem);
+
+// Deliberately NO score floor. Measured on the real library: the nonsense
+// query "ช่วยแปลภาษาญี่ปุ่นเป็นไทย" scores 0.687 while the genuine query
+// "เทสเคส" scores only 0.621 — cosine cannot separate real from irrelevant, so
+// any threshold would cut real questions and admit nonsense. Deciding "there
+// is nothing for this" is the model's job, with the score passed along as a
+// weak hint.
 
 // devProgress may still be a legacy string ("90%") on a handful of un-migrated
 // docs — same defensive coercion as useAgents.js's normalizeAgent.
@@ -48,6 +219,7 @@ function matchesKeyword(agent, keyword) {
   const hay = norm([
     agent.agentName, agent.owner, agent.description, agent.useCase,
     agent.coreAbility, agent.relatedRole,
+    agent.creator, Array.isArray(agent.creatorEmails) ? agent.creatorEmails.join(' ') : '',
   ].join(' '));
   return hay.includes(q);
 }
@@ -66,10 +238,30 @@ function matchesKeyword(agent, keyword) {
 // "quANTum" — happens to appear inside "assistANT"; one fluke trigram is not
 // a real signal, so require a small run of genuine overlap instead).
 const MIN_TRIGRAM_HITS = 3;
+
+// Verbs that describe what almost EVERY agent does ("สร้าง/create", "ช่วย/help")
+// carry no discriminating signal, but a single hit on one used to be enough to
+// clear the gate below. Real failure (2026-07-30): the query "สร้าง user story"
+// surfaced an investment-news skill whose description happened to contain
+// "…แล้วคำนวณและสร้าง…", and the assistant presented it as the answer. Dropping
+// these from the QUERY (never from the haystack) leaves "user story" — the part
+// that actually identifies what the user wants.
+const QUERY_STOPWORDS = new Set([
+  'สร้าง', 'ช่วย', 'ทำ', 'ใช้', 'หา', 'ตัว', 'ไหน', 'เรื่อง', 'การ', 'ได้', 'บ้าง', 'มี', 'ที่',
+  'create', 'creating', 'make', 'making', 'help', 'helps', 'generate', 'generating',
+  'build', 'building', 'do', 'does', 'get', 'the', 'for', 'with', 'and', 'any',
+]);
+
 function scoreText(hay, query) {
   const q = norm(query);
-  const chunks = q.split(/\s+/).filter((w) => w.length >= 2);
-  const flat = q.replace(/\s+/g, '');
+  const rawChunks = q.split(/\s+/).filter((w) => w.length >= 2);
+  // Keep the stopwords only if stripping them would leave nothing to match on
+  // (e.g. the user genuinely typed just "สร้าง").
+  const meaningful = rawChunks.filter((w) => !QUERY_STOPWORDS.has(w));
+  const chunks = meaningful.length ? meaningful : rawChunks;
+  // Trigrams follow the same filtered text, so a stopword can't sneak the
+  // score back in through character overlap either.
+  const flat = chunks.join('').replace(/\s+/g, '');
   const trigrams = flat.length >= 3
     ? Array.from({ length: flat.length - 2 }, (_, i) => flat.slice(i, i + 3))
     : (flat ? [flat] : []);
@@ -85,13 +277,54 @@ export const SKILLS = {
   search_library: {
     describe: {
       name: 'search_library',
-      description: 'ค้นหา Agent/Skill ที่มีอยู่แล้วในไลบรารีที่ใกล้เคียงกับ draft ที่ให้มา (rule-based nearest-neighbour, ไม่กรอง threshold) คืน top-N พร้อมคะแนน',
+      description: 'ค้นหา Agent/Skill ที่มีอยู่แล้วในไลบรารีที่ใกล้เคียงกับ draft ที่ให้มา — hybrid: rule-based nearest-neighbour ∪ semantic (embeddings) คืน top-N พร้อมคะแนน (ไม่กรอง threshold)',
       parameters: {
         draft: '{ agentName, description, coreAbility, input, output, businessValue }',
         limit: 'number — จำนวนที่คืน (default 15)',
       },
     },
-    run: ({ draft, limit = 15 }, ctx) => rankCandidates(draft, ctx.library, limit),
+    // Form-only (not a chat tool): includes archived so a registrant is warned
+    // about work that was already tried and retired.
+    //
+    // Hybrid for the same reason as capability_search, but the stakes are
+    // higher here: a duplicate this stage misses becomes a redundant agent
+    // someone actually builds. similarity.js already admitted the weakness in
+    // its own comment ("a genuine semantic overlap written in different words
+    // (or mixed Thai/English) can score well below the cutoff") and mitigated
+    // it by removing the threshold — but that only helps if the true duplicate
+    // is already inside the top-N, and ranking was still done by the same
+    // surface-token score. Measured: a Thai-reworded duplicate of TC Writer sat
+    // at #7 of 15 and would fall clean out of the window on the real 244-entry
+    // library, so the AI would never have seen it.
+    //
+    // The union NEVER shrinks the candidate set — rule-based hits keep their
+    // places (an English "Test Case Generator" ranks #1 lexically and only #2
+    // semantically, so dropping the lexical arm would have made that case
+    // worse) — semantic hits are added on top. Recall cannot regress.
+    run: ({ draft, limit = 15 }, ctx) => {
+      const lib = analysisLib(ctx);
+      const ruleHits = rankCandidates(draft, lib, limit);
+      if (!ctx.queryVector || !ctx.vectors?.size) return ruleHits;
+
+      const seen = new Set(ruleHits.map((r) => r.existing?.id || r.existing?.agentName));
+      const semHits = lib
+        .map((a) => ({ a, sem: cosine(ctx.queryVector, ctx.vectors.get(a.id)) }))
+        .filter((x) => x.sem > 0 && !seen.has(x.a.id) && !seen.has(x.a.agentName))
+        .sort((x, y) => y.sem - x.sem)
+        .slice(0, SEM_TOP_K)
+        // Shape-match rankCandidates' output so downstream code (PreRegModal
+        // and the analyzeDuplicate prompt) needs no special-casing. confidence
+        // is the real rule score — recomputed, not faked — so the AI is never
+        // handed an invented number; `viaSemantic` marks where it came from.
+        .map(({ a, sem }) => ({
+          existing: a,
+          ...scoreDraftAgainst(draft, a),
+          semantic: Math.round(sem * 1000) / 1000,
+          viaSemantic: true,
+        }));
+
+      return [...ruleHits, ...semHits];
+    },
   },
 
   duplicate_check: {
@@ -103,7 +336,8 @@ export const SKILLS = {
         limit: 'number — จำนวนสูงสุด (default 5)',
       },
     },
-    run: ({ draft, limit = 5 }, ctx) => findDuplicates(draft, ctx.library, limit),
+    // Form-only (not a chat tool): archived included — see search_library.
+    run: ({ draft, limit = 5 }, ctx) => findDuplicates(draft, analysisLib(ctx), limit),
   },
 
   connection_suggest: {
@@ -115,7 +349,18 @@ export const SKILLS = {
         limit: 'number — จำนวนสูงสุด (default 6)',
       },
     },
-    run: ({ draft, limit = 6 }, ctx) => findConnectionSuggestions(draft, ctx.library, ctx.processes, limit),
+    // Active only — you cannot integrate with an entry that has been retired.
+    // Each suggestion is enriched with the TARGET's readiness/endpoint (the
+    // scorer in connections.js only knows about names/scores): the assistant
+    // has to disclose that a suggested integration target is itself still in
+    // development, and can hand out its link when one exists.
+    run: ({ draft, limit = 6 }, ctx) => {
+      const lib = recommendLib(ctx);
+      return findConnectionSuggestions(draft, lib, ctx.processes, limit).map((c) => {
+        const target = lib.find((a) => norm(a.agentName) === norm(c.target));
+        return target ? { ...c, ...readinessOf(target), owner: target.owner || '' } : c;
+      });
+    },
   },
 
   get_agent_detail: {
@@ -124,7 +369,27 @@ export const SKILLS = {
       description: 'ดึงข้อมูลเต็มของ Agent/Skill หนึ่งตัวจากไลบรารีด้วยชื่อ (case-insensitive) — ใช้ตอบคำถามเจาะจงตัวใดตัวหนึ่ง',
       parameters: { agentName: 'string — ชื่อ Agent/Skill' },
     },
-    run: ({ agentName }, ctx) => ctx.library.find((a) => norm(a.agentName) === norm(agentName)) || null,
+    // Returns the raw doc PLUS the derived readiness fields — the doc itself
+    // only stores devProgress, and the assistant should never have to derive
+    // the status label (or re-implement the thresholds) on its own.
+    //
+    // Name lookup is fuzzy (resolveAgentByName): users type names from memory,
+    // and an exact match previously failed on nothing more than a different
+    // spacing around a hyphen. On a miss the result carries `suggestions` so
+    // the assistant can offer "did you mean…" instead of a dead end.
+    run: ({ agentName }, ctx) => {
+      const { match, matchedBy, suggestions } = resolveAgentByName(recommendLib(ctx), agentName);
+      if (!match) return { found: false, query: agentName, matchedBy, suggestions };
+      return {
+        found: true,
+        // Surfaced so the assistant can confirm when it corrected the user's
+        // spelling rather than silently answering about a different entry.
+        matchedBy,
+        matchedName: match.agentName,
+        ...match,
+        ...readinessOf(match),
+      };
+    },
   },
 
   // ── Chat Assistant skills (2026-07-02) ──────────────────────────
@@ -136,6 +401,7 @@ export const SKILLS = {
         type: '"Agent" | "Skill" | "all" (optional)',
         tier: 'array of "T1".."T4" (optional)',
         owner: 'array of owner strings (optional)',
+        creator: 'array of creator name/email substrings (optional) — ใช้ตอบ "AI ตัวไหนที่ <ชื่อคน> เป็น creator"',
         relatedRole: 'array of role strings (optional)',
         coreAbility: 'array of ability strings (optional)',
         reusable: 'array of "Reusable" | "Reusable with Conditions" | "Non-reusable" (optional)',
@@ -143,14 +409,14 @@ export const SKILLS = {
         scope: '"Internal" | "External" (optional)',
         sdlcStage: 'array of SDLC stage names (optional, requires ctx.processes)',
         sdlcProcessMapping: 'array of process ids e.g. "2.2" (optional)',
-        useCase: 'string, exact use case name (optional)',
+        useCase: 'array of use case name strings (optional) — matches if the agent has ANY of these',
         keyword: 'string — free-text search across name/owner/description/ability/role (optional)',
-        groupBy: '"owner" | "tier" | "status" | "relatedRole" | "coreAbility" (optional) — if set, returns counts per group instead of a flat list',
+        groupBy: '"owner" | "creator" | "tier" | "status" | "relatedRole" | "coreAbility" (optional) — if set, returns counts per group instead of a flat list',
       },
     },
     run: (args, ctx) => {
       const {
-        type = 'all', tier, owner, relatedRole, coreAbility, reusable, status,
+        type = 'all', tier, owner, creator, relatedRole, coreAbility, reusable, status,
         scope, sdlcStage, sdlcProcessMapping, useCase, keyword, groupBy,
       } = args || {};
 
@@ -164,10 +430,35 @@ export const SKILLS = {
         );
       }
 
-      const filtered = ctx.library.filter((a) => {
+      // `keyword` used to be a pure substring test, which made it the last
+      // place the old lexical-only behaviour could still bite: a Thai keyword
+      // against an English field matches nothing, exactly like "เทสเคส" once
+      // returned zero results. Structured filters (tier/owner/status/…) stay
+      // literal — those ARE exact values — but the free-text keyword now also
+      // admits semantic neighbours. Union, so a substring hit is never lost.
+      let semanticKeywordIds = null;
+      if (keyword && ctx.queryVector && ctx.vectors?.size) {
+        semanticKeywordIds = new Set(
+          recommendLib(ctx)
+            .map((a) => ({ id: a.id, sem: cosine(ctx.queryVector, ctx.vectors.get(a.id)) }))
+            .filter((x) => x.sem > 0)
+            .sort((x, y) => y.sem - x.sem)
+            .slice(0, SEM_TOP_K)
+            .map((x) => x.id)
+        );
+      }
+
+      const filtered = recommendLib(ctx).filter((a) => {
         if (type !== 'all' && type && getType(a) !== type.toLowerCase()) return false;
         if (tier?.length && !tier.includes(getTier(a))) return false;
         if (owner?.length && !owner.includes(a.owner || '')) return false;
+        if (creator?.length) {
+          // Substring match (not exact): `creator` is a comma-joined display
+          // string of the whole team, and the user often types a partial name.
+          // Also search creatorEmails so an email query works too.
+          const hay = norm([a.creator, Array.isArray(a.creatorEmails) ? a.creatorEmails.join(' ') : ''].join(' '));
+          if (!creator.some((c) => hay.includes(norm(c)))) return false;
+        }
         if (relatedRole?.length) {
           const roles = splitRoles(a.relatedRole);
           if (!roles.some((r) => relatedRole.includes(r))) return false;
@@ -190,8 +481,11 @@ export const SKILLS = {
           const ids = agentProcessIds(a);
           if (!ids.some((id) => stageProcessIds.has(id))) return false;
         }
-        if (useCase && norm(a.useCase) !== norm(useCase)) return false;
-        if (!matchesKeyword(a, keyword)) return false;
+        if (useCase?.length) {
+          const names = agentUseCaseNames(a).map(norm);
+          if (!useCase.some((u) => names.includes(norm(u)))) return false;
+        }
+        if (keyword && !matchesKeyword(a, keyword) && !semanticKeywordIds?.has(a.id)) return false;
         return true;
       });
 
@@ -201,12 +495,17 @@ export const SKILLS = {
           tier: (a) => getTier(a),
           status: (a) => ST_DEF[agentStatus({ devProgress: progressNum(a) })].lb,
         }[groupBy] || null;
-        if (groupBy === 'relatedRole' || groupBy === 'coreAbility') {
-          const field = groupBy === 'relatedRole' ? 'relatedRole' : 'coreAbility';
+        if (groupBy === 'relatedRole' || groupBy === 'coreAbility' || groupBy === 'creator') {
+          // Multi-value group: one agent can contribute to several buckets.
+          // creator is a comma-joined display string → split like roles.
+          const valsOf = (a) => {
+            if (groupBy === 'relatedRole') return splitRoles(a.relatedRole);
+            if (groupBy === 'coreAbility') return Array.isArray(a.coreAbility) ? a.coreAbility : [a.coreAbility];
+            return String(a.creator || '').split(',').map((s) => s.trim());
+          };
           const counts = {};
           filtered.forEach((a) => {
-            const vals = field === 'relatedRole' ? splitRoles(a[field]) : (Array.isArray(a[field]) ? a[field] : [a[field]]);
-            vals.filter(Boolean).forEach((v) => { counts[v] = (counts[v] || 0) + 1; });
+            valsOf(a).filter(Boolean).forEach((v) => { counts[v] = (counts[v] || 0) + 1; });
           });
           return { mode: 'group', groupBy, counts, total: filtered.length };
         }
@@ -220,11 +519,16 @@ export const SKILLS = {
       return {
         mode: 'list',
         total: filtered.length,
-        agents: filtered.map((a) => ({
-          agentName: a.agentName, type: getType(a), tier: getTier(a), owner: a.owner,
-          status: ST_DEF[agentStatus({ devProgress: progressNum(a) })].lb,
-          reusable: a.reusable || '', scope: isInternalOrExternal(a),
-        })),
+        // Sorted by readiness (Ready to Use → Pilot → still in development) so
+        // the assistant presents usable things first without having to re-rank.
+        agents: filtered
+          .map((a) => ({
+            agentName: a.agentName, type: getType(a), tier: getTier(a), owner: a.owner,
+            creator: a.creator || '',
+            ...readinessOf(a),
+            reusable: a.reusable || '', scope: isInternalOrExternal(a),
+          }))
+          .sort((x, y) => READINESS_RANK[x.readiness] - READINESS_RANK[y.readiness]),
       };
     },
   },
@@ -267,7 +571,10 @@ export const SKILLS = {
         // that was missing before: the assistant could read the catalog and
         // the library separately, but had no cross-referenced coverage view.
         const countByProcess = {};
-        (ctx.library || []).forEach((a) => {
+        // Coverage counts active agents only — an archived agent no longer
+        // covers its process, which is the honest signal for a gap map (same
+        // rule the Dashboard applies).
+        recommendLib(ctx).forEach((a) => {
           agentProcessIds(a).forEach((id) => { countByProcess[id] = (countByProcess[id] || 0) + 1; });
         });
         processesOut = processesOut.map((p) => ({ ...p, agentCount: countByProcess[p.id] || 0 }));
@@ -284,19 +591,34 @@ export const SKILLS = {
   capability_search: {
     describe: {
       name: 'capability_search',
-      description: 'หา Agent/Skill ที่ "ความสามารถ" ตรงกับที่ถามเชิงความหมาย (เช่น "มีตัวไหนทำ documentation generation ได้บ้าง") — คืนเฉพาะ candidate ที่กว้างพอ (keyword prefilter) ให้ผู้เรียกใช้ (LLM) คัดเลือกอีกชั้นจากความหมายจริง ไม่ใช่ผลลัพธ์สุดท้าย',
+      description: 'หา Agent/Skill ที่ "ความสามารถ" ตรงกับที่ถามเชิงความหมาย (เช่น "มีตัวไหนทำ documentation generation ได้บ้าง") — hybrid: รวมผลค้นเชิงความหมาย (embeddings) กับการเทียบคำตรงตัว แล้วคืน candidate ให้ผู้เรียกใช้ (LLM) คัดเลือกอีกชั้นจากความหมายจริง ไม่ใช่ผลลัพธ์สุดท้าย',
       parameters: {
         query: 'string — คำอธิบายความสามารถที่ต้องการค้นหา (ภาษาธรรมชาติ)',
-        limit: 'number — จำนวนสูงสุด (default 20)',
+        intent: '"usable_now" | "all" — usable_now = เอาเฉพาะที่ใช้งานได้จริงตอนนี้ (Ready to Use + Pilot)',
+        limit: 'number — จำนวนสูงสุด (default 15)',
       },
     },
-    // Broad, forgiving prefilter using scoreText (chunk + trigram matching —
-    // see its comment for why plain word-splitting fails on Thai). Deliberately
-    // wider than matchesKeyword's single-substring check so a synonym-heavy
-    // natural-language query still surfaces enough candidates for the LLM to
-    // judge; the LLM (not this function) makes the final semantic call.
-    run: ({ query, limit = 20 }, ctx) => {
-      const cacheKey = `${(query || '').trim().toLowerCase()}::${limit}`;
+    // Hybrid retrieval. Two arms, unioned:
+    //
+    //   semantic — cosine over /agentVectors. This is what makes a Thai query
+    //              find an English field: "เทสเคส" used to return ZERO results
+    //              because the library stores "Testcase", and "ตัวไหนช่วย debug
+    //              bug" now finds RCA Fix Assistant whose description contains
+    //              neither "debug" nor "bug".
+    //   lexical  — the original scoreText pass, kept because it measurably wins
+    //              when wording overlaps literally.
+    //
+    // Union, never replacement: the candidate set strictly contains what the
+    // lexical arm alone would have produced, so recall cannot regress.
+    //
+    // If vectors are unavailable (still loading, or the index has not been
+    // built) the semantic arm contributes nothing and this degrades to exactly
+    // the old behaviour rather than failing.
+    run: ({ query, intent = 'all', limit = 15 }, ctx) => {
+      const cacheKey = `${(query || '').trim().toLowerCase()}::${intent}::${limit}::${ctx.queryVector ? 'v' : 'n'}`;
+      // Cache stays keyed on ctx.library — the array straight from onSnapshot,
+      // whose identity is stable between snapshots. Keying it on the filtered
+      // list instead would allocate a fresh array per call and never hit.
       let byQuery = capabilitySearchCache.get(ctx.library);
       if (!byQuery) {
         byQuery = new Map();
@@ -304,17 +626,71 @@ export const SKILLS = {
       }
       if (byQuery.has(cacheKey)) return byQuery.get(cacheKey);
 
-      const scored = ctx.library.map((a) => {
-        const hay = norm([a.agentName, a.description, a.input, a.output, a.businessValue, a.coreAbility].join(' '));
-        return { a, score: scoreText(hay, query) };
-      }).filter((x) => x.score > 0)
-        .sort((x, y) => y.score - x.score)
-        .slice(0, limit);
-      const result = scored.map(({ a }) => ({
+      const pool = recommendLib(ctx);
+      const picked = new Map(); // agentName -> { a, sem, lex }
+
+      // ── semantic arm ──
+      const vectors = ctx.vectors;
+      if (ctx.queryVector && vectors) {
+        pool
+          .map((a) => {
+            const sem = cosine(ctx.queryVector, vectors.get(a.id));
+            return { a, sem, rank: rankScore(a, sem) };
+          })
+          .filter((x) => x.sem > 0)
+          .sort((x, y) => y.rank - x.rank)
+          .slice(0, SEM_TOP_K)
+          .forEach(({ a, sem, rank }) => picked.set(a.agentName, { a, sem, rank, lex: 0 }));
+      }
+
+      // ── lexical arm ──
+      pool
+        .map((a) => {
+          const hay = norm([a.agentName, a.description, a.input, a.output, a.businessValue, a.coreAbility].join(' '));
+          return { a, lex: scoreText(hay, query) };
+        })
+        .filter((x) => x.lex > 0)
+        .sort((x, y) => y.lex - x.lex)
+        .slice(0, LEX_TOP_K)
+        .forEach(({ a, lex }) => {
+          const hit = picked.get(a.agentName);
+          if (hit) hit.lex = lex;
+          else picked.set(a.agentName, { a, sem: 0, rank: 0, lex });
+        });
+
+      let rows = [...picked.values()];
+
+      // Readiness gate enforced HERE, in code — not as a prompt rule. The
+      // prompt already forbade offering in-development entries as an answer to
+      // "what can I use", and the model listed seven of them anyway. A filter
+      // the model cannot forget is the only version that holds.
+      if (intent === 'usable_now') {
+        rows = rows.filter(({ a }) => readinessOf(a).readiness !== 'in_dev');
+      }
+
+      // Rank by the penalised semantic score first (it is the better signal),
+      // falling back to the lexical score for entries the semantic arm never saw.
+      rows.sort((x, y) => ((y.rank || 0) - (x.rank || 0)) || (y.lex - x.lex));
+
+      const result = rows.slice(0, limit).map(({ a, sem, lex }) => ({
         agentName: a.agentName,
+        type: getType(a),
+        tier: getTier(a),
         description: (a.description || '').slice(0, 300),
         input: a.input || '', output: a.output || '', businessValue: (a.businessValue || '').slice(0, 200),
         coreAbility: a.coreAbility,
+        owner: a.owner || '',
+        creator: a.creator || '',
+        // A weak hint only. Deliberately NOT thresholded — measured on the real
+        // library, a nonsense query outscored a genuine one (0.687 vs 0.621),
+        // so the model must judge relevance from meaning, not from this number.
+        similarity: Math.round(sem * 1000) / 1000,
+        matchedBy: sem > 0 && lex > 0 ? 'both' : sem > 0 ? 'semantic' : 'keyword',
+        // Readiness + endpoint travel with EVERY candidate: this tool answers
+        // "is there something that does X", and the assistant must be able to
+        // say which of the hits are actually usable (and hand out the link)
+        // without a second lookup.
+        ...readinessOf(a),
       }));
       byQuery.set(cacheKey, result);
       return result;
