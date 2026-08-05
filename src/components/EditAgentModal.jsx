@@ -3,8 +3,9 @@ import { doc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/f
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill } from '../lib/tier';
 import { developmentPhaseLabel } from '../lib/status';
-import { splitRoles, normalizeProgress, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC } from '../lib/agentUtils';
+import { splitRoles, normalizeProgress, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
+import { reindexAgent } from '../lib/reindex';
 import MultiSelect from './MultiSelect';
 import TagMultiSelect from './TagMultiSelect';
 import AgentMultiSelect from './AgentMultiSelect';
@@ -47,6 +48,24 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   const canEditSDLCFlag = canEditSDLC(agent, user, userRole, isAdmin);
   const lockTierA = !canEditTierA;
   const lockSensitive = lockProgress || !canEditSensitive;
+  // Ready-to-Use exception (2026-07-22): only relevant when the general Tier A
+  // right is ALREADY blocked (the freeze at deploymentStatus 'approved') — if
+  // canEditTierA is true nothing extra is needed, Description/Endpoint are
+  // already editable as part of that group.
+  const canEditRTU = lockTierA && canEditReadyToUseFields(agent, user, isAdmin);
+  const descEndpointLocked = lockTierA && !canEditRTU;
+  // Ready to Use (2026-07-22): once deploymentStatus is 'approved', canEditTierA
+  // and canEditSDLCFlag are ALREADY false by construction (see canEditDetails/
+  // canEditSDLC) — but canEditSensitive (Tier B: creator/progress/launchDate)
+  // never checked deploymentStatus at all, so those stayed editable forever
+  // for admin/owner/creator. That's the actual bug: the form kept showing a
+  // full Creator picker + Progress + Launch Date after go-live. Rather than
+  // patch canUpdateProgress (used elsewhere for the pre-approval 95%-cap rule
+  // and by chat/other read paths — narrowing it risks side effects there too),
+  // the fix lives here: once approved, collapse the ENTIRE form down to
+  // Agent Name (read-only, for context) + Description + Endpoint and hide
+  // every other section outright, matching the explicit ask.
+  const isReadyToUseLocked = agent?.deploymentStatus === 'approved';
 
   const [form, setForm] = useState(() => ({
     agentName: agent.agentName || '',
@@ -63,12 +82,13 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     reuseCondition: agent.reuseCondition || '',
     hml: !!agent.hml,
     humanJob: agent.humanJob || '',
+    endpoint: agent.endpoint || '',
     launchDate: toDateInputValue(agent.launchDate),
     devProgress: normalizeProgress(agent?.devProgress),
     compatibleAgents: Array.isArray(agent.compatibleAgents) ? agent.compatibleAgents : [],
     sdlcStage: new Set(Array.isArray(agent.sdlcStage) ? agent.sdlcStage : [agent.sdlcStage].filter(Boolean)),
     sdlcProcessMapping: new Set(Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping : [agent.sdlcProcessMapping].filter(Boolean)),
-    useCase: agent.useCase || '',
+    useCase: new Set(agentUseCaseNames(agent)),
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -127,6 +147,21 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     });
   }, [processOptions]);
 
+  // Same drop-if-stale rule, one level down: a Use Case selection that no
+  // longer belongs to the (possibly just-changed) Process Mapping. Same
+  // catalogLoaded guard for the same reason — otherwise this fires before the
+  // catalog arrives and wipes the agent's saved Use Case(s) on mount.
+  useEffect(() => {
+    if (!catalogLoaded) return;
+    setForm((f) => {
+      if (f.useCase.size === 0) return f;
+      const valid = new Set(useCaseOptions);
+      const kept = new Set([...f.useCase].filter((u) => valid.has(u)));
+      if (kept.size === f.useCase.size) return f;
+      return { ...f, useCase: kept };
+    });
+  }, [useCaseOptions]);
+
   // Re-hydrate creator chips (loaded from creatorEmails with no name) from the
   // directory cache so `creator` display can be rewritten correctly on save.
   useEffect(() => {
@@ -164,6 +199,9 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         setError('กรุณาระบุ Reuse Conditions');
         return;
       }
+    } else if (canEditRTU && !form.description.trim()) {
+      setError('กรุณากรอก Description');
+      return;
     }
     setSaving(true);
     setError('');
@@ -189,6 +227,9 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           reuseCondition: form.reusable === 'Reusable with Conditions' ? form.reuseCondition.trim() : '',
           hml: form.hml,
           humanJob: form.hml ? form.humanJob.trim() : '',
+          // Sanitised on write, same as pre-registration — never store a
+          // scheme we would refuse to render.
+          endpoint: safeEndpointUrl(form.endpoint),
           // Sensitive: creator list — writes `creator` display alongside
           // creatorEmails so the card/detail reflect new names immediately.
           ...(canEditSensitive ? {
@@ -214,10 +255,28 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         await updateDoc(doc(db, 'agents', agent.id), {
           sdlcStage: isExternal ? [] : [...form.sdlcStage],
           sdlcProcessMapping: isExternal ? [] : [...form.sdlcProcessMapping],
-          useCase: isExternal ? '' : form.useCase.trim(),
+          useCase: isExternal ? [] : [...form.useCase],
           updatedAt: serverTimestamp(),
         });
       }
+
+      // Write 3 — Ready-to-Use exception (2026-07-22): admin/creator touching
+      // ONLY description + endpoint on an agent already 'approved'. Mutually
+      // exclusive with Write 1 (canEditTierA is false whenever this runs) —
+      // its own affectedKeys matches the dedicated rules branch exactly.
+      if (canEditRTU) {
+        await updateDoc(doc(db, 'agents', agent.id), {
+          description: form.description.trim(),
+          endpoint: safeEndpointUrl(form.endpoint),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // One reindex after ALL the conditional writes above — the searchable
+      // text may have moved (name/description/input/output/ability/role/use
+      // case), and the index has to follow or search silently ranks on stale
+      // wording. Fire-and-forget: never let this fail or delay a save.
+      reindexAgent(agent.id);
 
       onSaved?.();
       onClose();
@@ -239,19 +298,60 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
 
+        {/* ── Agent Name is always the first field (2026-07-22) — rendered here,
+             OUTSIDE the Tier A fieldset, so it stays first in the form even
+             though Description/Endpoint (right below) also live outside that
+             fieldset. disabled tracks lockTierA directly: whenever the form is
+             Ready-to-Use-locked, lockTierA is already true by construction
+             (canEditDetails returns false once deploymentStatus is 'approved'),
+             so this single flag correctly covers both "read-only after Ready
+             to Use" and "no Tier A rights at all" without a separate check. */}
+        <div className="fg">
+          <label>Agent / Skill Name <span className="req">*</span></label>
+          <input disabled={lockTierA} value={form.agentName} onChange={(e) => setField('agentName', e.target.value)} />
+        </div>
+
+        {/* ── Description + Endpoint live OUTSIDE the Tier A fieldset (2026-07-22):
+             a disabled <fieldset> forces every descendant control disabled with
+             no way to selectively re-enable one — so these two, which admin/
+             creator may still touch after Ready to Use, can't live inside it. */}
+        {canEditRTU && (
+          <div className="msg info" style={{ fontSize: 11 }}>
+            <span className="dot" style={{ background: '#4a6fa5' }} />
+            Agent/Skill นี้พร้อมใช้งานแล้ว — แก้ไขได้เฉพาะ Description และ Endpoint
+          </div>
+        )}
+        <div className="fg">
+          <label>Description <span className="req">*</span></label>
+          <textarea rows={3} disabled={descEndpointLocked} value={form.description} onChange={(e) => setField('description', e.target.value)} />
+        </div>
+        <div className="fg">
+          <label>Endpoint</label>
+          <input
+            disabled={descEndpointLocked}
+            value={form.endpoint}
+            onChange={(e) => setField('endpoint', e.target.value)}
+            placeholder="ลิงก์เข้าใช้งาน Agent หรือลิงก์ดาวน์โหลด Skill (ไม่บังคับ)"
+          />
+          <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>
+            ผู้ใช้กดจากการ์ดไปใช้งานได้ทันที — รองรับเฉพาะ http/https
+          </div>
+        </div>
+
+        {/* ── Everything else: Tier A (minus Name, moved above), SDLC,
+             Creator/Team, Progress/Launch —
+             hidden entirely once Ready to Use (deploymentStatus 'approved'),
+             not just disabled. See isReadyToUseLocked above. */}
+        {!isReadyToUseLocked && (
+        <>
         {/* ── Tier A details — locked as one group for a user without detail rights ── */}
         <fieldset disabled={lockTierA} style={{ ...FS, opacity: lockTierA ? 0.6 : 1 }}>
-          {lockTierA && (
+          {lockTierA && !canEditRTU && (
             <div className="msg info" style={{ fontSize: 11 }}>
               <span className="dot" style={{ background: '#4a6fa5' }} />
               คุณมีสิทธิ์แก้ไขเฉพาะ SDLC (Stage / Process / Use Case) เท่านั้น
             </div>
           )}
-          <div className="fg">
-            <label>Agent / Skill Name <span className="req">*</span></label>
-            <input value={form.agentName} onChange={(e) => setField('agentName', e.target.value)} />
-          </div>
-
           <div className="fg">
             <label>Scope <span className="req">*</span></label>
             <div className="radio-row">
@@ -262,11 +362,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
                 </label>
               ))}
             </div>
-          </div>
-
-          <div className="fg">
-            <label>Description <span className="req">*</span></label>
-            <textarea rows={3} value={form.description} onChange={(e) => setField('description', e.target.value)} />
           </div>
 
           <div className="grid2">
@@ -329,6 +424,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
               <input value={form.humanJob} onChange={(e) => setField('humanJob', e.target.value)} placeholder="หน้าที่ของ Human ใน loop" />
             </div>
           )}
+
         </fieldset>
 
         {/* ── SDLC metadata — own edit right (createdBy/staff/approver/admin) ── */}
@@ -350,7 +446,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
             </div>
             <div className="fg">
               <label>Use Case</label>
-              <ComboInput value={form.useCase} onChange={(v) => setField('useCase', v)} options={useCaseOptions} placeholder="— เลือก Use Case —" />
+              <MultiSelect label="เลือก Use Case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
             </div>
           </fieldset>
         )}
@@ -397,6 +493,8 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
               <input type="date" value={form.launchDate} onChange={(e) => setField('launchDate', e.target.value)} />
             </div>
           </div>
+        )}
+        </>
         )}
 
         <div className="btn-group" style={{ marginTop: 12 }}>

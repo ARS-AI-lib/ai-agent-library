@@ -133,7 +133,7 @@ service cloud.firestore {
             && affectedKeys().hasOnly([
                  'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing',
                  'internalUse', 'coreAbility', 'relatedRole', 'reusable', 'reuseCondition', 'hml',
-                 'humanJob', 'updatedAt',
+                 'humanJob', 'endpoint', 'updatedAt',
                ])
             && !(resource.data.deploymentStatus in ['requested', 'approved']))
         // Detail edit — Tier B (2026-07-03, widened): the agent's owner
@@ -145,7 +145,7 @@ service cloud.firestore {
         || (affectedKeys().hasOnly([
               'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing', 'internalUse',
               'coreAbility', 'relatedRole', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
-              'humanJob', 'launchDate', 'devProgress', 'developmentPhase', 'updatedAt',
+              'humanJob', 'endpoint', 'launchDate', 'devProgress', 'developmentPhase', 'updatedAt',
             ])
             && isOwnerCreatorOrApprover(resource.data)
             && !(resource.data.deploymentStatus in ['requested', 'approved'])
@@ -165,7 +165,29 @@ service cloud.firestore {
         || (isApproverOrAbove()
             && affectedKeys().hasOnly(['deploymentStatus', 'deployDecidedBy', 'deployDecidedAt', 'updatedAt'])
             && resource.data.deploymentStatus == 'requested'
-            && request.resource.data.deploymentStatus in ['approved', 'rejected']);
+            && request.resource.data.deploymentStatus in ['approved', 'rejected'])
+        // Archive / un-archive (2026-07-22): retiring an entry from the library
+        // is a CURATION right, so unlike the detail tiers above it is granted by
+        // role only — committee/approver/admin — and never by authorship
+        // (createdBy/creator cannot archive their own entry). Nothing is
+        // deleted: the doc stays readable for audit, duplicate warnings and AI
+        // background context; only `archived` changes what the app shows.
+        // Deliberately NOT frozen by deploymentStatus — a deployed-then-retired
+        // agent is exactly a case that must be archivable.
+        || (isApproverOrAbove()
+            && affectedKeys().hasOnly(['archived', 'archivedAt', 'archivedBy', 'archiveReason', 'updatedAt'])
+            && request.resource.data.archived is bool)
+        // Ready-to-Use post-freeze exception (2026-07-22): every detail tier
+        // above freezes ENTIRELY once deploymentStatus is 'approved' — but
+        // Description and Endpoint legitimately need touch-ups after go-live
+        // (e.g. the real endpoint link only exists once the agent is live).
+        // admin is already covered by the blanket isAdmin() branch above, so
+        // this only needs to add the creator identity; deliberately NOT
+        // approvedBy-only (a bare approver shouldn't get ongoing edit rights
+        // here) and NOT 'requested' (still under active review).
+        || (resource.data.deploymentStatus == 'approved'
+            && affectedKeys().hasOnly(['description', 'endpoint', 'updatedAt'])
+            && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid));
 
       allow delete: if isAdmin();
     }
@@ -206,6 +228,33 @@ service cloud.firestore {
     match /config/{id} {
       allow read: if isKnownUser();
       allow write: if isAdmin();
+    }
+    // Semantic search index (2026-08-04). One doc per agent holding a 256-dim
+    // embedding, read by the chat assistant and the Pre-Registration duplicate
+    // check so cosine similarity can run client-side (which is what keeps
+    // tier/readiness/archive logic in skills.js instead of duplicated on the
+    // server). Contains no information that isn't already derived from /agents,
+    // which known users can read anyway — so read is the same tier.
+    // Writes are CLOSED to every client: only reindexAgentVectors writes here,
+    // and it uses the admin SDK, which bypasses rules entirely. A client that
+    // could write would be able to poison search ranking for everyone.
+    match /agentVectors/{id} {
+      allow read: if isKnownUser();
+      allow write: if false;
+    }
+    // Content-free chat counters (2026-08-04): turn counts, which tool the
+    // model picked, list-vs-prose, not-found rate. No message text, no user
+    // identity — the session-only/no-transcript rule for chat is unchanged.
+    // Written exclusively by chatLibrary via the admin SDK (which bypasses
+    // rules), so clients get no write path and cannot forge the numbers.
+    match /metrics/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    // Rate-limit counters (2026-08-04) for embedQuery. Purely internal
+    // bookkeeping, of no use to any client — closed to both read and write.
+    match /rateLimits/{id} {
+      allow read, write: if false;
     }
     // SDLC Timeline config (2026-07): viewers allowlist + editable milestones.
     // Read is cosmetic (any known user can read; menu-hiding only, accepted

@@ -5,7 +5,8 @@ import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
-import { uniq, splitRoles, extractProcessId, processLabel } from '../lib/agentUtils';
+import { reindexAgent } from '../lib/reindex';
+import { uniq, splitRoles, extractProcessId, processLabel, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
 import useEscapeKey from '../hooks/useEscapeKey';
 import ComboInput from './ComboInput';
 import MultiSelect from './MultiSelect';
@@ -53,7 +54,7 @@ const KB_DEDUP_THRESHOLD = 80;
 // Minimum length for the free-text quality fields (Description, Business
 // Value). Enforced only at submit-time in validate() — no live counter/hint
 // on the field, by design (2026-07-xx request).
-const MIN_DETAIL_LEN = 120;
+const MIN_DETAIL_LEN = 100;
 
 const EMPTY_FORM = {
   agentName: '',
@@ -74,9 +75,10 @@ const EMPTY_FORM = {
   tool: '',
   llm: '',
   dataPrivacy: '',
+  endpoint: '',           // optional — where to actually USE the agent / download the skill
   sdlcStage: new Set(),
   sdlcProcessMapping: new Set(),
-  useCase: '',
+  useCase: new Set(),
   skills: [],             // paired sub-skills when type === 'Agent+Skill' (each → its own Skill doc)
   compatibleAgents: [],   // agent doc IDs this Skill can be used with (type === 'Skill' only, reference-only, no cascade)
 };
@@ -92,7 +94,7 @@ function emptySkill() {
     name: '', description: '', scope: 'Internal',
     ability: new Set(), relatedRole: new Set(),
     input: '', output: '', reusable: '', reuseCondition: '',
-    hml: false, humanJob: '',
+    hml: false, humanJob: '', endpoint: '',
   };
 }
 
@@ -111,7 +113,7 @@ function splitOptions(values) {
   return uniq(values.flatMap((v) => splitRoles(v))).sort();
 }
 
-export default function PreRegModal({ onClose, approvedAgents, schema, user, onSubmitted, onAddRelatedRole }) {
+export default function PreRegModal({ onClose, approvedAgents, allAgents = [], schema, user, onSubmitted, onAddRelatedRole }) {
   const [tab, setTab] = useState('form');
   const [form, setForm] = useState(EMPTY_FORM);
   const [validationMsg, setValidationMsg] = useState('');
@@ -277,10 +279,45 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
     };
     // Skills run through the shared registry (same layer the chat agent will
     // call as tools). ctx carries the library + SDLC catalog.
-    const ctx = { library: approvedAgents, processes };
+    //
+    // Two different libraries on purpose (2026-07-22 archive rules):
+    //   dupCtx    — INCLUDES archived work, because "someone already built
+    //               this and it was retired" is exactly what a new registrant
+    //               needs to hear; hiding it invites rebuilding a dead end.
+    //   activeCtx — EXCLUDES archived work, because a connection/integration
+    //               suggestion has to point at something you can actually use.
+    // Semantic arm for the duplicate check (2026-08-04). The rule scorer only
+    // compares surface tokens, so a duplicate written in different words — or
+    // in Thai when the original is in English — ranks far below the window and
+    // the AI never sees it. Measured: a Thai-reworded duplicate of TC Writer
+    // sat at #7 of 15. Embedding the draft lets search_library union in
+    // semantic neighbours on top of the rule hits.
+    //
+    // Both calls are best-effort. If either fails the check still runs exactly
+    // as it does today — a duplicate check that refuses to run is worse than
+    // one that runs with fewer candidates.
+    let vectors = null;
+    let queryVector = null;
+    try {
+      const [vecSnap, embedded] = await Promise.all([
+        getDocs(collection(db, 'agentVectors')),
+        httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'embedQuery')({
+          text: [draft.agentName, draft.description, `input: ${draft.input}`, `output: ${draft.output}`,
+            (draft.coreAbility || []).join(', '), draft.businessValue].join('. ').replace(/\s+/g, ' ').trim(),
+        }),
+      ]);
+      vectors = new Map(vecSnap.docs.map((d) => [d.id, d.data()?.v]).filter(([, v]) => Array.isArray(v)));
+      queryVector = embedded?.data?.v || null;
+    } catch (e) {
+      console.warn('semantic duplicate arm unavailable, using rule-based only:', e?.message || e);
+    }
+
+    const dupCtx = { library: allAgents.length ? allAgents : approvedAgents, processes, vectors, queryVector };
+    const activeCtx = { library: approvedAgents, processes };
     // Top-15 nearest by raw rule score, NO threshold — so the AI always has
-    // material even when surface-token similarity is low.
-    const top = runSkill('search_library', { draft, limit: 15 }, ctx);
+    // material even when surface-token similarity is low — plus semantic
+    // neighbours unioned on top (never replacing the rule hits).
+    const top = runSkill('search_library', { draft, limit: 15 }, dupCtx);
     // Deterministic directional connection scoring ("ต่อกับตัวนี้ได้").
     const connDraft = {
       agentName: draft.agentName,
@@ -290,7 +327,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
       owner: form.owner.trim(),
       sdlcProcessMapping: [...form.sdlcProcessMapping],
     };
-    const conns = runSkill('connection_suggest', { draft: connDraft, limit: 6 }, ctx);
+    const conns = runSkill('connection_suggest', { draft: connDraft, limit: 6 }, activeCtx);
     setRanked(top);
     setConnections(conns);
     setAiResult(null);
@@ -300,13 +337,18 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
       agentName: m.existing.agentName,
       description: m.existing.description || '',
       coreAbility: m.existing.coreAbility,
-      useCase: m.existing.useCase || '',
+      useCase: agentUseCaseNames(m.existing).join(', '),
       // Reusability of the EXISTING item is a first-class signal for the AI:
       // a freely "Reusable" match is a strong "just use it" duplicate; a
       // "Non-reusable"/"Reusable with Conditions" match may leave room for a
       // new build precisely because the existing one can't be adopted as-is.
       reusable: m.existing.reusable || '',
       reuseCondition: m.existing.reuseCondition || '',
+      // Archived matches are a WARNING, never a "use this instead": the AI is
+      // told the item is retired (and why) so it can say "this was tried and
+      // dropped because X" rather than pointing the user at something gone.
+      archived: m.existing.archived === true,
+      archiveReason: m.existing.archiveReason || '',
       ruleConfidence: Math.round(m.confidence),
     }));
     const connectionCandidates = conns.map((c) => ({
@@ -415,9 +457,13 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
         tool: inheritedFromAgent.tool,
         llm: inheritedFromAgent.llm,
         dataPrivacy: inheritedFromAgent.dataPrivacy,
+        // Sanitised on the way IN as well as at render time — a hostile scheme
+        // should never reach Firestore, so no future reader has to remember to
+        // re-check it. NOT inherited by sub-skills: each has its own location.
+        endpoint: safeEndpointUrl(form.endpoint),
         sdlcStage: isExternal ? [] : [...form.sdlcStage],
         sdlcProcessMapping: isExternal ? [] : [...form.sdlcProcessMapping],
-        useCase: isExternal ? '' : form.useCase.trim(),
+        useCase: isExternal ? [] : [...form.useCase],
         input: form.input.trim(),
         output: form.output.trim(),
         compatibleAgents: form.type === 'Skill' ? form.compatibleAgents : [],
@@ -496,7 +542,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
       if (form.type === 'Agent+Skill') {
         for (const s of form.skills) {
           const sExternal = s.scope === 'External';
-          await addDoc(collection(db, 'agents'), {
+          const skillRef = await addDoc(collection(db, 'agents'), {
             agentName: s.name.trim(),
             description: s.description.trim(),
             aiAgent: false,
@@ -513,11 +559,12 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
             tool: inheritedFromAgent.tool,
             llm: inheritedFromAgent.llm,
             dataPrivacy: inheritedFromAgent.dataPrivacy,
+            endpoint: safeEndpointUrl(s.endpoint),
             // SDLC context inherited from the Agent (blanked when the skill
             // itself is customer-facing, mirroring the Agent rule).
             sdlcStage: sExternal ? [] : [...form.sdlcStage],
             sdlcProcessMapping: sExternal ? [] : [...form.sdlcProcessMapping],
-            useCase: sExternal ? '' : form.useCase.trim(),
+            useCase: sExternal ? [] : [...form.useCase],
             input: s.input.trim(),
             output: s.output.trim(),
             businessValue: inheritedFromAgent.businessValue,
@@ -535,8 +582,14 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+          reindexAgent(skillRef.id);
         }
       }
+
+      // Index the new entries so the very next duplicate check and the chat can
+      // both see them semantically. Fire-and-forget — a submit must never fail
+      // because the search index is unavailable.
+      reindexAgent(agentRef.id);
 
       // Analysis is now committed to the KB — drop the transient session cache
       // so nothing lingers post-submit (per the "clear cache after submit" rule).
@@ -758,6 +811,18 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
               </div>
             )}
 
+            <div className="fg">
+              <label>Endpoint</label>
+              <input
+                value={form.endpoint}
+                onChange={(e) => setField('endpoint', e.target.value)}
+                placeholder="ลิงก์เข้าใช้งาน Agent หรือลิงก์ดาวน์โหลด Skill (ไม่บังคับ)"
+              />
+              <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>
+                ผู้ใช้กดจากการ์ดไปใช้งานได้ทันที — รองรับเฉพาะ http/https
+              </div>
+            </div>
+
             {/* SDLC group (Internal only) */}
             {internalShown && (
               <>
@@ -777,7 +842,7 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                 </div>
                 <div className="fg">
                   <label>Use Case</label>
-                  <ComboInput value={form.useCase} onChange={(v) => setField('useCase', v)} options={useCaseOptions} placeholder="— เลือก Use Case —" />
+                  <MultiSelect label="เลือก Use Case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
                 </div>
               </>
             )}
@@ -882,6 +947,10 @@ export default function PreRegModal({ onClose, approvedAgents, schema, user, onS
                         <input value={s.humanJob} onChange={(e) => setSkillField(s._id, 'humanJob', e.target.value)} placeholder="หน้าที่ของ Human ใน loop" />
                       </div>
                     )}
+                    <div className="fg">
+                      <label>Endpoint</label>
+                      <input value={s.endpoint} onChange={(e) => setSkillField(s._id, 'endpoint', e.target.value)} placeholder="ลิงก์ดาวน์โหลด Skill นี้ (ไม่บังคับ)" />
+                    </div>
                   </div>
                 ))}
               </div>
