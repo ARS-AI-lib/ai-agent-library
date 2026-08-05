@@ -56,6 +56,53 @@
 .chat-agent-link { color: var(--accent); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .chat-agent-link:hover { color: var(--accent-hover); }
 
+/* Status pill (Ready to Use / Pilot / In Progress / To Do) — colors come
+   from ST_DEF via inline style, this just supplies the pill chrome so it
+   matches the badge shape used everywhere else in the app. */
+.chat-status-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; padding: 1px 8px 1px 6px; border-radius: 20px; margin: 0 2px; white-space: nowrap; vertical-align: middle; }
+.chat-status-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+/* Endpoint link the model pastes as a raw URL — rendered as a small icon-only
+   button (matches AgentCard's .ac-endpoint) instead of a long wrapping link or
+   repeated "เปิดใช้งาน" text, so lists with several endpoints stay tidy. */
+.chat-endpoint-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin: 0 1px; border-radius: 5px;
+  color: var(--accent); background: var(--accent-soft, transparent); vertical-align: middle;
+}
+.chat-endpoint-link:hover { color: var(--accent-hover); background: var(--sf3); }
+
+/* Readiness-disclaimer footnote ("* อยู่ในช่วงทดสอบ...") — smaller and
+   muted, set apart from the main reply text. */
+.chat-footnote { font-size: 11px; color: var(--mu); margin-top: 4px; line-height: 1.5; }
+
+/* Recommendation cards — drawn from library data, not from model text, so
+   status/tier/links can never contradict what Firestore actually says. */
+.chat-recs { margin-top: 8px; display: flex; flex-direction: column; gap: 10px; }
+.chat-rec-group { display: flex; flex-direction: column; gap: 6px; }
+.chat-rec-grouphdr {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; color: var(--mu);
+  text-transform: uppercase; margin-top: 2px;
+}
+.chat-rec {
+  background: var(--sf); border: 1px solid var(--bd-soft); border-radius: 8px;
+  padding: 7px 9px; display: flex; flex-direction: column; gap: 3px;
+}
+.chat-rec-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.chat-rec-reason { font-size: 11.5px; color: var(--tx2); line-height: 1.45; }
+/* SDLC process/use-case card title — same weight as an agent-card name
+   (.chat-agent-link) so the two card kinds read as one visual family, but not
+   colored/underlined as a link since there is nothing to click through to. */
+.chat-sdlc-title { font-size: 12.5px; font-weight: 700; color: var(--tx); }
+/* Fallback row for names that did not resolve — deliberately plain: no pill,
+   no link, nothing that could pass for a verified library entry. */
+.chat-rec-row { display: flex; align-items: flex-start; gap: 7px; margin: 2px 0; font-size: 12px; }
+.chat-rec-note { font-size: 10.5px; color: var(--mu); line-height: 1.4; }
+
+/* "- " bullet lines */
+.chat-bullet-row { display: flex; align-items: flex-start; gap: 7px; margin: 2px 0; }
+.chat-bullet-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--mu); margin-top: 7px; flex-shrink: 0; }
+
 .chat-thinking { display: flex; gap: 4px; align-items: center; padding: 10px 12px; }
 .chat-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mu); animation: chat-bounce 1.2s infinite ease-in-out; }
 .chat-dot:nth-child(2) { animation-delay: .15s; }

@@ -64,7 +64,11 @@ export default function App() {
   const { user, role, approveAreas, loading, roleReady, domainError, canSubmitIdea, isAdmin, isCommittee, canManageUsers, signIn, signOut } = useAuth();
   // Gate agent subscriptions on the role doc existing — avoids a permanent
   // permission-denied race on a brand-new user's first login (see useAgents).
-  const { agents, loading: agentsLoading } = useApprovedAgents(!!role);
+  // `agents` excludes archived entries (grid/search/Dashboard/Timeline all read
+  // it). `allAgents` keeps them, for the three places where retired work still
+  // matters: export audit trail, duplicate warnings, and the chat assistant's
+  // background context. See useApprovedAgents.
+  const { agents, allAgents, loading: agentsLoading } = useApprovedAgents(!!role);
   const { pending } = usePendingAgents(!!role);
   const { deployRequests } = useDeploymentRequests(!!role);
   const { schema, addRelatedRoles } = useConfigSchema();
@@ -106,7 +110,7 @@ export default function App() {
   );
 
   const [search, setSearch] = useState('');
-  const [view, setView] = useState('by-role');
+  const [view, setView] = useState('by-owner');
   const [owner, setOwner] = useState(new Set());
   const [role_, setRole_] = useState(new Set());
   const [ability, setAbility] = useState(new Set());
@@ -206,7 +210,7 @@ export default function App() {
   );
 
   function clearFilters() {
-    setView('by-role');
+    setView('by-owner');
     setOwner(new Set());
     setRole_(new Set());
     setAbility(new Set());
@@ -286,10 +290,11 @@ export default function App() {
         onToggleMyAI={() => setMyAI((v) => !v)}
         onOpenExport={() => setShowExport(true)}
         canSeeTimeline={canSeeTimeline}
+        isAdmin={isAdmin}
         canSeeDashboard={canSeeDashboard}
       />
 
-      <ChatAssistant approvedAgents={agents} onOpenPreReg={() => setShowPreReg(true)} onOpenAgent={setSelectedAgent} />
+      <ChatAssistant approvedAgents={agents} allAgents={allAgents} onOpenPreReg={() => setShowPreReg(true)} onOpenAgent={setSelectedAgent} />
 
       {activeTab === 'lib' && (
         <>
@@ -366,6 +371,7 @@ export default function App() {
         <PreRegModal
           onClose={() => setShowPreReg(false)}
           approvedAgents={agents}
+          allAgents={allAgents}
           schema={schema}
           user={user}
           onSubmitted={() => {}}
@@ -397,7 +403,9 @@ export default function App() {
       {showExport && (
         <ExportDataModal
           onClose={() => setShowExport(false)}
-          approvedAgents={agents}
+          // Export is the audit trail — archived entries must stay in it, with
+          // an Archived column so a reader can tell them apart.
+          approvedAgents={allAgents}
           user={user}
           role={role}
           isAdmin={isAdmin}

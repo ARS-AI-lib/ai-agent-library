@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
-import { runSkill } from '../lib/skills';
+import { runSkill, resolveAgentByName, readinessOf } from '../lib/skills';
 import { isBlockedInput, BLOCKED_REPLY } from '../lib/chatGuardrails';
 import { getType, getTier } from '../lib/tier';
+import { ST_DEF } from '../lib/status';
+import { safeEndpointUrl } from '../lib/agentUtils';
 import '../styles/ChatAssistant.css';
 
 // Tools whose result is composed into a Thai answer LOCALLY (no further
@@ -15,13 +17,19 @@ const TEMPLATE_TOOLS = new Set(['query_library', 'query_sdlc', 'get_agent_detail
 
 const MAX_LOOP = 3;
 const HISTORY_WINDOW = 6;
+// Max characters of a PREVIOUS assistant answer replayed as history — see the
+// comment where historyForCall is built.
+const HISTORY_ANSWER_MAX = 700;
 const CHAT_W_KEY = 'chatWidth';
 const CHAT_W_MIN = 340;
 const CHAT_W_MAX = 640;
 
+// Shares the fuzzy resolver used by get_agent_detail — an exact match here
+// used to fail on nothing more than different spacing around a hyphen
+// ("Nok-Suggest" vs the real "Nok - Suggest"), which surfaced to the user as
+// "not found" for an entry that exists.
 function findAgentByName(library, name) {
-  const q = (name || '').toLowerCase().trim();
-  return library.find((a) => (a.agentName || '').toLowerCase().trim() === q) || null;
+  return resolveAgentByName(library, name).match;
 }
 
 // Runs a tool call against the client-side skill registry. Handles the one
@@ -30,13 +38,52 @@ function findAgentByName(library, name) {
 // existing agentName, so we resolve the real agent record and feed it in as
 // the "draft" (findConnectionSuggestions already excludes a draft's own name
 // from its own results, so this is safe).
-function runTool(name, args, ctx) {
+async function runTool(name, args, ctx) {
   if (name === 'connection_suggest') {
     const agent = findAgentByName(ctx.library, args.agentName);
     if (!agent) return { notFound: true, agentName: args.agentName };
     return { suggestions: runSkill('connection_suggest', { draft: agent, limit: 6 }, ctx) };
   }
+  // capability_search is the one tool that needs a network round-trip before
+  // it can run: the browser holds the library vectors but has no Vertex
+  // credentials, so the QUERY has to be embedded server-side. Doing it here
+  // (rather than inside the skill) keeps every skill in skills.js a pure,
+  // synchronous function over its context.
+  //
+  // A failure here is non-fatal on purpose — the skill still has its lexical
+  // arm, so a flaky embed call degrades search quality instead of breaking chat.
+  // query_library only needs it when a free-text keyword is in play; its
+  // structured filters are exact values and never go near the vector index.
+  const needsVector = name === 'capability_search'
+    ? (args.query || '')
+    : (name === 'query_library' ? (args.keyword || '') : '');
+
+  if (needsVector && ctx.vectors?.size) {
+    try {
+      const embed = httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'embedQuery');
+      const { data } = await embed({ text: needsVector });
+      return runSkill(name, args, { ...ctx, queryVector: data?.v || null });
+    } catch (e) {
+      console.warn('embedQuery failed, falling back to keyword-only search:', e?.message || e);
+    }
+  }
   return runSkill(name, args, ctx);
+}
+
+// Renders every row of a previous query_library answer's full CSV set as
+// cards — the "show all" expansion. Capped: a wall of 60+ cards stops being a
+// readable answer and just becomes a worse CSV, so past EXPAND_CAP this hands
+// back to the file instead of trying to out-scroll it.
+const EXPAND_CAP = 30;
+function expandCsvAnswer(rows) {
+  if (rows.length > EXPAND_CAP) {
+    return {
+      text: `มีทั้งหมด ${rows.length} รายการ ซึ่งเยอะเกินกว่าจะแสดงในแชทได้อ่านง่าย ครับ — ดาวน์โหลด CSV ด้านล่างเพื่อดูทั้งหมดได้เลยครับ`,
+      csv: rows,
+    };
+  }
+  const lines = rows.map((a) => `@@ ${a.agentName} | ${[a.tier, a.owner || 'ไม่ระบุ owner'].join(' · ')}`).join('\n');
+  return { text: `**ทั้งหมด ${rows.length} รายการ**\n${lines}`, csv: rows };
 }
 
 // ── Local (no-LLM) Thai templates for the deterministic tools ──────────
@@ -45,25 +92,40 @@ function templateAnswer(name, args, result) {
     if (result.mode === 'group') {
       const entries = Object.entries(result.counts).sort((a, b) => b[1] - a[1]);
       if (entries.length === 0) return { text: 'ไม่พบข้อมูลตามเงื่อนไขที่ถามครับ', csv: null };
-      const lines = entries.map(([k, v]) => `• ${k}: ${v} รายการ`).join('\n');
-      return { text: `พบทั้งหมด ${result.total} รายการ แบ่งตาม ${result.groupBy}:\n${lines}`, csv: null };
+      const lines = entries.map(([k, v]) => `- ${k}: ${v} รายการ`).join('\n');
+      return { text: `**พบทั้งหมด ${result.total} รายการ** แบ่งตาม ${result.groupBy}:\n${lines}`, csv: null };
     }
     if (result.total === 0) return { text: 'ไม่พบ Agent/Skill ที่ตรงกับเงื่อนไขนี้ครับ', csv: null };
-    const shown = result.agents.slice(0, 15);
-    const lines = shown.map((a) => `• ${a.agentName} (${a.tier}, ${a.status}, ${a.owner || 'ไม่ระบุ owner'})`).join('\n');
-    const more = result.total > shown.length ? `\n...และอีก ${result.total - shown.length} รายการ` : '';
+    // Emits the same "@@ name | reason" protocol the model uses, so a filter
+    // answer renders through the identical card path — status pill, endpoint
+    // icon, readiness grouping and all. Before this, template-backed answers
+    // looked visibly different from model-composed ones, which is exactly the
+    // inconsistency this design was meant to eliminate.
+    //
+    // Capped at 8 cards regardless of `limit`: a filter can legitimately match
+    // 200+ entries, and a 200-card wall is not an answer. The remainder is
+    // stated as a number, with CSV still offered for the full set.
+    const shown = result.agents.slice(0, 8);
+    const lines = shown.map((a) => `@@ ${a.agentName} | ${[a.tier, a.owner || 'ไม่ระบุ owner'].join(' · ')}`).join('\n');
+    const more = result.total > shown.length ? `\nยังมีอีก ${result.total - shown.length} รายการ ดาวน์โหลด CSV เพื่อดูทั้งหมดได้ครับ` : '';
     return {
-      text: `พบทั้งหมด ${result.total} รายการ:\n${lines}${more}`,
+      text: `**พบทั้งหมด ${result.total} รายการ**\n${lines}${more}`,
       csv: result.agents,
     };
   }
   if (name === 'query_sdlc') {
     const parts = [];
+    // "## title | subtitle" — the SDLC counterpart to the "@@ name | reason"
+    // agent-card protocol. A process/use case has no readiness or endpoint,
+    // so it gets its own lightweight card (SdlcList) rather than being forced
+    // through the agent-card component, but it uses the same visual language
+    // (bordered card, not a flat bullet) so an SDLC answer doesn't look like a
+    // different, older part of the app next to a capability-search answer.
     if (result.processes.length) {
-      parts.push(result.processes.map((p) => `• Process ${p.id}: ${p.name} (${p.stage}${p.owner ? `, owner: ${p.owner}` : ''})`).join('\n'));
+      parts.push(result.processes.map((p) => `## Process ${p.id}: ${p.name} | ${p.stage}${p.owner ? ` · owner: ${p.owner}` : ''}`).join('\n'));
     }
     if (result.useCases.length) {
-      parts.push(result.useCases.map((u) => `• Use Case: ${u.name} (process ${u.processId}${u.owner ? `, owner: ${u.owner}` : ''})`).join('\n'));
+      parts.push(result.useCases.map((u) => `## Use Case: ${u.name} | process ${u.processId}${u.owner ? ` · owner: ${u.owner}` : ''}`).join('\n'));
     }
     if (!parts.length) return { text: 'ไม่พบข้อมูล SDLC ตามที่ถามครับ', csv: null };
     return { text: parts.join('\n'), csv: null };
@@ -71,17 +133,19 @@ function templateAnswer(name, args, result) {
   if (name === 'get_agent_detail') {
     if (!result) return { text: `ไม่พบ Agent/Skill ชื่อ "${args.agentName}" ในไลบรารีครับ`, csv: null };
     const type = getType(result) === 'skill' ? 'Skill' : 'Agent';
-    const tier = getTier(result);
+    // The card comes FIRST (it carries the name, live status and endpoint),
+    // then the fields below it — which is why parseBlocks preserves source
+    // order instead of hoisting all prose above the cards.
     return {
-      text: `**${result.agentName}** (${type}, Tier ${tier})\n${result.description || '(ไม่มีคำอธิบาย)'}\n\nOwner: ${result.owner || '—'}\nInput: ${result.input || '—'}\nOutput: ${result.output || '—'}`,
+      text: `@@ ${result.agentName} | ${type} · Tier ${getTier(result)}\n${result.description || '(ไม่มีคำอธิบาย)'}\n- Owner: ${result.owner || '—'}\n- Input: ${result.input || '—'}\n- Output: ${result.output || '—'}`,
       csv: null,
     };
   }
   if (name === 'connection_suggest') {
     if (result.notFound) return { text: `ไม่พบ Agent ชื่อ "${result.agentName}" ในไลบรารีครับ`, csv: null };
     if (!result.suggestions.length) return { text: 'ไม่พบ Agent/Skill ที่ต่อกันได้อย่างมีนัยสำคัญครับ', csv: null };
-    const lines = result.suggestions.map((s) => `• ${s.target} (${s.type}) — ${s.reason}`).join('\n');
-    return { text: `ต่อกับตัวนี้ได้:\n${lines}`, csv: null };
+    const lines = result.suggestions.map((s) => `@@ ${s.target} | ${s.type} — ${s.reason}`).join('\n');
+    return { text: `**ต่อกับตัวนี้ได้**\n${lines}`, csv: null };
   }
   return { text: 'ขอโทษครับ ประมวลผลไม่สำเร็จ', csv: null };
 }
@@ -116,21 +180,270 @@ function linkifyAgents(text, keyBase, matcher, onOpen) {
   return parts;
 }
 
-function renderRich(text, matcher, onOpen) {
-  return text.split('\n').map((line, li) => {
-    const segs = line.split('**');
+// Status pill + endpoint-link rendering (2026-08-01) — the chat prompt's
+// readiness gate (see functions/index.js) makes ALPHA emit these two things
+// in predictable, literal form: the exact ST_DEF label text ("Ready to Use",
+// "Pilot", "In Progress", "To Do") and raw http(s) URLs. Rendering them as a
+// colored pill / a link — using the SAME colors as the rest of the app
+// (ST_DEF, not invented ones) — turns the plain-text reply into something
+// that reads like the product it's describing, matching the presentation
+// mockup the user approved.
+const STATUS_LABEL_TO_KEY = { 'Ready to Use': 'ru', 'Pilot': 'pilot', 'In Progress': 'ip', 'To Do': 'td' };
+const STATUS_MATCHER = /(Ready to Use|Pilot|In Progress|To Do)/g;
+const URL_MATCHER = /(https?:\/\/[^\s)]+)/g;
+
+// Generic "find all matches of `regex`, render each via `renderMatch`, leave
+// the rest as plain strings" splitter — the same shape linkifyAgents already
+// used inline; pulled out so status pills and endpoint links can reuse it
+// without duplicating the sweep-and-splice logic three times.
+function splitByRegex(text, regex, renderMatch, keyBase) {
+  regex.lastIndex = 0;
+  const parts = [];
+  let last = 0;
+  let idx = 0;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    if (m[0].length === 0) { regex.lastIndex++; continue; }
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(renderMatch(m[0], `${keyBase}-${idx++}`));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+function renderBoldAndLinks(seg, keyBase, matcher, onOpen) {
+  const segs = seg.split('**');
+  return segs.map((s, si) => {
+    const inner = linkifyAgents(s, `${keyBase}-${si}`, matcher, onOpen);
+    // Odd segments sit between a pair of ** → bold. A dangling ** (odd
+    // count) just leaves its tail as a normal segment — graceful.
+    return si % 2 === 1
+      ? <strong key={si}>{inner}</strong>
+      : <span key={si}>{inner}</span>;
+  });
+}
+
+// URLs are split out first (their text must never be re-scanned by the later
+// passes), then each remaining plain-text chunk is scanned for a status
+// label, then whatever's left goes through the original bold+agent-link pass.
+function processInline(text, keyBase, matcher, onOpen) {
+  const afterUrls = splitByRegex(text, URL_MATCHER, (url, k) => (
+    <a
+      key={k}
+      className="chat-endpoint-link"
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={`เปิดใช้งาน / ดาวน์โหลด: ${url}`}
+      aria-label="เปิด endpoint ในแท็บใหม่"
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        <polyline points="15 3 21 3 21 9" />
+        <line x1="10" y1="14" x2="21" y2="3" />
+      </svg>
+    </a>
+  ), keyBase);
+
+  return afterUrls.map((part, i) => {
+    if (typeof part !== 'string') return part; // already a rendered link node
+    const afterStatus = splitByRegex(part, STATUS_MATCHER, (label, k) => {
+      const def = ST_DEF[STATUS_LABEL_TO_KEY[label]];
+      return (
+        <span key={k} className="chat-status-pill" style={{ color: def.color, background: def.bg }}>
+          <span className="chat-status-dot" style={{ background: def.dot }} />{label}
+        </span>
+      );
+    }, `${keyBase}-${i}`);
+
+    return afterStatus.map((seg, j) => (
+      typeof seg === 'string'
+        ? <span key={`${keyBase}-${i}-${j}`}>{renderBoldAndLinks(seg, `${keyBase}-${i}-${j}`, matcher, onOpen)}</span>
+        : seg
+    ));
+  });
+}
+
+// ── Recommendation lines ("@@ Name | reason") ─────────────────────────
+// The model emits ONLY a name and a reason; everything else — status pill,
+// tier, endpoint link, grouping — is drawn here from the library data the
+// client already holds.
+//
+// This is deliberate. Formatting used to live in the system prompt, and a
+// model cannot be relied on to format identically twice: the same question
+// produced differently-shaped answers on consecutive turns, and one reply put
+// four `*`-marked (pilot) entries under a "Ready to Use:" heading it invented
+// on its own — the label and the marker contradicting each other. Rendering
+// from data makes that class of bug structurally impossible, and means the
+// status shown can never drift from the status in Firestore.
+const REC_LINE = /^@@\s*(.+?)\s*\|\s*(.*)$/;
+// SDLC counterpart to REC_LINE — a process/use case card. Kept as a separate
+// marker (not reusing "@@") because it is resolved differently downstream:
+// "@@" names are looked up against the agent library (and dropped if a name
+// doesn't resolve, guarding against a hallucinated agent); "##" entries are
+// plain data straight from query_sdlc's own template, never model-composed,
+// so there is nothing to resolve or hallucinate-guard.
+const SDLC_LINE = /^##\s*(.+?)\s*\|\s*(.*)$/;
+
+// Blocks come back in SOURCE ORDER. An earlier version collected all prose
+// into one string and rendered it before the cards, which silently reordered
+// the answer: a trailing "และอีก 4 รายการ" note jumped above the list it was
+// describing, and a detail answer showed its fields before the entry's own
+// heading. Order is part of the meaning, so it is preserved.
+function parseBlocks(text) {
+  const blocks = [];
+  const pushItem = (kind, item) => {
+    const last = blocks[blocks.length - 1];
+    if (last?.kind === kind) last.items.push(item);
+    else blocks.push({ kind, items: [item] });
+  };
+  text.split('\n').forEach((line) => {
+    const trimmed = line.trim();
+    const rec = REC_LINE.exec(trimmed);
+    const sdlc = !rec && SDLC_LINE.exec(trimmed);
+    if (rec) {
+      pushItem('recs', { name: rec[1].trim(), reason: rec[2].trim() });
+    } else if (sdlc) {
+      pushItem('sdlc', { title: sdlc[1].trim(), subtitle: sdlc[2].trim() });
+    } else {
+      const last = blocks[blocks.length - 1];
+      if (last?.kind === 'prose') last.lines.push(line);
+      else blocks.push({ kind: 'prose', lines: [line] });
+    }
+  });
+  return blocks
+    .map((b) => (b.kind === 'prose' ? { ...b, text: b.lines.join('\n').trim() } : b))
+    .filter((b) => (b.kind === 'prose' ? b.text : b.items.length));
+}
+
+// Process/use-case cards — same bordered-card visual language as
+// RecommendationList, but deliberately simpler: no status pill (SDLC entries
+// have no readiness), no endpoint link, no click-through (nothing to open).
+function SdlcList({ items }) {
+  return (
+    <div className="chat-recs">
+      <div className="chat-rec-group">
+        {items.map((it, i) => (
+          <div key={i} className="chat-rec">
+            <div className="chat-rec-head">
+              <span className="chat-sdlc-title">{it.title}</span>
+            </div>
+            {it.subtitle && <div className="chat-rec-reason">{it.subtitle}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const READINESS_GROUP = [
+  { key: 'ready', label: 'พร้อมใช้งาน' },
+  { key: 'pilot', label: 'อยู่ในช่วงทดสอบใช้งานจริง' },
+  { key: 'in_dev', label: 'ยังพัฒนาไม่เสร็จ' },
+];
+
+function RecommendationList({ recs, library, onOpen }) {
+  // Resolve each name against the real library. A name that does not resolve
+  // is dropped rather than shown — a hallucinated entry must never reach the
+  // user wearing the same styling as a real one.
+  const resolved = recs
+    .map((r) => ({ ...r, agent: resolveAgentByName(library, r.name).match }))
+    .filter((r) => r.agent);
+
+  // …but "drop silently" must not become "the answer vanished". If NOTHING
+  // resolved, the user would otherwise see a lone intro sentence pointing at
+  // an empty space, which reads as a broken app. Show the reasons as plain
+  // text instead: no pill, no link, no click target — visibly not a verified
+  // library entry, while still not hiding that the model said something.
+  if (!resolved.length) {
+    if (!recs.length) return null;
     return (
-      <div key={li}>
-        {segs.map((seg, si) => {
-          const inner = linkifyAgents(seg, `${li}-${si}`, matcher, onOpen);
-          // Odd segments sit between a pair of ** → bold. A dangling ** (odd
-          // count) just leaves its tail as a normal segment — graceful.
-          return si % 2 === 1
-            ? <strong key={si}>{inner}</strong>
-            : <span key={si}>{inner}</span>;
-        })}
+      <div className="chat-recs">
+        {recs.map((r, i) => (
+          <div key={i} className="chat-rec-row">
+            <span className="chat-bullet-dot" />
+            <span>{r.name}{r.reason ? ` — ${r.reason}` : ''}</span>
+          </div>
+        ))}
+        <div className="chat-rec-note">ไม่พบรายการเหล่านี้ในไลบรารี — โปรดตรวจสอบชื่ออีกครั้งครับ</div>
       </div>
     );
+  }
+
+  const groups = READINESS_GROUP
+    .map((g) => ({ ...g, items: resolved.filter((r) => readinessOf(r.agent).readiness === g.key) }))
+    .filter((g) => g.items.length);
+
+  return (
+    <div className="chat-recs">
+      {groups.map((g) => (
+        <div key={g.key} className="chat-rec-group">
+          {/* Only label a group when the answer actually mixes readiness
+              levels — a single-group answer needs no header. */}
+          {groups.length > 1 && <div className="chat-rec-grouphdr">{g.label}</div>}
+          {g.items.map((r, i) => {
+            const { status, readiness, endpoint } = readinessOf(r.agent);
+            const def = ST_DEF[STATUS_LABEL_TO_KEY[status]] || ST_DEF.td;
+            const href = safeEndpointUrl(endpoint);
+            return (
+              <div key={`${g.key}-${i}`} className="chat-rec">
+                <div className="chat-rec-head">
+                  <span className="chat-agent-link" onClick={() => onOpen(r.agent.agentName)}>
+                    {r.agent.agentName}
+                  </span>
+                  <span className="chat-status-pill" style={{ color: def.color, background: def.bg }}>
+                    <span className="chat-status-dot" style={{ background: def.dot }} />{status}
+                  </span>
+                  {href && (
+                    <a className="chat-endpoint-link" href={href} target="_blank" rel="noopener noreferrer"
+                      title={`เปิดใช้งาน / ดาวน์โหลด: ${href}`} aria-label="เปิด endpoint ในแท็บใหม่">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        <polyline points="15 3 21 3 21 9" />
+                        <line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
+                {r.reason && <div className="chat-rec-reason">{r.reason}</div>}
+                {readiness === 'pilot' && (
+                  <div className="chat-rec-note">อยู่ในช่วงทดสอบ · หากพบปัญหาติดต่อ {r.agent.creator || r.agent.owner || 'ผู้ดูแล'}</div>
+                )}
+                {readiness === 'in_dev' && <div className="chat-rec-note">ยังใช้งานไม่ได้</div>}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderRich(text, matcher, onOpen) {
+  return text.split('\n').map((line, li) => {
+    const trimmed = line.trim();
+    // Readiness-disclaimer footnotes always start "* " (see the chat prompt's
+    // readiness gate) — render smaller/muted instead of a literal asterisk.
+    if (/^\*\s+/.test(trimmed)) {
+      return (
+        <div key={li} className="chat-footnote">
+          {processInline(trimmed.replace(/^\*\s+/, ''), `${li}`, matcher, onOpen)}
+        </div>
+      );
+    }
+    // "- " bullets (the prompt is told to use "-", never "*", for lists —
+    // see functions/index.js — precisely so it never collides with the
+    // footnote marker above).
+    if (/^-\s+/.test(trimmed)) {
+      return (
+        <div key={li} className="chat-bullet-row">
+          <span className="chat-bullet-dot" />
+          <span>{processInline(trimmed.replace(/^-\s+/, ''), `${li}`, matcher, onOpen)}</span>
+        </div>
+      );
+    }
+    return <div key={li}>{processInline(line, `${li}`, matcher, onOpen)}</div>;
   });
 }
 
@@ -154,9 +467,10 @@ function downloadCsv(rows, filename = 'agents.csv') {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpenAgent }) {
+export default function ChatAssistant({ approvedAgents = [], allAgents = [], onOpenPreReg, onOpenAgent }) {
   const [open, setOpen] = useState(false);
   const [catalog, setCatalog] = useState(null); // { processes, useCases } — lazy-loaded on first open
+  const [vectors, setVectors] = useState(null); // Map<agentId, number[]> — semantic index, same lazy load
   const [transcript, setTranscript] = useState([]); // [{role:'user'|'assistant', text, csv?}]
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -166,6 +480,7 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
   });
   const [resizing, setResizing] = useState(false);
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
 
   // Drag-to-resize — width only (panel is anchored bottom-right, so we grow
   // leftward: newWidth = start width + (mouse moved left from start)).
@@ -207,16 +522,25 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
     if (open && !catalog) {
       (async () => {
         try {
-          const [procSnap, ucSnap] = await Promise.all([
+          // Vectors load HERE, on first chat open, rather than with the main
+          // agent listener — a normal browsing session never pays for them.
+          // ~244 × 256 floats is a few hundred KB, and keeping them client-side
+          // is what lets cosine run inside skills.js so tier/readiness/archive
+          // logic is never duplicated server-side.
+          const [procSnap, ucSnap, vecSnap] = await Promise.all([
             getDocs(collection(db, 'sdlcProcesses')),
             getDocs(collection(db, 'sdlcUseCases')),
+            getDocs(collection(db, 'agentVectors')),
           ]);
           setCatalog({
             processes: procSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
             useCases: ucSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
           });
+          setVectors(new Map(vecSnap.docs.map((d) => [d.id, d.data()?.v]).filter(([, v]) => Array.isArray(v))));
         } catch {
-          setCatalog({ processes: [], useCases: [] }); // best-effort — query_sdlc just returns empty
+          // Best-effort: query_sdlc just returns empty, and capability_search
+          // falls back to its keyword arm rather than failing.
+          setCatalog({ processes: [], useCases: [] });
         }
       })();
     }
@@ -225,6 +549,15 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [transcript, thinking]);
+
+  // The input carries `disabled={thinking}` so a user can't send a second
+  // question mid-answer — but a disabled input is forcibly blurred by the
+  // browser the instant that attribute flips true, and nothing put focus back
+  // once it flips false again. The user was left clicking into the box before
+  // every follow-up question. Refocus whenever the box re-enables.
+  useEffect(() => {
+    if (!thinking && open) inputRef.current?.focus();
+  }, [thinking, open]);
 
   function handleClose() {
     // Only hide the panel — KEEP the transcript in memory so reopening the
@@ -246,6 +579,29 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
       return;
     }
 
+    // "Show all" follow-up (2026-08-04) — handled ENTIRELY locally, no model
+    // call. Root cause of the bug this fixes: a capped query_library answer
+    // only shows 8 cards with a CSV link for the rest; when the user typed
+    // "แสดงทั้งหมด" the model had no structured record of the original filter
+    // (only the templated text), so it improvised a fresh capability_search
+    // with a vague query — which surfaced ALPHA's own tool skills
+    // (get_agent_detail, query_library) as top hits, since their descriptions
+    // are generic filter/search boilerplate that matches almost anything.
+    //
+    // The fix isn't a better prompt for reconstructing lost filters — it's to
+    // never lose them. `templateAnswer`'s `csv` field already holds the FULL
+    // matching set (query_library never truncates the data, only the display),
+    // so "show all" can be answered by re-rendering that same array wider,
+    // deterministically, for free. Gated on the immediately preceding
+    // assistant turn actually having that data, so this can't misfire on an
+    // unrelated sentence that happens to contain "ทั้งหมด".
+    const SHOW_ALL_RE = /(แสดง|ดู|ขอ)?(ทั้งหมด|ครบทุกตัว|ครบทุกรายการ)|show all|list all|all of (them|it)/i;
+    const lastMsg = transcript[transcript.length - 1];
+    if (SHOW_ALL_RE.test(text) && lastMsg?.role === 'assistant' && lastMsg.csv?.length > 0) {
+      setTranscript((t) => [...t, { role: 'user', text }, { role: 'assistant', ...expandCsvAnswer(lastMsg.csv) }]);
+      return;
+    }
+
     // On-demand registration link (2026-07-02): no persistent header button
     // anymore — only surface it inline, on the reply, when the user actually
     // asks about registering a new idea. Heuristic keyword match is fine here
@@ -253,13 +609,36 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
     const wantsRegister = /ลงทะเบียน|สมัคร|register|pre-?reg|เพิ่ม.*agent|สร้าง.*agent.*ใหม่/i.test(text);
 
     const userTurn = { role: 'user', text };
+    // Past ANSWERS are trimmed before being replayed as history (2026-07-30).
+    // A previous reply can be a long formatted list; sent back verbatim it
+    // dominates the context and the model starts anchoring on it — a fresh,
+    // unrelated question ("มีตัวไหนช่วยทำ automate test") got answered with
+    // "ผมให้ข้อมูล User Story ไปแล้วครับ" instead of a new search. Enough is
+    // kept for genuine follow-ups ("ตัวแรกมี endpoint ไหม") to still resolve;
+    // user turns are left intact since they are short and carry the intent.
     const historyForCall = transcript
       .slice(-HISTORY_WINDOW)
-      .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', text: m.text }));
+      .map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        text: m.role === 'assistant' && m.text.length > HISTORY_ANSWER_MAX
+          ? `${m.text.slice(0, HISTORY_ANSWER_MAX)}…[คำตอบก่อนหน้าถูกย่อ]`
+          : m.text,
+      }));
     setTranscript((t) => [...t, userTurn]);
     setThinking(true);
 
-    const ctx = { library: approvedAgents, processes: catalog?.processes || [], useCases: catalog?.useCases || [] };
+    // `library` is the recommendable set (archived excluded) — ALPHA must never
+    // point a user at a retired entry. `libraryAll` keeps the archived ones for
+    // the analysis-flavoured tools (duplicate/overlap warnings, idea
+    // generation), which need to know what was already tried and dropped.
+    // Per-tool choice lives in src/lib/skills.js, not here.
+    const ctx = {
+      library: approvedAgents,
+      libraryAll: allAgents.length ? allAgents : approvedAgents,
+      processes: catalog?.processes || [],
+      useCases: catalog?.useCases || [],
+      vectors,
+    };
     const fn = httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'chatLibrary');
 
     try {
@@ -268,15 +647,31 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
       let finalText = null;
 
       for (let i = 0; i < MAX_LOOP && finalText === null; i++) {
+        // `message` is re-sent on EVERY iteration, not just the first.
+        //
+        // It used to be nulled after the first call, which meant the turn that
+        // actually COMPOSES the answer (after a tool result comes back) never
+        // saw the user's question at all — it received only the prior
+        // conversation plus a function response. The most recent user text in
+        // its context was therefore the PREVIOUS question, so it answered that
+        // one instead: asking "อะไรช่วยเขียน code ได้" produced a reply that
+        // opened "อยากรู้ว่ามี Agent ตัวไหนพร้อมใช้งานบ้าง" — verbatim the
+        // question before it. Answers were consistently one turn behind.
+        //
+        // This also restores the documented function-calling shape
+        // (user → model:functionCall → user:functionResponse); without the
+        // user turn the sequence was malformed. The server is stateless and
+        // rebuilds `contents` from scratch each call, and historyForCall is
+        // snapshotted BEFORE this turn is appended, so re-sending cannot
+        // duplicate the message.
         const { data } = await fn({ history: historyForCall, message, toolResults });
-        message = null; // only sent on the first iteration
 
         if (data.type === 'answer') {
           finalText = data.text;
           break;
         }
         if (data.type === 'tool_call') {
-          const result = runTool(data.name, data.args || {}, ctx);
+          const result = await runTool(data.name, data.args || {}, ctx);
           // query_sdlc with withAgentCounts is an ANALYSIS request (coverage/
           // gap reasoning), not a plain lookup — it must go back to Gemini to
           // be interpreted, same as capability_search. Plain query_sdlc calls
@@ -337,7 +732,22 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
             {transcript.map((m, i) => (
               <div key={i} className={`chat-msg ${m.role}`}>
                 <div className="chat-bubble">
-                  {renderRich(m.text, m.role === 'assistant' ? agentMatcher : null, openAgentByName)}
+                  {(() => {
+                    // Assistant replies may carry "@@ Name | reason" (agent
+                    // cards) or "## title | subtitle" (SDLC process/use-case
+                    // cards) lines. Those become data-drawn cards; whatever
+                    // else is in the message stays ordinary prose, so mode-B
+                    // answers (Agile advice, gap analysis, "not found") render
+                    // exactly as before.
+                    if (m.role !== 'assistant') return renderRich(m.text, null, openAgentByName);
+                    return parseBlocks(m.text).map((b, bi) => (
+                      b.kind === 'recs'
+                        ? <RecommendationList key={bi} recs={b.items} library={approvedAgents} onOpen={openAgentByName} />
+                        : b.kind === 'sdlc'
+                        ? <SdlcList key={bi} items={b.items} />
+                        : <div key={bi}>{renderRich(b.text, agentMatcher, openAgentByName)}</div>
+                    ));
+                  })()}
                   {m.csv?.length > 0 && (
                     <button className="btn btn-secondary chat-csv-btn" onClick={() => downloadCsv(m.csv, 'agents.csv')}>
                       ⬇ ดาวน์โหลด CSV
@@ -362,6 +772,7 @@ export default function ChatAssistant({ approvedAgents = [], onOpenPreReg, onOpe
 
           <div className="chat-input-row">
             <input
+              ref={inputRef}
               className="chat-input"
               placeholder="Ask ALPHA..."
               value={input}

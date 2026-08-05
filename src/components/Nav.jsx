@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import { rebuildAllVectors } from '../lib/reindex';
 
 export default function Nav({
   search, setSearch,
   agentCount, skillCount,
   user, onSignOut,
   activeTab, setActiveTab,
-  myAI, onToggleMyAI, onOpenExport, canSeeTimeline, canSeeDashboard,
+  myAI, onToggleMyAI, onOpenExport, canSeeTimeline, canSeeDashboard, isAdmin,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -135,6 +137,37 @@ export default function Nav({
               >
                 Export Data
               </button>
+              {isAdmin && (
+                // Admin escape hatch for the semantic search index. Individual
+                // saves reindex themselves fire-and-forget, so this is only
+                // needed after a bulk import/migration that bypassed the UI, or
+                // if a save-time reindex was ever lost. Safe to run any time:
+                // it hashes content and re-embeds only what actually changed.
+                <button
+                  type="button"
+                  disabled={reindexing}
+                  onClick={async () => {
+                    setReindexing(true);
+                    try {
+                      const r = await rebuildAllVectors();
+                      window.alert(`Search index rebuilt\n\nScanned ${r.scanned} · Re-indexed ${r.embedded} · Already current ${r.skipped} · Removed ${r.pruned}`);
+                    } catch (e) {
+                      window.alert(`Rebuild failed: ${e?.message || e}`);
+                    } finally {
+                      setReindexing(false);
+                      setMenuOpen(false);
+                    }
+                  }}
+                  style={{
+                    display: 'block', width: '100%', padding: '9px 12px', fontSize: 12.5, fontWeight: 500,
+                    color: 'var(--tx)', background: 'none', border: 'none', borderBottom: '1px solid var(--bd-soft)',
+                    cursor: reindexing ? 'wait' : 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                    opacity: reindexing ? 0.6 : 1,
+                  }}
+                >
+                  {reindexing ? 'Rebuilding…' : 'Rebuild Search Index'}
+                </button>
+              )}
               {canSeeTimeline && (
                 <button
                   type="button"
