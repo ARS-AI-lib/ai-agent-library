@@ -1,10 +1,43 @@
 ---
 name: project-work-queue
-description: "Ordered backlog of confirmed-but-not-yet-started features for AI Agent Library Suite v2, as of 2026-06-30"
+description: "Work history + current state for AI Agent Library Suite v2 — current as of 2026-08-05 (see the STATUS block at the top; everything below it is older history)"
 metadata: 
   node_type: memory
   type: project
   originSessionId: 5b7ada72-a449-4ebc-b37a-4269b922e007
+---
+
+## ⭐ STATUS as of 2026-08-05 — read this first, the rest is older history
+
+**Everything below this block is a chronological log from June–July 2026 and is NO LONGER a to-do
+list.** In particular the old "Next up: AI Chat Assistant — design/build not started" line at the
+bottom is long obsolete: the chat shipped, then got re-architected twice.
+
+**Where the project actually is:** all shipped and verified in production. 244 agents/skills in
+Firestore. Authoritative detail lives in CLAUDE.md §5 (current state), §18 (semantic search) and
+§19 (machine migration) — this file only records *what happened and why*, CLAUDE.md records
+*what is true now*.
+
+**August 2026 in one paragraph.** Shipped archive (hide, never delete — archived entries still feed
+the duplicate checker), an optional `endpoint` field, Owner-instead-of-Creator on preview cards, a
+UTF-8 BOM on CSV export (Excel rendered Thai as mojibake; Numbers sniffed it correctly, which is why
+nobody had noticed), By-Owner as the default view, and an import of 73 new records. Then the large
+one: **`capability_search` was never semantic** — it matched character trigrams, so the Thai query
+"เทสเคส" returned zero results against a library that stores "Testcase" in English. Replaced with
+hybrid retrieval (embeddings ∪ lexical). The same disease was then found in the Pre-Registration
+duplicate checker, where a duplicate worded differently ranked #89/#135/#43 out of 244 — outside the
+top-15 window, so the AI never saw it at all. Also moved answer formatting out of the prompt and
+into the client, added content-free metrics, a rate limit, and a server-side role check on full
+reindex. Finished by migrating the whole working environment to a company laptop.
+
+**The through-line worth remembering:** every one of these was found by the user hitting it and
+reporting it, and in several cases my first diagnosis was wrong and had to be corrected by measuring
+against the real 244-entry library rather than a small sample. Two concrete instances: I reported a
+vector payload of "~250KB" from binary math when the real JSON transfer was 1.26MB, and I attributed
+an "answers one question behind" bug to a dropped message when the real cause was bad retrieval.
+**Measure on real data before claiming a cause.** The `/metrics` counters exist specifically to stop
+the loop of only discovering problems through user complaints.
+
 ---
 
 UI polish round finished and deployed 2026-06-30 (Nav/legend unification, scope icons, z-index fix, devProgress normalization). User confirmed UI is good enough to move on. Two features are next, in this order.

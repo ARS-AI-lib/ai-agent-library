@@ -1,9 +1,10 @@
 - [SDLCTab baseline](feedback_sdlctab_baseline.md) — protected known-good SDLCTab.jsx/.css, don't sed-patch it again
 - [Deploy workflow](feedback_cloudshell_workflow.md) — deploy DIRECT from local Mac via npx firebase-tools (Cloud Shell retired 2026-07-22); scope functions deploys — shared project w/ Portfolio
 - [Progress-update feature design](project_progress_update_feature_design.md) — superseded by simpler shipped design in project_work_queue.md (no sdlcProcesses.group needed)
-- [Work queue](project_work_queue.md) — see file for full history; as of 2026-07-06: Feature Batch fully SHIPPED (legend, timeline, chat resize, staff, TagMultiSelect, paired sub-skill cascade)
+- [Work queue](project_work_queue.md) — START HERE for "what happened and why"; STATUS block at top is current as of 2026-08-05, everything under it is older history (its old "chat not built yet" line is obsolete)
 - [Chat Assistant requirements](project_chat_assistant_requirements.md) — locked spec 2026-07-02; v1 shipped + expansion (integration/tech-stack) added 2026-07-06
 - [Team derivation](feedback_team_derivation.md) — "My Team's AI" matches creator name↔owner, NOT creatorEmails — locked 2026-07-03, don't re-ask
 - [Backlog decisions 2026-07-04](project_backlog_decisions_20260704.md) — Connections migration, UID backfill, Owner auto-fill all cut — don't re-propose
 - [Feature batch 2026-07-06](project_feature_batch_20260706.md) — ALL 10 items shipped; see CLAUDE.md §17 for authoritative detail
-- [Chat retrieval re-architecture](project_chat_retrieval_rearchitecture.md) — locked 2026-08-04: hybrid embeddings (text-multilingual-embedding-002 @256), client-drawn JSON answers, idea-check included; measured evidence for every choice
+- [Chat retrieval re-architecture](project_chat_retrieval_rearchitecture.md) — locked 2026-08-04: hybrid embeddings (text-multilingual-embedding-002 @256), client-drawn answers, idea-check included; measured evidence for every choice — read before touching search/prompt
+- [Machine migration](feedback_machine_migration.md) — moved to the company laptop 2026-08-05; what git carries vs what never does, and the standing rule that CLAUDE.md + docs/memory ARE the handover

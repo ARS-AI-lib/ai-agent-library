@@ -37,7 +37,8 @@
 | SDLC Tracker | `/sdlc/` |
 | Portfolio | `/portfolio/` |
 
-- Roles: `viewer` / `editor` / `admin`
+- Roles: `user` / `staff` / `approver` / `committee` / `admin` (5 ระดับ — ดูข้อ 17)
+  ⚠️ เอกสารเก่าเคยเขียนว่า `viewer/editor/admin` ซึ่ง **ผิดแล้ว** (โมเดล 2 ชั้นเดิม เลิกใช้ตั้งแต่ 2026-07-01)
 - ต้อง login ก่อนถึงจะเข้าหน้าไหนได้เลย (ทุก path ต้อง auth)
 
 ---
@@ -88,23 +89,37 @@ Tier:
 
 ---
 
-## 5. สถานะปัจจุบัน (Current State — อัปเดต 2026-07-06)
+## 5. สถานะปัจจุบัน (Current State — อัปเดต 2026-08-05)
 
-**Phase 4 — Feature Batch (July 2026) deploy ครบแล้วทุก item**
+**ทุกอย่างที่ระบุด้านล่าง deploy ขึ้น production แล้วและทดสอบผ่านแล้ว**
+ข้อมูลจริงในระบบ ณ ตอนนี้: **agent/skill 244 รายการ** (approved + not archived = 242)
 
-### เสร็จแล้ว (ครบทุก phase ก่อนหน้า + batch ล่าสุด)
-- Re-migration ของ agent ทั้ง 144 ตัวเข้า Firestore สำเร็จ (มีการ sync เพิ่ม/ลบ agent ทีหลังด้วย)
-- Owner/Creator backfill รันแล้ว
-- SDLC catalog migrate เข้า Firestore แล้ว (57 processes + 106 use cases)
-- `SDLCTab.jsx` implement ครบแล้ว
-- **Chat Assistant "ALPHA"** (v1, read-only) — deploy แล้ว รายละเอียดในข้อ 15
-- **Sign-in screen + Branding UI** — deploy แล้ว รายละเอียดในข้อ 16
-- Firestore security rules publish เข้า Firebase Console แล้ว (named DB `ai-agent-lib`)
-- **Feature Batch (2026-07-06)** — ดูข้อ 17 สำหรับรายละเอียดครบถ้วน
+### เสร็จแล้ว — ของเดิม (ก่อน ส.ค.)
+- Migration agent + SDLC catalog เข้า Firestore ครบ (57 processes + 106 use cases)
+- `SDLCTab.jsx`, Dashboard (ข้อ 14), Timeline, Sign-in/Branding (ข้อ 16) — ครบ
+- Chat Assistant "ALPHA" v1 (ข้อ 15) + Feature Batch 2026-07-06 (ข้อ 17)
+- Deploy workflow ย้ายมา local direct แล้ว (ข้อ 11)
 
-### ค้างอยู่
-- Connections 129 คู่ ยังไม่ migrate เข้า Firestore (ตัดสินใจ cut แล้ว — ดู memory backlog_decisions_20260704)
-- Dashboard v1 implement แล้ว (2026-07-07, ดูข้อ 14) — รอ deploy + สร้าง `/config/dashboard` doc ถ้าต้องการ allowlist user ทั่วไป
+### เสร็จแล้ว — รอบล่าสุด (ส.ค. 2026)
+- **Archive agent/skill** — ไม่ลบ แค่ซ่อนจากไลบรารี/แชท แต่ **ยังใช้ตรวจซ้ำได้** (approver+ เท่านั้น)
+- **`endpoint` field** (optional) — ลิงก์ไปใช้งาน/ดาวน์โหลด แสดงเป็นไอคอนลิงก์ · sanitize ผ่าน `safeEndpointUrl()`
+- **Preview card แสดง Owner แทน Creator** (detail card ยังแสดงครบ)
+- **CSV export เพิ่ม UTF-8 BOM** — Excel เคยอ่านภาษาไทยเป็นตัวต่างดาว (Numbers ไม่เป็น เลยไม่มีใครเห็นบั๊ก)
+- **Default view เปลี่ยนเป็น By Owner** (เดิม By Role)
+- **Import 73 รายการใหม่จาก Google Sheet** — เพิ่มอย่างเดียว ไม่แตะของเดิม
+- **⭐ รื้อ semantic search ทั้งระบบ (ข้อ 18)** — งานใหญ่ที่สุดของรอบนี้
+- **ตรวจซ้ำตอน Pre-Registration เป็น hybrid ด้วย** — เดิมพลาดตัวซ้ำที่เขียนคนละคำ (วัดได้อันดับ #89/#135/#43 จาก 244 = หลุด top-15 ทั้งหมด)
+- **Metrics แบบไม่เก็บข้อความ** — `/metrics/chat-YYYY-MM-DD` นับ turn/tool/ไม่พบ · ข้อตกลง session-only ยังอยู่ครบ
+- **Rate limit** `embedQuery` 20 ครั้ง/นาที/คน · **full reindex เช็ค role ฝั่ง server** (เดิมซ่อนแค่ปุ่ม)
+- **ปุ่ม Rebuild Search Index** ในเมนู admin (เห็นเฉพาะ `role === 'admin'`)
+- **ย้ายเครื่องทำงานสำเร็จ (2026-08-05)** — จาก Mac เดิม → เครื่องบริษัท (ดูข้อ 19)
+
+### ค้างอยู่ / ต้องเฝ้าดู
+- **ต้อง publish `firestore.rules` ทุกครั้งที่แก้** ผ่าน Console (named DB `ai-agent-lib`) — collection ใหม่รอบนี้: `/agentVectors`, `/metrics`, `/rateLimits`
+- **เฝ้าดู `/metrics`** — ถ้า `answer_notFound` พุ่ง หรือ `tool_query_library` ชนะคำถามความสามารถ = retrieval เริ่มเพี้ยน
+- **คุณภาพข้อมูลในไลบรารี** — มีคนลงทะเบียนไฟล์ prompt ภายใน (`*.md`) เป็น agent ทำให้ค้นหาเพี้ยน
+  แก้ชั่วคราวด้วย `internalTool` flag แล้ว แต่ **ถ้ามีคนลงเพิ่มอาการจะกลับมา** — ควรคุยเป็นกติกาตอนอนุมัติ
+- Connections 129 คู่ / UID backfill / Owner auto-fill — **cut แล้วทั้งหมด** อย่าเสนอซ้ำ (ดู memory backlog_decisions_20260704)
 
 ---
 
@@ -151,14 +166,29 @@ Tier:
 
 ---
 
-## 10. งานที่ค้างอยู่ (On the Horizon)
+## 10. งานที่ค้างอยู่ (On the Horizon — อัปเดต 2026-08-05)
 
-1. ออกแบบ Dashboard สำหรับ Agent/Skill Library (ดูข้อ 14 — ยังไม่ตัดสินใจ scope/metric)
-2. Setup backup admin account (deferred — เป็น accepted risk)
-3. Migrate Connections 129 คู่เข้า Firestore (cut แล้ว — ดู memory backlog_decisions_20260704)
-4. Firebase Auth UID backfill สำหรับ user ที่เหลือ (cut แล้ว — priority ต่ำ)
-5. เปลี่ยน Owner field จาก free-text → auto-fill จาก credential (cut แล้ว — ดู memory backlog_decisions_20260704)
-6. Monitor ALPHA chat ในการใช้งานจริง — integration/tech-stack Q&A เพิ่งเพิ่มเข้าไปใน batch ล่าสุด ยังไม่ได้ exercise ครบถ้วน
+### เฝ้าดู (ไม่ใช่งานสร้าง)
+1. **เฝ้าดู `/metrics/chat-YYYY-MM-DD`** — สัญญาณเตือนล่วงหน้าว่า retrieval เพี้ยน
+   (`answer_notFound` พุ่ง / `tool_query_library` ชนะคำถามความสามารถ)
+2. **รัน `node functions/flag-internal.cjs` เป็นระยะ** — ถ้ามีคนลงทะเบียนไฟล์ `*.md` ภายในเพิ่ม
+
+### ยังไม่ตัดสินใจ
+3. **กติกาว่าอะไรควร/ไม่ควรอยู่ในไลบรารี** — ปัญหาคุณภาพข้อมูลที่เจอรอบนี้แก้ปลายเหตุด้วย
+   `internalTool` flag ไปแล้ว แต่ต้นเหตุคือไม่มีเกณฑ์ตอนอนุมัติ ควรคุยกันเป็นนโยบาย
+4. **Rename Firebase web app registration** จาก `test-auth` → `ai-agent-library`
+   (เป็นแค่ชื่อเรียก ไม่กระทบ App ID/API key ไม่ต้อง redeploy — ทำเมื่อไหร่ก็ได้)
+5. Setup backup admin account (deferred — accepted risk)
+
+### ❌ Cut แล้ว — อย่าเสนอซ้ำ
+- Migrate Connections 129 คู่เข้า Firestore
+- Firebase Auth UID backfill ที่เหลือ
+- เปลี่ยน Owner field เป็น auto-fill จาก credential
+- (ทั้ง 3 ข้อดู memory `backlog_decisions_20260704`)
+
+### ⏸️ พักไว้ รอข้อสรุปเพิ่ม
+- **GitLab skill integration** + ข้อกำหนดจากทีม security ว่า `wolfy-481609` ควรเป็น sandbox
+  เท่านั้น — ผู้ใช้สั่ง "พักเรื่องนี้ไว้ก่อน" (2026-07-30) ยังไม่มีข้อสรุป
 
 ---
 
@@ -212,6 +242,15 @@ Tier:
 | `firestore.rules` | Security rules — ต้อง publish ผ่าน Firebase Console (named DB dropdown) เท่านั้น |
 | `backfill-owner-creator-v2.cjs` | สคริปต์ backfill owner/creator |
 | `sdlc-migrate.cjs` | สคริปต์ migrate SDLC catalog เข้า Firestore |
+| **— เพิ่ม ส.ค. 2026 (ดูข้อ 18) —** | |
+| `functions/embedText.js` | **single source of truth ของ embedding** — model/มิติ/ความละเอียด/รูปแบบข้อความ · แก้ตรงนี้แล้ว index ถูก rebuild อัตโนมัติผ่าน `contentHash` |
+| `functions/chatPrompt.js` | `CHAT_SYSTEM_PROMPT` + `TOOL_DECLARATIONS` — แยกออกมาเพื่อให้ `regression.cjs` เทสของจริง ไม่ใช่สำเนา |
+| `functions/regression.cjs` | **รันก่อน deploy แชททุกครั้ง** — 11 เคส ครอบโหมด B ด้วย |
+| `functions/bootstrap-vectors.cjs` | สร้าง/อัปเดต index ทั้งชุด (dry-run ถ้าไม่ใส่ `--apply`) |
+| `functions/flag-internal.cjs` | ติด `internalTool` ให้ไฟล์ `*.md` + tool ของ ALPHA เอง เพื่อกดอันดับ |
+| `functions/calibrate.cjs` / `verify-dup.cjs` | เทียบ embeddings vs lexical บนข้อมูลจริง |
+| `src/lib/reindex.js` | `reindexAgent()` fire-and-forget หลัง save + `rebuildAllVectors()` สำหรับปุ่ม admin |
+| `docs/memory/` | **ต้นฉบับถาวรของ memory** — แก้แล้วต้อง copy กลับมา commit (ดูข้อ 19) |
 
 ---
 
