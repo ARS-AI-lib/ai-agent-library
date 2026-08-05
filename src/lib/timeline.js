@@ -6,7 +6,7 @@
 // editable milestones, and the auto-fitting time axis are new.
 
 import { getType } from './tier';
-import { normalizeProgress } from './agentUtils';
+import { normalizeProgress, agentUseCaseNames } from './agentUtils';
 
 // Status palette for the timeline dots — mirrors the reference TL_ST. These
 // are timeline-forecast statuses (done/pilot/ontime/risk/delay), DISTINCT from
@@ -54,7 +54,7 @@ export function toTimelineItem(a) {
     progress: normalizeProgress(a?.devProgress),
     ability: Array.isArray(a.coreAbility) ? a.coreAbility.join(', ') : (a.coreAbility || ''),
     role: Array.isArray(a.relatedRole) ? a.relatedRole.join(', ') : (a.relatedRole || ''),
-    useCase: a.useCase || '',
+    useCase: agentUseCaseNames(a).join(', '),
     process: Array.isArray(a.sdlcProcessMapping) ? a.sdlcProcessMapping.join(', ') : (a.sdlcProcessMapping || ''),
     _raw: a,
   };

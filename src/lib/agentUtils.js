@@ -57,6 +57,22 @@ export function canEditSDLC(agent, user, userRole, isAdmin) {
   return !!(agent?.createdBy && agent.createdBy === user.uid);
 }
 
+// Ready-to-Use post-freeze exception (2026-07-22): canEditDetails() above
+// freezes EVERY Tier A field once deploymentStatus is 'approved' — correct
+// for the sensitive/structural fields, but it also blocks Description and
+// Endpoint, which legitimately need touch-ups after go-live (e.g. adding the
+// real endpoint link once the agent is actually live). Admin or the agent's
+// creator(s) — NOT a bare approver, NOT staff/committee — may edit just those
+// two fields, and only once deploymentStatus is 'approved' specifically
+// (NOT 'requested': still under active review, stays fully frozen like
+// everything else). Narrower than canUpdateProgress on purpose.
+export function canEditReadyToUseFields(agent, user, isAdmin) {
+  if (!user) return false;
+  if (agent?.deploymentStatus !== 'approved') return false;
+  if (isAdmin) return true;
+  return isMyAgent(agent, user) || !!(agent?.createdBy && agent.createdBy === user.uid);
+}
+
 // "Is this MY agent?" (personal ownership, e.g. for the "My AI" filter/export)
 // — reliable identity check via creatorEmails, same field the security rules
 // and canUpdateProgress() already trust. NOT the same question as "what team
@@ -111,6 +127,16 @@ export function agentProcessIds(agent) {
   return String(agent.sdlcProcessMapping).split(',').map(extractProcessId).filter(Boolean);
 }
 
+// useCase (2026-07-22: single string -> multi-select array). Same
+// String(...).split(',') trick as agentProcessIds — String(anArray) auto-joins
+// with commas, so this reads correctly whether `agent.useCase` is the legacy
+// single string (no migration needed for the ~144 pre-existing docs) or the
+// new array. Single source of truth for every place that reads useCase.
+export function agentUseCaseNames(agent) {
+  if (!agent?.useCase) return [];
+  return String(agent.useCase).split(',').map((s) => s.trim()).filter(Boolean);
+}
+
 // "4.1 High-Level Design" for a process with a real numeric SDLC id, but just
 // "Performance Test Scripting" (no duplication) for the ~18 /sdlcProcesses
 // docs added without one, where `id` was back-filled equal to `name` (2026-07
@@ -141,6 +167,42 @@ export function fmtDate(d) {
     return dt.toLocaleDateString('en-GB', { year: '2-digit', month: 'short', day: 'numeric' });
   } catch {
     return String(d);
+  }
+}
+
+// `endpoint` (2026-07-22) is free text typed by a creator that we then render
+// as a clickable link — so it MUST be sanitised at the point of rendering, not
+// trusted from Firestore. Anything other than http/https (notably
+// `javascript:` and `data:`) is rejected outright rather than "cleaned", since
+// a permissive parse of a hostile scheme is exactly how these become XSS.
+// A bare host ("wolfy-ai-library.web.app/x") is the common human input, so it
+// gets an https:// prefix instead of being thrown away.
+// Returns '' when there is nothing safe to link to — callers treat '' as
+// "no endpoint" and render plain text / no icon.
+export function safeEndpointUrl(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s) ? s : `https://${s}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    return u.href;
+  } catch {
+    return '';
+  }
+}
+
+// Short, readable label for an endpoint link (host + first path segment) so a
+// long internal URL doesn't blow out the detail-modal layout.
+export function endpointLabel(raw) {
+  const href = safeEndpointUrl(raw);
+  if (!href) return '';
+  try {
+    const u = new URL(href);
+    const seg = u.pathname.split('/').filter(Boolean)[0];
+    return seg ? `${u.host}/${seg}${u.pathname.split('/').filter(Boolean).length > 1 ? '/…' : ''}` : u.host;
+  } catch {
+    return href;
   }
 }
 

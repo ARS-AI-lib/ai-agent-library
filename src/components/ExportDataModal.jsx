@@ -18,6 +18,9 @@ const ALL_COLUMNS = [
   'input', 'output', 'businessValue', 'developmentPhase', 'devProgress',
   'deploymentStatus', 'launchDate', 'approvalStatus',
   'creator', 'creatorEmails', 'matchingAgent',
+  // 2026-07-22: archived entries are still exported (this file IS the audit
+  // trail), so the export must say which ones they are and why.
+  'endpoint', 'archived', 'archiveReason',
 ];
 
 function csvCell(v) {
@@ -70,7 +73,11 @@ function downloadCsv(rows, filename, columns = COLUMNS) {
     .slice()
     .sort((a, b) => (a.owner || '').localeCompare(b.owner || '') || a.agentName.localeCompare(b.agentName))
     .forEach((r) => lines.push(columns.map((c) => csvCell(r[c])).join(',')));
-  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  // Excel (Windows especially) doesn't auto-detect UTF-8 without a BOM — Thai
+  // text renders as mojibake ("ต่างดาว") even though the bytes are correct
+  // UTF-8. Numbers on Mac sniffs the encoding anyway, which is why the same
+  // file looked fine there. The BOM is a no-op for every other CSV reader.
+  const blob = new Blob(['\uFEFF', lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

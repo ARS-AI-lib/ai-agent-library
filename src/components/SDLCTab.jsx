@@ -3,7 +3,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
-import { uniq, splitRoles, relationshipLabel, fmtDate, extractProcessId, agentProcessIds } from '../lib/agentUtils';
+import { uniq, splitRoles, relationshipLabel, fmtDate, extractProcessId, agentProcessIds, agentUseCaseNames } from '../lib/agentUtils';
 import MultiSelect from './MultiSelect';
 import StatusLegend from './StatusLegend';
 import '../styles/SDLCTab.css';
@@ -169,7 +169,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   }), [agents, owner, role, reusable, selectedStatus, search]);
 
   const agentsForProcess = (procId) => visAgents.filter((a) => agentProcessIds(a).includes(procId));
-  const agentsForUC = (uc) => visAgents.filter((a) => a.useCase && a.useCase.toLowerCase() === uc.name.toLowerCase());
+  const agentsForUC = (uc) => visAgents.filter((a) => agentUseCaseNames(a).some((n) => n.toLowerCase() === uc.name.toLowerCase()));
   const procOwnerOk = (ownerStr) => {
     if (procOwner.size === 0) return true;
     if (!ownerStr) return false;
@@ -196,7 +196,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     const ucNameSet = new Set(useCases.map((u) => (u.name || '').toLowerCase()));
     const procIdSet = new Set(processes.map((p) => p.id));
     return visAgents.filter((a) =>
-      !(a.useCase && ucNameSet.has(a.useCase.toLowerCase()))
+      !agentUseCaseNames(a).some((n) => ucNameSet.has(n.toLowerCase()))
       && agentProcessIds(a).some((id) => procIdSet.has(id))
     );
   }, [visAgents, useCases, processes]);

@@ -1,17 +1,23 @@
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
-import { fmtDate, relationshipLabel } from '../lib/agentUtils';
+import { fmtDate, relationshipLabel, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
 
-// Card anatomy (2026-07 redesign, reference-matched): eyebrow (type+tier+scope)
-// → title+pill ROW (pill always sits next to the title text itself, not the
-// owner subtitle below it, so a 2-line title never knocks the pill out of
-// alignment with 1-line-title cards) → owner subtitle (hidden when the grid
-// is already grouped "By Owner" — group header already says it, repeating it
-// on every card was pure noise) → progress bar → 2-col meta grid with a
-// FIXED field order and an em-dash fallback for missing values, so "Launch"
-// (or any label) lands in the same grid cell across every card in a row
-// instead of drifting depending on which fields a given agent happens to have.
-export default function AgentCard({ agent, allAgents, onClick, groupKey }) {
+// Card anatomy (2026-07 redesign, reference-matched): eyebrow (type+tier+scope
+// +endpoint link) → title+pill ROW (pill always sits next to the title text
+// itself, so a 2-line title never knocks the pill out of alignment with
+// 1-line-title cards) → progress bar → 2-col meta grid with a FIXED field
+// order and an em-dash fallback for missing values, so "Launch" (or any label)
+// lands in the same grid cell across every card in a row instead of drifting
+// depending on which fields a given agent happens to have.
+//
+// 2026-07-22: the preview card shows **Owner**, not Creator — the creator list
+// is a team roster that belongs in the detail modal, while owner is the single
+// accountable name a browsing user actually needs. It replaces Creator *in
+// place* in the meta grid (rather than being dropped in as an extra cell or
+// left as the old subtitle) precisely to keep that fixed-position guarantee
+// above intact; the old `ac-owner` subtitle went away so owner isn't shown
+// twice.
+export default function AgentCard({ agent, allAgents, onClick }) {
   const type = getType(agent);
   const tier = getTier(agent);
   const tierDef = TIER_DEF[tier];
@@ -22,7 +28,8 @@ export default function AgentCard({ agent, allAgents, onClick, groupKey }) {
   const scope = isInternalOrExternal(agent);
   const ability = Array.isArray(agent.coreAbility) ? agent.coreAbility.join(', ') : agent.coreAbility;
   const role = Array.isArray(agent.relatedRole) ? agent.relatedRole.join(', ') : agent.relatedRole;
-  const showOwner = groupKey !== 'owner' && !!agent.owner;
+  const endpoint = safeEndpointUrl(agent.endpoint);
+  const useCaseNames = agentUseCaseNames(agent);
 
   return (
     <div className={`ac ${type === 'agent' ? 'isag' : 'issk'}`} onClick={() => onClick(agent)}>
@@ -46,6 +53,25 @@ export default function AgentCard({ agent, allAgents, onClick, groupKey }) {
             </svg>
           )}
         </span>
+        {endpoint && (
+          // stopPropagation: the whole card is a click target that opens the
+          // detail modal, so without it every endpoint click would ALSO open
+          // the modal behind the newly-opened tab.
+          <a
+            href={endpoint}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ac-endpoint"
+            onClick={(e) => e.stopPropagation()}
+            title={`เปิดใช้งาน / ดาวน์โหลด: ${endpoint}`}
+            aria-label="เปิด endpoint ในแท็บใหม่"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
+        )}
       </div>
 
       <div className="ac-titlerow">
@@ -55,8 +81,6 @@ export default function AgentCard({ agent, allAgents, onClick, groupKey }) {
           {sd.lb}
         </span>
       </div>
-      {showOwner && <div className="ac-owner">Owner: {agent.owner}</div>}
-
       <div className="ac-progress-row">
         <div className="ac-progress-track">
           <div className={`ac-progress-fill ${progressBucket(progress)}`} style={{ width: `${progress}%` }} />
@@ -66,17 +90,17 @@ export default function AgentCard({ agent, allAgents, onClick, groupKey }) {
 
       <div className="ac-meta">
         <div className="ac-meta-item">
-          <div className="ac-meta-label">Creator</div>
-          <div className="ac-meta-value">{agent.creator || '—'}</div>
+          <div className="ac-meta-label">Owner</div>
+          <div className="ac-meta-value">{agent.owner || '—'}</div>
         </div>
         <div className="ac-meta-item">
           <div className="ac-meta-label">Ability</div>
           <div className="ac-meta-value">{ability || '—'}</div>
         </div>
-        {agent.useCase && (
+        {useCaseNames.length > 0 && (
           <div className="ac-meta-item ac-meta-span2">
             <div className="ac-meta-label">Use case</div>
-            <div className="ac-meta-value">{agent.useCase}</div>
+            <div className="ac-meta-value">{useCaseNames.join(', ')}</div>
           </div>
         )}
         <div className="ac-meta-item">

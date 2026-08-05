@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { normalizeProgress } from '../lib/agentUtils';
@@ -6,7 +6,8 @@ import { normalizeProgress } from '../lib/agentUtils';
 // ⚠️ Field name note: the approval workflow uses `approvalStatus`
 // (pending/approved/rejected) — NOT `status`. The legacy `status` field
 // (value 'active' on all 144 migrated agents from Phase 1) is a different,
-// unrelated flag and is left untouched.
+// unrelated flag and is left untouched. Archiving therefore uses its own
+// `archived` boolean rather than overloading either of those.
 
 function normalizeAgent(agent) {
   return { ...agent, devProgress: normalizeProgress(agent.devProgress) };
@@ -82,14 +83,38 @@ function useAgentSubscription({ field, value, enabled, map }) {
 }
 
 /**
- * Real-time list of *approved* agents/skills (status === 'approved') —
- * this is the data backing the main Agent Library dashboard view.
+ * Real-time list of *approved* agents/skills (approvalStatus === 'approved'),
+ * split by archive state (2026-07-22).
+ *
+ *   agents         — approved AND NOT archived. The library's working set:
+ *                    grid, search, Dashboard KPIs/coverage, Timeline. Every
+ *                    existing consumer already destructures `agents`, so they
+ *                    all start hiding archived entries with no change of their
+ *                    own — the single behaviour we want almost everywhere.
+ *   archivedAgents — approved AND archived. Rarely needed alone; kept separate
+ *                    so an "archived" admin view can be added without another
+ *                    Firestore listen.
+ *   allAgents      — both, for the places where history is the point: Export
+ *                    (audit trail), pre-reg duplicate check (must warn about
+ *                    work that was abandoned, so nobody rebuilds it), and the
+ *                    chat assistant's background context.
+ *
+ * `archived === true` is checked strictly, so the 144 pre-existing docs (which
+ * have no such field) count as active — no backfill needed.
  */
 export function useApprovedAgents(enabled = true) {
   const { data, loading, error } = useAgentSubscription({
     field: 'approvalStatus', value: 'approved', enabled, map: normalizeAgent,
   });
-  return { agents: data, loading, error };
+
+  const { agents, archivedAgents } = useMemo(() => {
+    const active = [];
+    const archived = [];
+    data.forEach((a) => { (a.archived === true ? archived : active).push(a); });
+    return { agents: active, archivedAgents: archived };
+  }, [data]);
+
+  return { agents, archivedAgents, allAgents: data, loading, error };
 }
 
 /**

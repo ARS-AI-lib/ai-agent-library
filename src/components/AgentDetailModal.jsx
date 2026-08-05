@@ -3,7 +3,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
-import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, pairedSubSkills, isPairedSubSkill } from '../lib/agentUtils';
+import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, pairedSubSkills, isPairedSubSkill, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
 import useEscapeKey from '../hooks/useEscapeKey';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
@@ -29,6 +29,12 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [saveError, setSaveError] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveReason, setArchiveReason] = useState('');
+  // Sub-skill ids the user ticked to KEEP live. Default empty = archive the
+  // whole package, per the agreed "if nothing is picked, archive them all".
+  const [keepIds, setKeepIds] = useState(() => new Set());
   useEscapeKey(onClose);
 
   if (!agent) return null;
@@ -43,6 +49,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const related = type === 'skill' ? agentsOfSkill(agent) : skillsOfAgent(agent, allAgents);
   const role = Array.isArray(agent.relatedRole) ? agent.relatedRole.join(', ') : agent.relatedRole;
   const ability = Array.isArray(agent.coreAbility) ? agent.coreAbility.join(', ') : agent.coreAbility;
+  // Re-sanitised at render even though writes are already sanitised — docs
+  // predating that write path (or touched by a script) must not be trusted.
+  const endpointHref = safeEndpointUrl(agent.endpoint);
+  const useCaseNames = agentUseCaseNames(agent);
   const process = Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping.join(', ') : agent.sdlcProcessMapping;
   const scope = isInternalOrExternal(agent);
 
@@ -61,8 +71,17 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const mayEditThisAgent = canUpdateProgress(agent, user, isAdmin);
   // Show the Edit button if the user may edit EITHER the Tier A detail set OR
   // the SDLC metadata fields (a pure approver-role has only the latter).
-  const mayEditDetails = canEditDetails(agent, user, userRole, isAdmin) || canEditSDLC(agent, user, userRole, isAdmin);
+  const mayEditDetails = canEditDetails(agent, user, userRole, isAdmin) || canEditSDLC(agent, user, userRole, isAdmin) || canEditReadyToUseFields(agent, user, isAdmin);
   const canRequestDeploy = !lockedSubSkill && mayEditThisAgent && deploymentStatus !== 'requested' && deploymentStatus !== 'approved';
+
+  // Archiving is a curation decision, not an authorship one — so it is NOT
+  // tied to createdBy/creator like the edit rights above. Only the roles that
+  // govern the library as a whole may retire an entry from it.
+  const mayArchive = isAdmin || userRole === 'approver' || userRole === 'committee';
+  const isArchived = agent.archived === true;
+  // Paired sub-skills that would be dragged along by archiving this Agent —
+  // the user gets to tick any worth keeping (e.g. a genuinely reusable skill).
+  const subSkills = pairedSubSkills(agent, allAgents || []);
 
   function startEdit() {
     setEditProgress(progress);
@@ -106,6 +125,65 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // both bumps devProgress to 95 and files the request — no separate
   // "save to 95 first" step. See the matching firestore.rules branch, which
   // requires request.resource.data.devProgress == 95 for this exact write.
+  // ── Archive (2026-07-22) ────────────────────────────────────────────
+  // Retire an entry from the library WITHOUT deleting it: it disappears from
+  // the grid, search, Dashboard and Timeline, but stays readable for audit,
+  // duplicate-warning and AI-background purposes. `archived === true` is what
+  // useApprovedAgents splits on.
+  //
+  // Note there is deliberately NO "unlock the kept sub-skills" write here: the
+  // paired-sub-skill lock is *derived* (isPairedSubSkill searches the active
+  // list for the parent), so once the parent leaves that list the kept skills
+  // become independently editable on their own — a stored flag would only be a
+  // second source of truth to keep in sync.
+  async function handleArchive() {
+    setArchiving(true);
+    setSaveError('');
+    try {
+      const stamp = {
+        archived: true,
+        archivedAt: serverTimestamp(),
+        archivedBy: user?.uid || '',
+        archiveReason: archiveReason.trim(),
+        updatedAt: serverTimestamp(),
+      };
+      await updateDoc(doc(db, 'agents', agent.id), stamp);
+      // Cascade to paired sub-skills EXCEPT the ones explicitly kept, so a
+      // still-useful reusable skill can outlive its parent Agent.
+      for (const sk of subSkills) {
+        if (keepIds.has(sk.id)) continue;
+        await updateDoc(doc(db, 'agents', sk.id), stamp);
+      }
+      setArchiveOpen(false);
+      onClose?.();
+    } catch (e) {
+      setSaveError(e.message || 'Archive ไม่สำเร็จ');
+    } finally {
+      setArchiving(false);
+    }
+  }
+
+  async function handleUnarchive() {
+    setArchiving(true);
+    setSaveError('');
+    try {
+      // Clears the stamp rather than leaving stale archivedAt/By behind, so a
+      // re-archive later records who did it *that* time.
+      await updateDoc(doc(db, 'agents', agent.id), {
+        archived: false,
+        archivedAt: null,
+        archivedBy: '',
+        archiveReason: '',
+        updatedAt: serverTimestamp(),
+      });
+      onClose?.();
+    } catch (e) {
+      setSaveError(e.message || 'ยกเลิก Archive ไม่สำเร็จ');
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   async function handleRequestDeploy() {
     setConfirmingDeploy(false);
     setRequesting(true);
@@ -152,6 +230,29 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               </svg>
             </button>
           )}
+          {mayArchive && (
+            <button
+              className="btn-icon"
+              style={{ width: 22, height: 22 }}
+              title={isArchived ? 'นำกลับเข้า Library' : 'Archive ออกจาก Library'}
+              disabled={archiving}
+              onClick={() => (isArchived ? handleUnarchive() : setArchiveOpen(true))}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+                {isArchived ? <path d="M12 18v-6M9 15l3-3 3 3" /> : <line x1="9" y1="13" x2="15" y2="13" />}
+              </svg>
+            </button>
+          )}
+          {isArchived && (
+            <span
+              className="ttag"
+              style={{ color: '#92400e', background: '#fef3c7', fontWeight: 700 }}
+              title={agent.archiveReason ? `เหตุผล: ${agent.archiveReason}` : 'ถูก archive ออกจาก Library'}
+            >
+              ARCHIVED
+            </span>
+          )}
         </div>
         <div className="msub">1 agent/skill</div>
 
@@ -186,11 +287,29 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               <span style={{ color: 'var(--tx2)', fontSize: 11, lineHeight: 1.45 }}>{agent.description}</span>
             </div>
           )}
-          {agent.useCase && (
-            <div className="mrow"><span className="mk">Use case</span><span style={{ color: 'var(--tx2)', fontSize: 11 }}>{agent.useCase}</span></div>
+          {useCaseNames.length > 0 && (
+            <div className="mrow"><span className="mk">Use case</span><span style={{ color: 'var(--tx2)', fontSize: 11 }}>{useCaseNames.join(', ')}</span></div>
           )}
           <div className="mrow"><span className="mk">Owner</span><span>{agent.owner || '—'}</span></div>
           <div className="mrow"><span className="mk">Creator</span><span>{agent.creator || '—'}</span></div>
+          {endpointHref && (
+            <div className="mrow">
+              <span className="mk">Endpoint</span>
+              <a
+                href={endpointHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
+                title={endpointHref}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+                {endpointLabel(agent.endpoint)}
+              </a>
+            </div>
+          )}
           <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
           {related.length > 0 && (
             <div className="mrow">
@@ -301,6 +420,78 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             <div className="btn-group">
               <button className="btn btn-secondary" onClick={() => setConfirmingDeploy(false)}>No</button>
               <button className="btn btn-success" onClick={handleRequestDeploy}>Yes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {archiveOpen && (
+        <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setArchiveOpen(false)}>
+          <div className="mbox" style={{ padding: 18, maxWidth: 460 }}>
+            <button className="mclose" onClick={() => setArchiveOpen(false)}>✕</button>
+            <h3 style={{ fontSize: 15, marginBottom: 10 }}>Archive ออกจาก Library</h3>
+            <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 14 }}>
+              <strong>{agent.agentName}</strong> จะหายจากหน้า Library, การค้นหา, Dashboard และ Timeline
+              โดย<strong>ไม่ถูกลบ</strong> — ข้อมูลยังอยู่สำหรับตรวจย้อนหลัง, เตือนความซ้ำซ้อน
+              และให้ AI ใช้เป็นข้อมูลประกอบ (แต่จะไม่ถูกแนะนำให้ผู้ใช้)
+            </p>
+
+            {subSkills.length > 0 && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                  Skill ที่ผูกกับ Agent นี้ ({subSkills.length})
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--mu)', marginBottom: 8, lineHeight: 1.5 }}>
+                  ติ๊กตัวที่ต้องการ<strong>เก็บไว้ใน Library</strong> (เช่น skill ที่ยัง reusable) —
+                  ที่ไม่ติ๊กจะถูก archive ไปพร้อมกันทั้งหมด
+                </div>
+                {subSkills.map((sk) => (
+                  <label
+                    key={sk.id}
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, padding: '5px 0', cursor: 'pointer' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={keepIds.has(sk.id)}
+                      onChange={(e) => setKeepIds((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(sk.id); else next.delete(sk.id);
+                        return next;
+                      })}
+                      style={{ marginTop: 2 }}
+                    />
+                    <span>
+                      {sk.agentName}
+                      {sk.reusable && (
+                        <span style={{ color: 'var(--mu)', fontSize: 11 }}> — {sk.reusable}</span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <div className="fg" style={{ marginBottom: 14 }}>
+              <label>เหตุผล</label>
+              <input
+                value={archiveReason}
+                onChange={(e) => setArchiveReason(e.target.value)}
+                placeholder="เช่น ซ้ำกับ X / เจ้าของย้ายทีม / เลิกใช้แล้ว"
+              />
+              <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>
+                AI จะใช้เหตุผลนี้เตือนคนที่กำลังจะสร้างของคล้ายกันในอนาคต
+              </div>
+            </div>
+
+            {saveError && <div className="msg error" style={{ marginBottom: 10 }}>{saveError}</div>}
+
+            <div className="btn-group">
+              <button className="btn btn-secondary" disabled={archiving} onClick={() => setArchiveOpen(false)}>ยกเลิก</button>
+              <button className="btn btn-success" disabled={archiving} onClick={handleArchive}>
+                {archiving
+                  ? 'กำลัง Archive…'
+                  : `Archive${subSkills.length ? ` (${1 + subSkills.length - keepIds.size} items)` : ''}`}
+              </button>
             </div>
           </div>
         </div>
