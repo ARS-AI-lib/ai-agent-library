@@ -1,0 +1,40 @@
+{
+  "$comment": [
+    "Shared project permissions — curated by hand, NOT the auto-grown local allowlist.",
+    "The machine-local settings.local.json had accumulated 209 entries by approving",
+    "things in the moment; copying that wholesale onto a new machine would carry over",
+    "permissions nobody ever reviewed. This list is only the routine, read-only or",
+    "clearly-scoped commands this project runs every day.",
+    "",
+    "DEPLOY IS DELIBERATELY ABSENT. CLAUDE.md section 11 requires confirming every",
+    "deploy because it always targets production and the GCP project is shared with",
+    "the Portfolio app — pre-approving it here would quietly cancel that rule.",
+    "",
+    "Anything not listed still works; it just prompts once."
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote -v)",
+      "Bash(git rev-list:*)",
+      "Bash(git ls-files:*)",
+      "Bash(npm run build)",
+      "Bash(npm install)",
+      "Bash(npm ls:*)",
+      "Bash(node --check:*)",
+      "Bash(node functions/regression.cjs)",
+      "Bash(node functions/calibrate.cjs)",
+      "Bash(node functions/verify-dup.cjs)",
+      "Bash(node functions/bootstrap-vectors.cjs)",
+      "Bash(node functions/flag-internal.cjs)",
+      "Bash(npx firebase-tools login:list)",
+      "Bash(npx firebase-tools projects:list)",
+      "Bash(npx firebase-tools functions:list:*)"
+    ],
+    "deny": []
+  }
+}
