@@ -7,7 +7,7 @@ metadata:
 
 The working machine changed on 2026-08-05: from a personal Mac to a company laptop with an admin
 lock. The move is complete and verified (clone → build → Firebase login → gcloud ADC → memory
-restore → regression 11/11 → preview deploy → Claude Code answered a context-only question
+restore → regression 12/12 → preview deploy → Claude Code answered a context-only question
 correctly). The old machine is being retired.
 
 **Why this matters beyond the move itself:** preparing it surfaced that ~2 weeks of work — the

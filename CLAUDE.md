@@ -1,5 +1,10 @@
 # CLAUDE.md — AI Agent Library Suite v2 (Krungthai Group / Arise)
 
+> # 👉 อ่าน `docs/SYSTEM-OVERVIEW.md` ก่อนเริ่มงานทุกครั้ง
+> ไฟล์นั้นคือภาพรวมระบบ + สถานะล่าสุด + แผน integrate ที่ **ตรวจกับโค้ดจริงแล้ว**
+> ส่วนไฟล์นี้เป็น **กฎปฏิบัติ + ประวัติรายฟีเจอร์** (เรียงตามเวลา ไม่ใช่ภาพรวม)
+> ถ้าสองไฟล์ขัดกัน **ให้ยึด SYSTEM-OVERVIEW** แล้วมาแก้ไฟล์นี้ให้ตรง
+
 > ไฟล์นี้สรุปบริบทโปรเจกต์ทั้งหมดจากการคุยงานที่ผ่านมา ใช้เป็นจุดเริ่มต้นสำหรับ Claude Code session ใหม่
 > วางไฟล์นี้ไว้ที่ root ของ repo เพื่อให้ Claude Code โหลดเป็น context อัตโนมัติ
 
@@ -29,13 +34,18 @@
 
 ## 2. สถาปัตยกรรม (Architecture — Locked for v2)
 
-3 React apps แยกกัน บน Firebase Hosting site เดียว:
+> ⚠️ **ข้อความเดิมตรงนี้ผิด** — เคยเขียนว่า "3 React apps แยกกัน: `/`, `/sdlc/`, `/portfolio/`"
+> ตรวจกับ `src/main.jsx` แล้วไม่ตรง · รายละเอียดเต็มอยู่ใน `docs/SYSTEM-OVERVIEW.md` §2
 
-| App | Path |
-|---|---|
-| Agent Library | `/` |
-| SDLC Tracker | `/sdlc/` |
-| Portfolio | `/portfolio/` |
+ของจริง: repo นี้คือ **SPA เดียว** (ไม่ใช้ router library — เลือก component จาก `pathname` ใน `main.jsx`)
+
+| Path | Component | หมายเหตุ |
+|---|---|---|
+| `/` | `App.jsx` | มี 3 **แท็บ**ข้างใน: Agent Library / SDLC AI Adoption / Dashboard |
+| `/timeline` | `TimelinePage.jsx` | หน้าแยก access-gated ผ่าน `/config/timeline` |
+
+**Portfolio เป็นคนละแอป คนละ repo คนละ hosting site (`wolfy-portfolio`)** — อยู่แค่ GCP project
+เดียวกันเท่านั้น **นี่คือเหตุผลของกฎเหล็กเรื่อง scoped functions deploy ในข้อ 11**
 
 - Roles: `user` / `staff` / `approver` / `committee` / `admin` (5 ระดับ — ดูข้อ 17)
   ⚠️ เอกสารเก่าเคยเขียนว่า `viewer/editor/admin` ซึ่ง **ผิดแล้ว** (โมเดล 2 ชั้นเดิม เลิกใช้ตั้งแต่ 2026-07-01)
@@ -252,7 +262,7 @@ Tier:
 | **— เพิ่ม ส.ค. 2026 (ดูข้อ 18) —** | |
 | `functions/embedText.js` | **single source of truth ของ embedding** — model/มิติ/ความละเอียด/รูปแบบข้อความ · แก้ตรงนี้แล้ว index ถูก rebuild อัตโนมัติผ่าน `contentHash` |
 | `functions/chatPrompt.js` | `CHAT_SYSTEM_PROMPT` + `TOOL_DECLARATIONS` — แยกออกมาเพื่อให้ `regression.cjs` เทสของจริง ไม่ใช่สำเนา |
-| `functions/regression.cjs` | **รันก่อน deploy แชททุกครั้ง** — 11 เคส ครอบโหมด B ด้วย |
+| `functions/regression.cjs` | **รันก่อน deploy แชททุกครั้ง** — 12 เคส ครอบโหมด B ด้วย |
 | `functions/bootstrap-vectors.cjs` | สร้าง/อัปเดต index ทั้งชุด (dry-run ถ้าไม่ใส่ `--apply`) |
 | `functions/flag-internal.cjs` | ติด `internalTool` ให้ไฟล์ `*.md` + tool ของ ALPHA เอง เพื่อกดอันดับ |
 | `functions/calibrate.cjs` / `verify-dup.cjs` | เทียบ embeddings vs lexical บนข้อมูลจริง |
@@ -409,7 +419,7 @@ grilling session เคาะทุกข้อที่เคยค้าง:
 
 ### ต้องรันก่อน deploy แชททุกครั้ง
 ```bash
-node functions/regression.cjs     # 11 เคส รวมโหมด B (Agile/SDLC/ขอไอเดีย)
+node functions/regression.cjs     # 12 เคส รวมโหมด B (Agile/SDLC/ขอไอเดีย)
 ```
 ใช้ prompt จริงจาก `functions/chatPrompt.js` (ไม่ใช่สำเนา) → prompt เปลี่ยนแล้วพังจะรู้ทันที
 
@@ -447,7 +457,7 @@ cp docs/memory/*.md ~/.claude/projects/<key ใหม่>/memory/
 git log -1                                    # เห็น commit ล่าสุดจริง
 npm run build                                 # พิสูจน์ว่า .env.local + deps ครบ
 git rev-list --left-right --count origin/main...HEAD   # ต้องได้ 0 0 ก่อน deploy ใดๆ
-node functions/regression.cjs                 # ผ่าน 11/11 (ต้องมี ADC)
+node functions/regression.cjs                 # ผ่าน 12/12 (ต้องมี ADC)
 node functions/bootstrap-vectors.cjs          # dry run → agents: 244 / up to date: 244
 npx firebase-tools hosting:channel:deploy test-migration   # preview ไม่แตะ live
 ```
