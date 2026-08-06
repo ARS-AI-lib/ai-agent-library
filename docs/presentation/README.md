@@ -30,3 +30,4 @@ avconvert --preset PresetHighestQuality --source in.mov --output out.mp4 --repla
 ## ประวัติ
 เวอร์ชันก่อนหน้า (ยังไม่มีวิดีโอกับภาพหน้าจอ) ไม่ได้ commit ไว้ — ตั้งแต่นี้ไป
 git เก็บประวัติให้แล้ว ไม่ต้องทำไฟล์ `.BACKUP` เอง
+
