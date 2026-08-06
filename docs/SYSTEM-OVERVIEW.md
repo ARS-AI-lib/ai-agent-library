@@ -376,6 +376,41 @@ npm install                      # ถ้า package.json เปลี่ยน
 npm run build                    # ต้องผ่านก่อนเสมอ
 ```
 
+### ⚠️ ตั้งค่าครั้งเดียวบนเครื่องใหม่ — ต้องทำก่อน commit แรก
+
+**git identity ไม่ติดไปกับ `git clone`** (มันอยู่ใน `.git/config` ซึ่งไม่ถูก clone)
+ถ้าไม่ตั้ง git จะเดาเอาเป็น `<user>@<hostname>.local` แล้ว commit ด้วยชื่อนั้น **โดยไม่เตือน**
+
+```bash
+cd ~/ai-agent-library
+git config user.name  "Tinnapat Pongtongmuang"
+git config user.email "tinnapat.p@arise.tech"
+git config user.email      # ยืนยันว่าตั้งแล้ว
+```
+
+- ใช้ `git config` **ไม่ใส่ `--global`** → ผูกกับ repo นี้เท่านั้น ปลอดภัยกว่าบนเครื่องบริษัท
+- ประวัติเก่าบางส่วน commit ด้วยอีเมลส่วนตัว (`tinnapat.ptm@gmail.com`) จากเครื่องเดิม
+  ถ้าอยากให้ author ต่อเนื่องกับของเก่าให้ใช้อีเมลนั้นแทน — **เป็นการตัดสินใจของผู้ใช้ ไม่ใช่ของ AI**
+
+### 🔑 GitHub authentication
+
+GitHub **ไม่รองรับ password แล้ว** — `git clone/push` ต้องใช้ Personal Access Token
+(การ login เว็บผ่าน Google SSO เป็นคนละกลไก ใช้กับ command line ไม่ได้)
+
+- token ถูกเก็บอัตโนมัติใน macOS keychain (`credential.helper = osxkeychain` มาจาก Xcode
+  Command Line Tools → มีทุกเครื่อง Mac) **ใส่ครั้งเดียวพอ ไม่ต้องพิมพ์ซ้ำทุกครั้ง**
+- **⏰ token ปัจจุบันหมดอายุราว 2026-11-03** (สร้าง 2026-08-05 อายุ 90 วัน)
+  พอหมดอายุ `git push` จะ fail ด้วย auth error — สร้างใหม่ที่
+  https://github.com/settings/tokens?type=beta
+  · scope ที่ต้องมี: **Repository access = `ARS-AI-lib/ai-agent-library`** + **Contents: Read and write**
+  · ถ้า keychain ยังจำ token เก่าอยู่ ให้ลบด้วย
+  `git credential-osxkeychain erase` (พิมพ์ `host=github.com` แล้ว `protocol=https` แล้ว Enter 2 ครั้ง)
+
+### สิ่งที่ **ไม่ต้อง**ย้ายมา (ตรวจแล้ว)
+`~/.claude/settings.json` ว่างเปล่า (`{}`) · ไม่มี custom command/agent/output-style ·
+โลโก้และ skill package อยู่ใน `public/` ใน git แล้ว · permission allowlist อยู่ที่
+`.claude/settings.json` ใน repo แล้ว (จงใจ**ไม่ใส่ deploy** — ดูข้อ 8)
+
 **ก่อนแก้อะไรที่เกี่ยวกับ search/prompt** → อ่าน `CLAUDE.md` §18 + memory
 `project_chat_retrieval_rearchitecture.md` ให้จบก่อน มีเหตุผลที่วัดมาแล้วของทุกการตัดสินใจ
 
@@ -395,3 +430,4 @@ npm run build                    # ต้องผ่านก่อนเสม
 | `docs/memory/project_work_queue.md` | ประวัติว่าทำอะไรไปบ้างและ**ทำไม** (STATUS block บนสุด) |
 | `docs/memory/project_chat_retrieval_rearchitecture.md` | หลักฐานเชิงตัวเลขของทุกการตัดสินใจเรื่อง search |
 | `docs/memory/feedback_*.md` | กฎที่ผู้ใช้เคยสั่งไว้ — **อย่าถามซ้ำ** |
+| `docs/presentation/` | สไลด์แนะนำระบบ 5-6 นาที (self-contained เปิด offline ได้) + ข้อควรระวังถ้าจะแก้วิดีโอ |
