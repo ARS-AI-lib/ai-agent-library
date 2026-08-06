@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './styles/theme.css'
 import App from './App.jsx'
 import TimelinePage from './components/TimelinePage.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 // Lightweight path routing (no router lib): the SPA serves every path via the
 // Firebase rewrite, so we pick the root component by pathname. /timeline is a
@@ -12,6 +13,8 @@ const Root = isTimeline ? TimelinePage : App;
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <Root />
+    <ErrorBoundary>
+      <Root />
+    </ErrorBoundary>
   </StrictMode>,
 )
