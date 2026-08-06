@@ -138,13 +138,23 @@ export default function App() {
     () => uniq([...agents.flatMap((a) => splitRoles(a.relatedRole)), ...(schema.relatedRole || [])]).sort(),
     [agents, schema.relatedRole]
   );
+  // Filter options merge BOTH sources — the values agents actually carry AND
+  // the configured choices in /config/schema — the same way roleOptions above
+  // already did. Deriving from agent data alone meant a newly configured
+  // choice stayed invisible in the filter until some agent happened to use it,
+  // so an admin adding "UI Generation" saw nothing change and had no way to
+  // tell whether the config had even saved. relatedRole was already correct;
+  // coreAbility and reusable were simply never updated to match.
   const abilityOptions = useMemo(
-    () => uniq(agents.flatMap((a) => (Array.isArray(a.coreAbility) ? a.coreAbility : [a.coreAbility]))).sort(),
-    [agents]
+    () => uniq([
+      ...agents.flatMap((a) => (Array.isArray(a.coreAbility) ? a.coreAbility : [a.coreAbility])),
+      ...(schema.coreAbility || []),
+    ].filter(Boolean)).sort(),
+    [agents, schema.coreAbility]
   );
   const reusableOptions = useMemo(
-    () => uniq(agents.map((a) => a.reusable).filter(Boolean)).sort(),
-    [agents]
+    () => uniq([...agents.map((a) => a.reusable), ...(schema.reusable || [])].filter(Boolean)).sort(),
+    [agents, schema.reusable]
   );
 
   // Paired sub-skills are cascaded to deploymentStatus 'requested' alongside
