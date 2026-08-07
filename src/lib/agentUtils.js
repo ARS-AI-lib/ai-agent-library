@@ -137,6 +137,24 @@ export function agentUseCaseNames(agent) {
   return String(agent.useCase).split(',').map((s) => s.trim()).filter(Boolean);
 }
 
+// category (2026-08 sidebar shortcuts): array of string, one agent can belong
+// to more than one domain (e.g. Figma Code Connect → Design & UI + Software
+// Development). Assigned by AI at submit time / backfill, never hand-typed —
+// see agent-skill-structured-horizon plan. Mirrors the agentUseCaseNames
+// pattern (String(...).split(',') would also work for the legacy shape, but
+// category was never stored as a comma string, so a plain array guard is
+// enough — no legacy format to bridge).
+export function agentCategories(agent) {
+  return Array.isArray(agent?.category) ? agent.category.filter(Boolean) : [];
+}
+
+// sdlcStage on an agent doc is a multi-select array (form field), distinct
+// from the /config/schema.sdlcStage OPTIONS list — this just reads the
+// agent's own value defensively (some legacy docs may have missed migration).
+export function agentStages(agent) {
+  return Array.isArray(agent?.sdlcStage) ? agent.sdlcStage.filter(Boolean) : [];
+}
+
 // "4.1 High-Level Design" for a process with a real numeric SDLC id, but just
 // "Performance Test Scripting" (no duplication) for the ~18 /sdlcProcesses
 // docs added without one, where `id` was back-filled equal to `name` (2026-07
@@ -293,9 +311,22 @@ export function relationshipLabel(agent, allAgents) {
  * Builds the predicate used by both the card grid and the counters —
  * mirrors `tOk()` from the original dashboard.
  */
-export function buildAgentFilter({ type, owner, role, ability, tier, reusable, hasEndpoint, search }) {
+export function buildAgentFilter({ type, owner, role, ability, tier, reusable, hasEndpoint, category, stage, platformTools, search }) {
   return (agent) => {
     if (type !== 'all' && getType(agent) !== type) return false;
+    // Platform Tools shortcut (2026-08 sidebar) reuses the existing
+    // internalTool flag (flag-internal.cjs) rather than a new field.
+    if (platformTools && agent.internalTool !== true) return false;
+    // Category shortcut (2026-08 sidebar): OR within the selected categories,
+    // same as ability/role below — this whole predicate ANDs across groups.
+    if (category && category.size > 0) {
+      const cats = agentCategories(agent);
+      if (!cats.some((c) => category.has(c))) return false;
+    }
+    if (stage && stage.size > 0) {
+      const stages = agentStages(agent);
+      if (!stages.some((s) => stage.has(s))) return false;
+    }
     // "Has a usable link" toggle. Uses safeEndpointUrl rather than a bare
     // truthiness check so the filter agrees with what the UI actually renders —
     // an entry whose endpoint is present but unusable (a javascript:/data: URL

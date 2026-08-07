@@ -438,6 +438,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         llm: form.llm.trim(),
         dataPrivacy: form.dataPrivacy.trim(),
         businessValue: form.businessValue.trim(),
+        category: aiResult?.suggested_category ? [aiResult.suggested_category] : [],
       };
 
       const agentRef = await addDoc(collection(db, 'agents'), {
@@ -464,6 +465,12 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         sdlcStage: isExternal ? [] : [...form.sdlcStage],
         sdlcProcessMapping: isExternal ? [] : [...form.sdlcProcessMapping],
         useCase: isExternal ? [] : [...form.useCase],
+        // Category (2026-08 sidebar shortcuts): AI-assigned at submit time,
+        // never hand-typed. suggested_category is always the closest existing
+        // /config/schema.category value (fallback), even when the AI also
+        // proposes a brand-new one below — so this agent is never left
+        // uncategorized while a proposal awaits admin approval.
+        category: inheritedFromAgent.category,
         input: form.input.trim(),
         output: form.output.trim(),
         compatibleAgents: form.type === 'Skill' ? form.compatibleAgents : [],
@@ -495,6 +502,25 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      // ── Category proposal (2026-08): the AI decided no existing shortcut
+      // fits well. Best-effort, never blocks submission — the agent already
+      // has its fallback category from suggested_category above, so a failure
+      // here just means the new-category suggestion is lost, not the agent.
+      if (aiResult?.proposed_new_category?.name) {
+        try {
+          await addDoc(collection(db, 'categoryProposals'), {
+            name: aiResult.proposed_new_category.name,
+            reason: aiResult.proposed_new_category.reason || '',
+            agentId: agentRef.id,
+            agentName,
+            fallbackCategory: aiResult.suggested_category || null,
+            status: 'pending',
+            createdBy,
+            createdAt: serverTimestamp(),
+          });
+        } catch { /* proposal is groundwork, never fatal to the submission */ }
+      }
 
       // ── Knowledge base: persist the FULL analysis, but only at submit time
       // (never for an un-submitted draft), and skip if a near-identical draft
@@ -565,6 +591,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             sdlcStage: sExternal ? [] : [...form.sdlcStage],
             sdlcProcessMapping: sExternal ? [] : [...form.sdlcProcessMapping],
             useCase: sExternal ? [] : [...form.useCase],
+            category: inheritedFromAgent.category,
             input: s.input.trim(),
             output: s.output.trim(),
             businessValue: inheritedFromAgent.businessValue,

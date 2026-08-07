@@ -132,7 +132,7 @@ service cloud.firestore {
         || (userRole() in ['staff', 'committee']
             && affectedKeys().hasOnly([
                  'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing',
-                 'internalUse', 'coreAbility', 'relatedRole', 'reusable', 'reuseCondition', 'hml',
+                 'internalUse', 'coreAbility', 'relatedRole', 'category', 'reusable', 'reuseCondition', 'hml',
                  'humanJob', 'endpoint', 'updatedAt',
                ])
             && !(resource.data.deploymentStatus in ['requested', 'approved']))
@@ -144,7 +144,7 @@ service cloud.firestore {
         // approved. admin has unconditional access via the isAdmin() branch.
         || (affectedKeys().hasOnly([
               'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing', 'internalUse',
-              'coreAbility', 'relatedRole', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
+              'coreAbility', 'relatedRole', 'category', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
               'humanJob', 'endpoint', 'launchDate', 'devProgress', 'developmentPhase', 'updatedAt',
             ])
             && isOwnerCreatorOrApprover(resource.data)
@@ -285,6 +285,26 @@ service cloud.firestore {
         && affectedKeys().hasOnly(['relatedRole'])
         && request.resource.data.relatedRole is list
         && (!('relatedRole' in resource.data) || request.resource.data.relatedRole.hasAll(resource.data.relatedRole));
+    }
+
+    // ── /categoryProposals — AI-proposed new Category shortcuts ──────
+    // Written whenever analyzeDuplicate (or the backfill script) decides a
+    // draft/agent is novel enough that no existing /config/schema.category
+    // value fits well. The agent itself is NEVER left uncategorized while a
+    // proposal is pending — the client always writes a real (fallback)
+    // category on the agent doc alongside this proposal, so this collection
+    // only gates whether a NEW shortcut appears in the sidebar, never
+    // findability of the agent itself.
+    match /categoryProposals/{id} {
+      allow read: if isKnownUser();
+      // Submitter self-creates their own proposal row; can't forge another.
+      allow create: if isKnownUser()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'pending';
+      // Only admin approves/rejects (per 2026-08 decision: admin-only gate on
+      // new categories, to avoid repeating relatedRole's 54-value sprawl).
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // ── /analysisRuns — duplicate-check knowledge base ───────────────

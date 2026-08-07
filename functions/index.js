@@ -45,6 +45,32 @@ async function getCoreAbilityOptions() {
   return coreAbilityCache;
 }
 
+// Category — a DOMAIN grouping (Design & UI, Lending & Credit, …), deliberately
+// separate from Core Ability (a capability TYPE like Analytical/Documentation).
+// Same allowlist pattern as Core Ability above: /config/schema.category is the
+// single source of truth an admin can edit without redeploy, and the model must
+// pick from this list — never invent a name — EXCEPT via the explicit
+// proposed_new_category escape hatch below, which routes through admin approval
+// rather than writing straight to the list (2026-08 decision — see plan
+// agent-skill-structured-horizon.md).
+const FALLBACK_CATEGORY = [
+  'Design & UI', 'UX Research', 'Writing & Content', 'Requirements & Product',
+  'Software Development', 'DevOps & Performance', 'Testing & QA',
+  'Lending & Credit', 'Investment', 'Project & Delivery',
+];
+let categoryCache = null;
+async function getCategoryOptions() {
+  if (categoryCache) return categoryCache;
+  try {
+    const snap = await db.collection('config').doc('schema').get();
+    const opts = snap.data()?.category;
+    categoryCache = Array.isArray(opts) && opts.length ? opts : FALLBACK_CATEGORY;
+  } catch {
+    categoryCache = FALLBACK_CATEGORY;
+  }
+  return categoryCache;
+}
+
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'wolfy-481609';
 const LOCATION = 'asia-southeast1';
 const MODEL = 'gemini-2.5-flash';
@@ -67,7 +93,7 @@ const GENERATION_CONFIG = {
   thinkingConfig: { thinkingBudget: 0 },
 };
 
-function buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions) {
+function buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions, categoryOptions) {
   const candidatesShort = candidates.slice(0, 15).map((c, i) => ({
     i,
     agentName: c.agentName,
@@ -161,13 +187,24 @@ verdict ที่แปลว่าไม่ซ้ำ เช่น 70 คู่�
    ⚠️ ต้องเลือกจากรายการ Core Ability ที่กำหนดไว้เท่านั้น (ห้ามคิดคำใหม่เอง):
    [${coreAbilityOptions.map((a) => `"${a}"`).join(', ')}]
    ถ้าไม่มีตัวไหนในลิสต์นี้เหมาะสมจริงๆ ให้ตอบ null แทนการสร้างคำใหม่
-5. overall_risk: high | medium | low — ประเมินจาก verdict ที่แรงที่สุด
+5b. suggested_category: จัดหมวด Draft นี้เข้า "โดเมนงาน" (Category) — คนละมิติกับ Core Ability
+   (Core Ability = ชนิดความสามารถ เช่น Analytical/Documentation, Category = สายงาน/โดเมน
+   เช่น Lending & Credit, Design & UI) ต้องเลือกจากรายการนี้เท่านั้น เพราะค่านี้ต้องมี
+   เสมอทันทีที่ submit (ใช้เป็นหมวดที่หาเจอ แม้ระหว่างรอ admin อนุมัติหมวดใหม่):
+   [${categoryOptions.map((c) => `"${c}"`).join(', ')}]
+   เลือกหมวดที่ "ใกล้เคียงที่สุด" เสมอ แม้ Draft จะดูใหม่/ไม่เข้าพวกขนาดไหนก็ตาม ห้ามตอบ null
+6. proposed_new_category: ปกติหมวดเดิมด้านบนควรพอสำหรับ Draft ส่วนใหญ่ (>90%) — ให้ค่านี้เป็น
+   null เกือบทุกครั้ง มีค่าเฉพาะเมื่อ Draft เป็นสายงาน/โดเมนที่ "ใหม่จริงๆ" จนหมวดเดิมทุกหมวด
+   ไม่เหมาะสมเลย (ไม่ใช่แค่ "ใกล้เคียงแต่ไม่เป๊ะ" — กรณีนั้นให้ใช้ suggested_category แทน)
+   ถ้ามี ตอบเป็น {"name": "ชื่อหมวดใหม่สั้นๆ ภาษาอังกฤษ", "reason": "เหตุผลสั้นๆ ภาษาไทยว่าทำไมหมวดเดิมไม่พอ"}
+   ไม่งั้นตอบ null
+7. overall_risk: high | medium | low — ประเมินจาก verdict ที่แรงที่สุด
    (มี clear_duplicate=high, มี likely_overlap=medium, นอกนั้น low)
    ⭐ กฎ breadth เพิ่มเติม (ตัวเหมารวม/kitchen-sink): ถ้า Draft ทับงานย่อยกับของเดิม "ตั้งแต่ 3 ตัวขึ้นไป"
    (คือมี candidate ที่ verdict เป็น likely_overlap หรือ clear_duplicate รวมกัน ≥ 3 ตัว) ให้ดัน
    overall_risk เป็นอย่างน้อย "medium" แม้แต่ละตัวจะทับกันไม่มาก เพราะมันคือสัญญาณว่า Draft
    กำลังรวมงานที่กระจายอยู่ในหลาย agent เดิมมาไว้ในตัวเดียว (ขัดกับหลัก agent เฉพาะทาง)
-6. summary: สรุปภาพรวมภาษาไทย 1-2 ประโยค ว่าควรสร้างใหม่ / ใช้ของเดิม / เชื่อมต่อของเดิม
+8. summary: สรุปภาพรวมภาษาไทย 1-2 ประโยค ว่าควรสร้างใหม่ / ใช้ของเดิม / เชื่อมต่อของเดิม
    ถ้าเข้ากรณี breadth (ทับ ≥3 ตัว) ให้ระบุชัดใน summary ว่า "Draft นี้ทำงานทับกับ Agent เดิมหลายตัว
    ควรพิจารณาแยกเป็น skill เฉพาะทาง หรือใช้/เชื่อมของเดิมแทนการสร้างตัวเหมารวม"
 
@@ -184,6 +221,8 @@ verdict 4 ระดับ:
   "tech_stack_hint": "..." (string ว่างได้),
   "suggested_matching_agent": "..." หรือ null,
   "suggested_ability": "..." หรือ null,
+  "suggested_category": "...",
+  "proposed_new_category": {"name": "...", "reason": "..."} หรือ null,
   "overall_risk": "high" | "medium" | "low",
   "summary": "..."
 }
@@ -220,11 +259,11 @@ exports.analyzeDuplicate = onCall(
     const { draft, candidates, connectionCandidates } = request.data || {};
     if (!draft || !Array.isArray(candidates) || candidates.length === 0) {
       // No candidates → nothing to analyze; return empty result without burning quota.
-      return { candidates: [], integration_suggestions: [], suggested_matching_agent: null, suggested_ability: null, overall_risk: 'low', summary: '' };
+      return { candidates: [], integration_suggestions: [], suggested_matching_agent: null, suggested_ability: null, suggested_category: null, proposed_new_category: null, overall_risk: 'low', summary: '' };
     }
 
-    const coreAbilityOptions = await getCoreAbilityOptions();
-    const prompt = buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions);
+    const [coreAbilityOptions, categoryOptions] = await Promise.all([getCoreAbilityOptions(), getCategoryOptions()]);
+    const prompt = buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions, categoryOptions);
 
     let text = '';
     let finishReason = '';
@@ -267,6 +306,23 @@ exports.analyzeDuplicate = onCall(
     // the fixed Core Ability values rather than let a fabricated one reach the UI.
     parsed.suggested_ability = coreAbilityOptions.includes(parsed.suggested_ability)
       ? parsed.suggested_ability : null;
+    // Same defense-in-depth as suggested_ability above: never trust the model
+    // to have obeyed the category allowlist. Unlike suggested_ability, a null
+    // here would leave a new agent with no fallback category to fall back on —
+    // but writing an unvalidated string is worse (poisons the sidebar with a
+    // name /config/schema.category never approved), so null is still correct;
+    // PreRegModal treats a null suggested_category as "no category yet" rather
+    // than fabricating one client-side.
+    parsed.suggested_category = categoryOptions.includes(parsed.suggested_category)
+      ? parsed.suggested_category : null;
+    // proposed_new_category must be a well-formed {name, reason} or null — drop
+    // anything malformed rather than let a half-shaped object reach Firestore.
+    parsed.proposed_new_category = (
+      parsed.proposed_new_category
+      && typeof parsed.proposed_new_category.name === 'string'
+      && parsed.proposed_new_category.name.trim()
+    ) ? { name: parsed.proposed_new_category.name.trim().slice(0, 60), reason: String(parsed.proposed_new_category.reason || '').trim().slice(0, 300) }
+      : null;
     parsed.summary = typeof parsed.summary === 'string' ? parsed.summary : '';
     parsed.overall_risk = ['high', 'medium', 'low'].includes(parsed.overall_risk)
       ? parsed.overall_risk : 'medium';

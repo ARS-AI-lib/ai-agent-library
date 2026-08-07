@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { useAuth } from './hooks/useAuth';
 import { useApprovedAgents, usePendingAgents, useDeploymentRequests } from './hooks/useAgents';
@@ -10,9 +10,11 @@ import { ALLOWED_DOMAINS_LABEL } from './lib/firebase';
 import { agentStatus } from './lib/status';
 
 import Nav from './components/Nav';
+import Sidebar from './components/Sidebar';
 import StatusLegend from './components/StatusLegend';
 import ControlBar from './components/ControlBar';
 import CardGrid from './components/CardGrid';
+import CategoryApprovalPanel from './components/CategoryApprovalPanel';
 import AgentDetailModal from './components/AgentDetailModal';
 import PreRegModal from './components/PreRegModal';
 import PendingApprovalModal from './components/PendingApprovalModal';
@@ -109,6 +111,17 @@ export default function App() {
     || dashboardViewers.map((e) => (e || '').toLowerCase()).includes((user.email || '').toLowerCase())
   );
 
+  // Pending Category proposals (2026-08) — admin-only badge/panel; the query
+  // itself is fine for isKnownUser() per rules, but there's no reason for a
+  // non-admin client to subscribe to something it can't act on.
+  const [pendingProposalCount, setPendingProposalCount] = useState(0);
+  useEffect(() => {
+    if (!isAdmin) { setPendingProposalCount(0); return; }
+    const q = query(collection(db, 'categoryProposals'), where('status', '==', 'pending'));
+    const unsub = onSnapshot(q, (snap) => setPendingProposalCount(snap.size), () => setPendingProposalCount(0));
+    return unsub;
+  }, [isAdmin]);
+
   const [search, setSearch] = useState('');
   const [view, setView] = useState('by-owner');
   const [owner, setOwner] = useState(new Set());
@@ -119,6 +132,29 @@ export default function App() {
   const [reusable, setReusable] = useState(new Set());
   const [hasEndpoint, setHasEndpoint] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState(new Set());
+  // Left sidebar shortcuts (2026-08) — separate state from the ControlBar
+  // filters above. Only ONE sidebar group may be active at a time (2026-08-07
+  // revision, explicit user request): picking in Category clears Stage and
+  // Platform Tools, and vice versa — AND only ever applies WITHIN a group
+  // (multi-select there stays OR), never ACROSS groups. buildAgentFilter()
+  // itself still ANDs category/stage/platformTools together, so this
+  // exclusivity is enforced here at the setter level, not in the predicate.
+  const [category, setCategory] = useState(new Set());
+  const [stage, setStage] = useState(new Set());
+  const [platformTools, setPlatformTools] = useState(false);
+  function handleSetCategory(next) {
+    setCategory(next);
+    if (next.size > 0) { setStage(new Set()); setPlatformTools(false); }
+  }
+  function handleSetStage(next) {
+    setStage(next);
+    if (next.size > 0) { setCategory(new Set()); setPlatformTools(false); }
+  }
+  function handleSetPlatformTools(next) {
+    setPlatformTools(next);
+    if (next) { setCategory(new Set()); setStage(new Set()); }
+  }
+  const [showCategoryProposals, setShowCategoryProposals] = useState(false);
 
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showPreReg, setShowPreReg] = useState(false);
@@ -167,7 +203,7 @@ export default function App() {
   );
 
   const filtered = useMemo(() => {
-    let pred = buildAgentFilter({ type, owner, role: role_, ability, tier, reusable, hasEndpoint, search });
+    let pred = buildAgentFilter({ type, owner, role: role_, ability, tier, reusable, hasEndpoint, category, stage, platformTools, search });
     let result = agents.filter(pred);
     if (selectedStatus.size > 0) {
       result = result.filter((a) => selectedStatus.has(agentStatus(a)));
@@ -176,7 +212,7 @@ export default function App() {
       result = result.filter((a) => isMyAgent(a, user));
     }
     return result;
-  }, [agents, type, owner, role_, ability, tier, reusable, hasEndpoint, search, selectedStatus, myAI, user]);
+  }, [agents, type, owner, role_, ability, tier, reusable, hasEndpoint, category, stage, platformTools, search, selectedStatus, myAI, user]);
 
   const agentCount = filtered.filter((a) => getType(a) === 'agent').length;
   const skillCount = filtered.filter((a) => getType(a) === 'skill').length;
@@ -230,6 +266,9 @@ export default function App() {
     setReusable(new Set());
     setHasEndpoint(false);
     setSelectedStatus(new Set());
+    setCategory(new Set());
+    setStage(new Set());
+    setPlatformTools(false);
     setSearch('');
   }
 
@@ -298,8 +337,6 @@ export default function App() {
         onSignOut={signOut}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        myAI={myAI}
-        onToggleMyAI={() => setMyAI((v) => !v)}
         onOpenExport={() => setShowExport(true)}
         canSeeTimeline={canSeeTimeline}
         isAdmin={isAdmin}
@@ -324,12 +361,26 @@ export default function App() {
             onClear={clearFilters}
           />
 
-          <div className="main">
-            {agentsLoading ? (
-              <div className="empty-state">Loading…</div>
-            ) : (
-              <CardGrid agents={filtered} allAgents={agents} view={view} onCardClick={setSelectedAgent} />
-            )}
+          <div className="main-row">
+            <Sidebar
+              agents={agents}
+              categoryOptions={schema.category || []}
+              category={category} setCategory={handleSetCategory}
+              stageOptions={schema.sdlcStage || []}
+              stage={stage} setStage={handleSetStage}
+              platformTools={platformTools} setPlatformTools={handleSetPlatformTools}
+              myAI={myAI} onToggleMyAI={() => setMyAI((v) => !v)}
+              isAdmin={isAdmin}
+              pendingProposalCount={pendingProposalCount}
+              onOpenProposals={() => setShowCategoryProposals(true)}
+            />
+            <div className="main">
+              {agentsLoading ? (
+                <div className="empty-state">Loading…</div>
+              ) : (
+                <CardGrid agents={filtered} allAgents={agents} view={view} onCardClick={setSelectedAgent} />
+              )}
+            </div>
           </div>
         </>
       )}
@@ -411,6 +462,10 @@ export default function App() {
           schema={schema}
           currentUid={user?.uid}
         />
+      )}
+
+      {showCategoryProposals && isAdmin && (
+        <CategoryApprovalPanel onClose={() => setShowCategoryProposals(false)} user={user} />
       )}
 
       {showExport && (

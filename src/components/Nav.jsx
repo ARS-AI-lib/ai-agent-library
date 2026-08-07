@@ -6,7 +6,7 @@ export default function Nav({
   agentCount, skillCount,
   user, onSignOut,
   activeTab, setActiveTab,
-  myAI, onToggleMyAI, onOpenExport, canSeeTimeline, canSeeDashboard, isAdmin,
+  onOpenExport, canSeeTimeline, canSeeDashboard, isAdmin,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -115,18 +115,6 @@ export default function Nav({
                 boxShadow: 'var(--shm)', minWidth: 170, overflow: 'hidden',
               }}
             >
-              <button
-                type="button"
-                onClick={() => { onToggleMyAI?.(); setMenuOpen(false); }}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-                  padding: '9px 12px', fontSize: 12.5, fontWeight: myAI ? 700 : 500,
-                  color: myAI ? 'var(--ag)' : 'var(--tx)', background: myAI ? 'var(--sf2)' : 'none',
-                  border: 'none', borderBottom: '1px solid var(--bd-soft)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                }}
-              >
-                My AI {myAI && <span style={{ fontSize: 10 }}>✓ on</span>}
-              </button>
               <button
                 type="button"
                 onClick={() => { onOpenExport?.(); setMenuOpen(false); }}

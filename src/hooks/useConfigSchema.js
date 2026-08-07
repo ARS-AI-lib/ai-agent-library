@@ -16,6 +16,7 @@ import { db } from '../lib/firebase';
  *   coreAbility: string[],
  *   reusable: string[],
  *   relatedRole: string[],
+ *   category: string[],   // 2026-08: left-sidebar shortcuts — see agent-skill-structured-horizon plan
  * }
  */
 export function useConfigSchema() {
@@ -26,6 +27,7 @@ export function useConfigSchema() {
     coreAbility: [],
     reusable: [],
     relatedRole: [],
+    category: [],
   });
   const [loading, setLoading] = useState(true);
 

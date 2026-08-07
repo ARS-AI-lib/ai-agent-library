@@ -375,3 +375,54 @@ select.dd:focus { border-color: var(--accent); }
 .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
 .btn-icon-badge { position: absolute; top: -5px; right: -5px; background: var(--uc); color: #fff; border-radius: 9px; font-size: 9.5px; font-weight: 700; padding: 0 4px; min-width: 16px; height: 16px; line-height: 16px; text-align: center; border: 1.5px solid var(--sf); }
 
+/* ── Left sidebar shortcuts (2026-08 — Category/SDLC Stage/Platform Tools) ──
+   Only wraps .main (the card grid), not the StatusLegend/ControlBar above —
+   .main keeps its own padding untouched; this just adds a flex row around it
+   plus the fixed-width rail. */
+.main-row { display: flex; align-items: flex-start; }
+.main-row .main { flex: 1; min-width: 0; }
+
+.sidebar {
+  width: 208px; flex-shrink: 0; padding: 20px 12px 48px 20px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+.sidebar-myai {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 8px 10px; border: 1.5px solid var(--bd2); border-radius: var(--r-sm);
+  background: var(--sf); color: var(--tx2); font-family: inherit; font-size: 12.5px;
+  font-weight: 600; cursor: pointer; transition: border-color .15s, color .15s, background .15s;
+}
+.sidebar-myai:hover { border-color: var(--accent); color: var(--accent); }
+.sidebar-myai.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.sidebar-on { margin-left: auto; font-size: 10px; }
+
+.sidebar-group { display: flex; flex-direction: column; gap: 2px; }
+.sidebar-h { font-size: 9.5px; font-weight: 700; color: var(--mu); letter-spacing: .06em; text-transform: uppercase; padding: 0 4px 6px; }
+.sidebar-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding: 6px 8px; border: none; border-radius: var(--r-sm);
+  background: none; color: var(--tx2); font-family: inherit; font-size: 12px;
+  text-align: left; cursor: pointer; transition: background .15s, color .15s;
+}
+.sidebar-item span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-item:hover { background: var(--sf2); }
+.sidebar-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.sidebar-count { font-size: 10.5px; color: var(--mu); flex-shrink: 0; }
+.sidebar-item.active .sidebar-count { color: var(--accent); }
+.sidebar-empty { padding: 6px 8px; font-size: 11px; color: var(--mu2); }
+
+.sidebar-admin {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 7px 8px; border: 1.5px dashed var(--bd2); border-radius: var(--r-sm);
+  background: none; color: var(--mu); font-family: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer; margin-top: auto;
+}
+.sidebar-admin:hover { border-color: var(--accent); color: var(--accent); }
+.sidebar-badge { background: var(--uc); color: #fff; border-radius: 9px; font-size: 9.5px; font-weight: 700; padding: 0 5px; min-width: 15px; height: 15px; line-height: 15px; text-align: center; }
+
+/* ── Category Proposals admin panel (2026-08) ── */
+.catprop-row { padding: 10px 12px; border: 1px solid var(--bd-soft); border-radius: var(--r-md); background: var(--sf2); margin-bottom: 8px; }
+.catprop-name { font-size: 13.5px; font-weight: 700; color: var(--tx); }
+.catprop-meta { font-size: 11.5px; color: var(--tx2); margin-top: 2px; }
+.catprop-reason { font-size: 11.5px; color: var(--mu); margin-top: 4px; }
+

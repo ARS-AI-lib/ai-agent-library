@@ -1,20 +1,35 @@
 // ── Tier Classification ──────────────────────────────────────────
 // Computed client-side, NEVER stored in Firestore.
-// Locked logic (confirmed in project memory):
 //
 //   isSkill = (aiAgent === false && skillMd === true)
 //
-//   Internal/External priority:
+//   Internal/External priority (revised 2026-08-07 — see below):
 //     1) customerFacing === true → External
 //     2) internalUse === true    → Internal
-//     3) both false/empty: sdlcStage has a value → Internal, else → External
+//     3) neither set             → Internal (default)
 //
 //   Tier mapping:
 //     Skill + Internal = T1
 //     Agent + Internal = T2
 //     Skill + External = T3
 //     Agent + External = T4
-
+//
+// 2026-08-07 fix: step 3 used to guess External when an agent had no
+// sdlcStage, on the theory "no dev-process tracking → not an internal
+// workflow tool". Checked against the real 242-item library: 24 agents hit
+// that branch, and every one of them was an incomplete/placeholder entry
+// (owner Tech Innovation/นกลงทุน/นกรู้, description "TBC", several literal
+// internal orchestrator prompt fragments like 3.safety.md, 5.query-planner.md)
+// — none were actually customer-facing. Guessing External for missing data is
+// also backwards from a governance standpoint (T3/T4 imply the STRONGER
+// governance requirements per the tier design — Red Team/CAB/PVT for T4 — so
+// under-classifying as External is the wrong direction to default toward).
+// New default: Internal. Every NEW submission already sets customerFacing/
+// internalUse explicitly via the required Scope radio in PreRegModal, so this
+// branch only ever fires for legacy/incomplete data — see
+// functions/backfill-scope.cjs, which uses the agent's actual description/
+// output (when there's real content to read) to properly set these two flags
+// instead of leaving them to this default indefinitely.
 export function isSkill(agent) {
   return agent?.aiAgent === false && agent?.skillMd === true;
 }
@@ -22,10 +37,7 @@ export function isSkill(agent) {
 export function isInternalOrExternal(agent) {
   if (agent?.customerFacing === true) return 'External';
   if (agent?.internalUse === true) return 'Internal';
-  const hasStage =
-    agent?.sdlcStage &&
-    (Array.isArray(agent.sdlcStage) ? agent.sdlcStage.length > 0 : String(agent.sdlcStage).trim() !== '');
-  return hasStage ? 'Internal' : 'External';
+  return 'Internal';
 }
 
 export function getTier(agent) {
@@ -43,7 +55,7 @@ export function getTier(agent) {
 export const TIER_DEF = {
   T1: { label: 'T1 · Alpha Skill', color: '#0b7a68', bg: '#0b7a6815', bd: '#0b7a6840' },
   T2: { label: 'T2 · Incubate Agent', color: '#2f6bff', bg: '#2f6bff15', bd: '#2f6bff40' },
-  T3: { label: 'T3 · Certified Skill', color: '#6d28d9', bg: '#6d28d915', bd: '#6d28d940' },
+  T3: { label: 'T3 · Public Skill', color: '#6d28d9', bg: '#6d28d915', bd: '#6d28d940' },
   T4: { label: 'T4 · Enterprise Agent', color: '#b45309', bg: '#b4530915', bd: '#b4530940' },
 };
 
