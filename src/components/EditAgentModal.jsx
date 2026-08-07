@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { doc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill } from '../lib/tier';
-import { developmentPhaseLabel } from '../lib/status';
-import { splitRoles, normalizeProgress, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
+import { splitRoles, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import MultiSelect from './MultiSelect';
@@ -84,7 +83,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     humanJob: agent.humanJob || '',
     endpoint: agent.endpoint || '',
     launchDate: toDateInputValue(agent.launchDate),
-    devProgress: normalizeProgress(agent?.devProgress),
     compatibleAgents: Array.isArray(agent.compatibleAgents) ? agent.compatibleAgents : [],
     sdlcStage: new Set(Array.isArray(agent.sdlcStage) ? agent.sdlcStage : [agent.sdlcStage].filter(Boolean)),
     sdlcProcessMapping: new Set(Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping : [agent.sdlcProcessMapping].filter(Boolean)),
@@ -207,7 +205,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     setError('');
     try {
       const isExternal = form.scope === 'External';
-      const clampedProgress = Math.max(0, Math.min(100, Math.round(Number(form.devProgress) || 0)));
 
       // Write 1 — Tier A (+ sensitive) fields. Skipped entirely for a user who
       // can only edit SDLC, so its affectedKeys never leaks into the SDLC rule
@@ -238,12 +235,15 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
             ],
             creator: form.creatorPicks.map((p) => (p.name || p.email)).filter(Boolean).join(', '),
           } : {}),
-          // Sensitive: launch/progress — locked for a paired sub-skill (cascades
-          // from parent) or when the user lacks sensitive rights.
+          // Sensitive: launch date only — locked for a paired sub-skill
+          // (cascades from parent) or when the user lacks sensitive rights.
+          // devProgress/developmentPhase are deliberately NOT written here
+          // (2026-08-06): progress belongs to the dedicated update flow that
+          // enforces the 95% ceiling and the deploy-approval gate. Sending it
+          // from this form could only ever match the rules by accident, and
+          // when it didn't the user got an unattributable permission error.
           ...(lockSensitive ? {} : {
             launchDate: form.launchDate ? new Date(form.launchDate) : null,
-            devProgress: clampedProgress,
-            developmentPhase: developmentPhaseLabel(clampedProgress),
           }),
           updatedAt: serverTimestamp(),
         });
@@ -483,15 +483,19 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
             Progress และ Launch Date แก้ไขได้เฉพาะ admin, owner และ creator
           </div>
         ) : (
-          <div className="grid2">
-            <div className="fg">
-              <label>Dev Progress (%)</label>
-              <input type="number" min={0} max={100} value={form.devProgress} onChange={(e) => setField('devProgress', e.target.value)} />
-            </div>
-            <div className="fg">
-              <label>Launch Date</label>
-              <input type="date" value={form.launchDate} onChange={(e) => setField('launchDate', e.target.value)} />
-            </div>
+          // Dev Progress is deliberately NOT editable here (2026-08-06).
+          // Progress has its own dedicated update flow in AgentDetailModal,
+          // which enforces the 95% ceiling and routes anything past it through
+          // the deploy-approval request. Offering a free-text % box here let a
+          // creator type 100 and hit a raw "Missing or insufficient
+          // permissions" from firestore.rules — technically correct (the rule
+          // caps devProgress at 95 until deployment is approved) but with no
+          // way for the user to tell which field caused it. Removing the input
+          // removes the trap; the write below no longer sends devProgress or
+          // developmentPhase at all.
+          <div className="fg">
+            <label>Launch Date</label>
+            <input type="date" value={form.launchDate} onChange={(e) => setField('launchDate', e.target.value)} />
           </div>
         )}
         </>
