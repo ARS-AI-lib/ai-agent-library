@@ -293,9 +293,15 @@ export function relationshipLabel(agent, allAgents) {
  * Builds the predicate used by both the card grid and the counters —
  * mirrors `tOk()` from the original dashboard.
  */
-export function buildAgentFilter({ type, owner, role, ability, tier, reusable, search }) {
+export function buildAgentFilter({ type, owner, role, ability, tier, reusable, hasEndpoint, search }) {
   return (agent) => {
     if (type !== 'all' && getType(agent) !== type) return false;
+    // "Has a usable link" toggle. Uses safeEndpointUrl rather than a bare
+    // truthiness check so the filter agrees with what the UI actually renders —
+    // an entry whose endpoint is present but unusable (a javascript:/data: URL
+    // that safeEndpointUrl rejects, or whitespace) shows no link on the card,
+    // so it must not pass a filter that promises one.
+    if (hasEndpoint && !safeEndpointUrl(agent.endpoint)) return false;
     if (tier && tier.size > 0 && !tier.has(getTier(agent))) return false;
     if (owner && owner.size > 0 && !owner.has(agent.owner || '')) return false;
     if (role && role.size > 0) {

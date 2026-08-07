@@ -117,6 +117,7 @@ export default function App() {
   const [tier, setTier] = useState(new Set());
   const [type, setType] = useState('all');
   const [reusable, setReusable] = useState(new Set());
+  const [hasEndpoint, setHasEndpoint] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState(new Set());
 
   const [selectedAgent, setSelectedAgent] = useState(null);
@@ -166,7 +167,7 @@ export default function App() {
   );
 
   const filtered = useMemo(() => {
-    let pred = buildAgentFilter({ type, owner, role: role_, ability, tier, reusable, search });
+    let pred = buildAgentFilter({ type, owner, role: role_, ability, tier, reusable, hasEndpoint, search });
     let result = agents.filter(pred);
     if (selectedStatus.size > 0) {
       result = result.filter((a) => selectedStatus.has(agentStatus(a)));
@@ -175,7 +176,7 @@ export default function App() {
       result = result.filter((a) => isMyAgent(a, user));
     }
     return result;
-  }, [agents, type, owner, role_, ability, tier, reusable, search, selectedStatus, myAI, user]);
+  }, [agents, type, owner, role_, ability, tier, reusable, hasEndpoint, search, selectedStatus, myAI, user]);
 
   const agentCount = filtered.filter((a) => getType(a) === 'agent').length;
   const skillCount = filtered.filter((a) => getType(a) === 'skill').length;
@@ -227,6 +228,7 @@ export default function App() {
     setTier(new Set());
     setType('all');
     setReusable(new Set());
+    setHasEndpoint(false);
     setSelectedStatus(new Set());
     setSearch('');
   }
@@ -318,6 +320,7 @@ export default function App() {
             tier={tier} setTier={setTier}
             type={type} setType={setType}
             reusableOptions={reusableOptions} reusable={reusable} setReusable={setReusable}
+            hasEndpoint={hasEndpoint} setHasEndpoint={setHasEndpoint}
             onClear={clearFilters}
           />
 

@@ -87,6 +87,12 @@ select.dd:focus { border-color: var(--accent); }
 .csep { width: 1px; height: 13px; background: var(--bd); }
 .btnclr { width: 22px; height: 22px; border-radius: 5px; border: 1px solid #fca5a5; background: #fff5f5; color: #b91c1c; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; }
 .btnclr:hover { background: #b91c1c; color: #fff; }
+/* Icon toggle in the control bar (endpoint filter). Height matches .ms-btn so
+   it lines up with the dropdowns beside it; the active state reuses --accent,
+   the same colour the endpoint link itself uses on cards and in chat. */
+.cb-toggle { height: 26px; width: 28px; border-radius: 6px; border: 1.5px solid var(--bd2); background: var(--sf2); color: var(--mu); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+.cb-toggle:hover { color: var(--tx2); border-color: var(--mu2); }
+.cb-toggle.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 
 .ms-wrap { position: relative; display: inline-block; }
 .ms-btn { height: 26px; line-height: 24px; padding: 0 20px 0 7px; border-radius: 6px; border: 1.5px solid var(--bd2); background: var(--sf2); font-family: inherit; font-size: 10.5px; color: var(--tx2); cursor: pointer; outline: none; min-width: 88px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 132px; }
