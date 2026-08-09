@@ -13,37 +13,36 @@ export default function StatusLegend({ agents, actions, onStatusClick, selectedS
   return (
     <div className="legend">
       <div className="legend-items">
-        {ST_ORDER.map((s, i) => {
+        {ST_ORDER.map((s) => {
           const d = ST_DEF[s];
           const on = selected.has(s);
+          // The dot keeps ST_DEF's saturated `dot` hex (identical in both
+          // themes — that mapping is what the legend exists to teach); the
+          // label/count use the theme-aware `color` token.
           const inner = (
             <>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: d.dot, display: 'inline-block' }} />
+              <span className="lg-dot" style={{ background: d.dot }} />
               <span style={{ color: d.color, fontWeight: 600 }}>{d.lb}</span>
-              <span style={{ fontWeight: 700, color: d.color }}>{counts[s]}</span>
+              <span className="lg-n" style={{ color: d.color }}>{counts[s]}</span>
             </>
           );
+          if (!clickable) return <span key={s} className="lg-item">{inner}</span>;
           return (
-            <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              {clickable ? (
-                <button
-                  type="button"
-                  className={`lg lg-btn ${on ? 'on' : ''}`}
-                  style={on ? { color: d.color } : undefined}
-                  onClick={() => {
-                    const next = new Set(selected);
-                    if (on) next.delete(s); else next.add(s);
-                    onStatusClick(next);
-                  }}
-                  title={on ? 'คลิกเพื่อยกเลิกตัวกรองนี้' : `เพิ่มตัวกรอง ${d.lb}`}
-                >
-                  {inner}
-                </button>
-              ) : (
-                <span className="lg">{inner}</span>
-              )}
-              {i < ST_ORDER.length - 1 && <span className="lsep" />}
-            </span>
+            <button
+              key={s}
+              type="button"
+              className={`lg-item ${on ? 'on' : ''}`}
+              style={on ? { color: d.color } : undefined}
+              aria-pressed={on}
+              onClick={() => {
+                const next = new Set(selected);
+                if (on) next.delete(s); else next.add(s);
+                onStatusClick(next);
+              }}
+              title={on ? 'คลิกเพื่อยกเลิกตัวกรองนี้' : `เพิ่มตัวกรอง ${d.lb}`}
+            >
+              {inner}
+            </button>
           );
         })}
       </div>

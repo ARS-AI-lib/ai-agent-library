@@ -1,11 +1,11 @@
 /* Chat Assistant — floating icon + panel (2026-07-02). Scoped with .chat- */
 .chat-fab {
   position: fixed; right: 22px; bottom: 22px; z-index: 1200;
-  height: 38px; border-radius: 19px; padding: 0 13px 0 5px;
+  height: 38px; border-radius: 19px; padding: 0 16px;
   background: var(--accent); color: #fff; border: none;
   font-size: 18px; cursor: pointer; box-shadow: var(--shm);
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  transition: transform .15s, background .15s;
+  transition: transform .15s, background .15s, padding .15s, width .15s;
 }
 .chat-fab:hover { transform: scale(1.04); background: var(--accent-hover); }
 .chat-fab.chat-fab-closed { width: 38px; padding: 0; border-radius: 50%; }
@@ -27,7 +27,7 @@
 
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px; background: var(--sf2); border-bottom: 1px solid var(--bd);
+  padding: 10px 12px; border-bottom: 1px solid var(--bd-soft);
   font-size: 13px; font-weight: 700; color: var(--tx);
 }
 .chat-header span { display: flex; align-items: center; gap: 7px; }
@@ -44,11 +44,11 @@
 .chat-msg.assistant { justify-content: flex-start; }
 
 .chat-bubble {
-  max-width: 84%; padding: 8px 11px; border-radius: 10px; font-size: 12.5px; line-height: 1.5;
+  max-width: 84%; padding: 8px 11px; border-radius: 12px; font-size: 12.5px; line-height: 1.5;
   white-space: pre-wrap; word-break: break-word;
 }
-.chat-msg.user .chat-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 2px; }
-.chat-msg.assistant .chat-bubble { background: var(--sf2); color: var(--tx); border: 1px solid var(--bd); border-bottom-left-radius: 2px; }
+.chat-msg.user .chat-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
+.chat-msg.assistant .chat-bubble { background: var(--sf2); color: var(--tx); border-bottom-left-radius: 3px; }
 
 .chat-csv-btn { margin-top: 6px; font-size: 10.5px; padding: 3px 8px; }
 
@@ -109,13 +109,18 @@
 .chat-dot:nth-child(3) { animation-delay: .3s; }
 @keyframes chat-bounce { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
 
-.chat-input-row { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--bd); background: var(--sf); }
+.chat-input-row { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--bd-soft); background: var(--sf); }
 .chat-input {
-  flex: 1; border: 1.5px solid var(--bd); border-radius: 8px; padding: 7px 10px;
+  flex: 1; border: 1px solid var(--bd-soft); border-radius: 99px; padding: 7px 12px;
   font-size: 12.5px; font-family: inherit; background: var(--sf2); color: var(--tx); outline: none;
 }
-.chat-input:focus { border-color: var(--accent); }
-.chat-send-btn { font-size: 12px; padding: 7px 14px; }
+.chat-input:focus { border-color: var(--accent); background: var(--sf); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Bare circular icon button (mockup .chat-send) — was a labelled pill sharing
+   .btn-success, the one send control in the app that wasn't icon-only like
+   every other compact action (.mi-btn, the nav hamburger, etc). */
+.chat-send { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .15s; }
+.chat-send:hover { background: var(--accent-hover); }
+.chat-send:disabled { opacity: .5; cursor: not-allowed; }
 
 @media (max-width: 480px) {
   .chat-panel { right: 12px; left: 12px; width: auto; bottom: 78px; }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { rebuildAllVectors } from '../lib/reindex';
+import ThemeToggle from './ThemeToggle';
 
 export default function Nav({
   search, setSearch,
@@ -75,7 +76,9 @@ export default function Nav({
 
         {user && (
           <div className="nav-user">
-            {user.photoURL && <img src={user.photoURL} alt="" />}
+            {user.photoURL
+                ? <img src={user.photoURL} alt="" />
+                : <span className="nav-user-fallback">{(user.displayName || user.email || '?').trim().charAt(0).toUpperCase()}</span>}
             <div className="nav-user-name">
               {(() => {
                 const full = (user.displayName || user.email || '').trim();
@@ -94,34 +97,27 @@ export default function Nav({
 
         <div ref={menuRef} style={{ position: 'relative' }}>
           <button
-            title="Menu" onClick={() => setMenuOpen((o) => !o)}
-            style={{
-              width: 32, height: 32, border: 'none', background: 'none', color: 'var(--mu)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: 'var(--r-sm)', transition: 'color .15s, background .15s', flexShrink: 0,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--tx)'; e.currentTarget.style.background = 'var(--sf2)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--mu)'; e.currentTarget.style.background = 'none'; }}
+            className="icon-btn"
+            title="Menu"
+            aria-label="Menu"
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
             </svg>
           </button>
           {menuOpen && (
-            <div
-              style={{
-                position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 20,
-                background: 'var(--sf)', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)',
-                boxShadow: 'var(--shm)', minWidth: 170, overflow: 'hidden',
-              }}
-            >
+            <div className="menu">
+              {/* Dark mode lives in the ☰ menu rather than as its own nav
+                  button — it is a set-once preference, not something worth a
+                  permanent slot in a row that already holds counts, avatar and
+                  menu. */}
+              <ThemeToggle />
               <button
                 type="button"
                 onClick={() => { onOpenExport?.(); setMenuOpen(false); }}
-                style={{
-                  display: 'block', width: '100%', padding: '9px 12px', fontSize: 12.5, fontWeight: 500,
-                  color: 'var(--tx)', background: 'none', border: 'none', borderBottom: '1px solid var(--bd-soft)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                }}
               >
                 Export Data
               </button>
@@ -146,12 +142,6 @@ export default function Nav({
                       setMenuOpen(false);
                     }
                   }}
-                  style={{
-                    display: 'block', width: '100%', padding: '9px 12px', fontSize: 12.5, fontWeight: 500,
-                    color: 'var(--tx)', background: 'none', border: 'none', borderBottom: '1px solid var(--bd-soft)',
-                    cursor: reindexing ? 'wait' : 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                    opacity: reindexing ? 0.6 : 1,
-                  }}
                 >
                   {reindexing ? 'Rebuilding…' : 'Rebuild Search Index'}
                 </button>
@@ -160,21 +150,14 @@ export default function Nav({
                 <button
                   type="button"
                   onClick={() => { window.location.href = '/timeline'; setMenuOpen(false); }}
-                  style={{
-                    display: 'block', width: '100%', padding: '9px 12px', fontSize: 12.5, fontWeight: 500,
-                    color: 'var(--tx)', background: 'none', border: 'none', borderBottom: '1px solid var(--bd-soft)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                  }}
                 >
                   SDLC Timeline
                 </button>
               )}
               <button
                 type="button"
+                className="danger"
                 onClick={() => { setMenuOpen(false); onSignOut?.(); }}
-                style={{
-                  display: 'block', width: '100%', padding: '9px 12px', fontSize: 12.5, fontWeight: 500,
-                  color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                }}
               >
                 Sign out
               </button>

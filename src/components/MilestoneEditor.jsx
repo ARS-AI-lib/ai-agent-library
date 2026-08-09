@@ -69,8 +69,15 @@ export default function MilestoneEditor({ milestones, defaultColors, onSave, onC
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
       <div className="mbox wide">
         <button className="mclose" onClick={onClose}>✕</button>
-        <div className="mtitle">Manage Milestones</div>
-        <div className="msub">เพิ่ม / แก้ไข / ลบ ช่วง milestone ในไทม์ไลน์</div>
+        <div className="m-head">
+          <div className="m-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+          </div>
+          <div>
+            <h2 className="mtitle">Manage Milestones</h2>
+            <p>เพิ่ม / แก้ไข / ลบ ช่วง milestone ในไทม์ไลน์</p>
+          </div>
+        </div>
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
 
@@ -94,7 +101,7 @@ export default function MilestoneEditor({ milestones, defaultColors, onSave, onC
                 <div style={LB}>สี</div>
                 <input type="color" value={r.color} onChange={(e) => setRow(r.id, { color: e.target.value })} style={{ ...CTRL, padding: 0, height: 30, cursor: 'pointer' }} />
               </div>
-              <button onClick={() => removeRow(r.id)} title="ลบ" style={{ height: 30, border: 'none', background: 'none', color: '#dc2626', fontSize: 16, cursor: 'pointer' }}>✕</button>
+              <button className="mi-btn" onClick={() => removeRow(r.id)} title="ลบ" style={{ width: 30, height: 30, color: 'var(--clr-fg)' }}>✕</button>
             </div>
           ))}
         </div>
@@ -112,4 +119,7 @@ export default function MilestoneEditor({ milestones, defaultColors, onSave, onC
 }
 
 const LB = { fontSize: 10, fontWeight: 700, color: 'var(--mu)', marginBottom: 3, letterSpacing: '.03em' };
-const CTRL = { width: '100%', height: 30, padding: '0 8px', border: '1.5px solid var(--bd2)', borderRadius: 8, fontSize: 12, background: 'var(--sf)', color: 'var(--tx)', fontFamily: 'inherit', outline: 'none' };
+// Same box as .fg input (theme.css) — was its own private 1.5px/8px-radius
+// pair, one of a handful of controls the redesign's border/radius unification
+// pass missed because nothing had a reason to open this file yet.
+const CTRL = { width: '100%', height: 30, padding: '0 8px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-sm)', fontSize: 12, background: 'var(--sf)', color: 'var(--tx)', fontFamily: 'inherit', outline: 'none' };

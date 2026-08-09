@@ -248,7 +248,14 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
       <div className="mbox wide">
         <button className="mclose" onClick={onClose}>✕</button>
-        <div className="mtitle">Pending Approval</div>
+        <div className="m-head">
+          <div className="m-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </div>
+          <div>
+            <h2 className="mtitle">Pending Approval</h2>
+          </div>
+        </div>
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
 
@@ -310,7 +317,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
               <div className="queue-actions">
                 {canReject(agent) && (
                   <button
-                    className="btn btn-danger"
+                    className="btn-sm rej"
                     disabled={busyId === agent.id}
                     onClick={() => (canApprove(agent) ? setRejectModal({ agent, reason: '' }) : handleReject(agent))}
                   >
@@ -318,7 +325,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                   </button>
                 )}
                 {canApprove(agent) && (
-                  <button className="btn btn-success" disabled={busyId === agent.id} onClick={() => handleApprove(agent)}>
+                  <button className="btn-sm appr" disabled={busyId === agent.id} onClick={() => handleApprove(agent)}>
                     Approve
                   </button>
                 )}
@@ -364,10 +371,10 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                 <div className="queue-actions">
                   {(fullAccess || (mine.size > 0 && agentApproveAreas(agent).some((area) => mine.has(area)))) && (
                     <>
-                      <button className="btn btn-danger" disabled={busyId === agent.id} onClick={() => handleRejectDeploy(agent)}>
+                      <button className="btn-sm rej" disabled={busyId === agent.id} onClick={() => handleRejectDeploy(agent)}>
                         Reject
                       </button>
-                      <button className="btn btn-success" disabled={busyId === agent.id} onClick={() => handleApproveDeploy(agent)}>
+                      <button className="btn-sm appr" disabled={busyId === agent.id} onClick={() => handleApproveDeploy(agent)}>
                         Approve
                       </button>
                     </>
@@ -391,7 +398,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                     {agent.rejectedAt && <>{' · '}{fmtDate(agent.rejectedAt)}</>}
                   </div>
                   <div
-                    style={{ fontSize: 11.5, color: '#c5221f', marginTop: 5, maxWidth: 520, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '6px 10px' }}
+                    style={{ fontSize: 11.5, color: 'var(--gap-fg)', marginTop: 5, maxWidth: 520, background: 'var(--gap-bg)', border: '1px solid var(--gap-bd)', borderRadius: 6, padding: '6px 10px' }}
                   >
                     <strong>เหตุผล:</strong> {agent.rejectionReason}
                   </div>
@@ -416,10 +423,11 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
               placeholder="ระบุเหตุผลให้ creator ทราบ เช่น ทับซ้อนกับ Agent เดิม / ขอบเขตยังไม่ชัด…"
               style={{ width: '100%', resize: 'vertical' }}
             />
-            <div className="btn-group" style={{ marginTop: 12 }}>
-              <button className="btn btn-secondary" disabled={busyId === rejectModal.agent.id} onClick={() => setRejectModal(null)}>Cancel</button>
+            <div className="btn-row" style={{ marginTop: 12 }}>
+              <button className="btn-sm rej" disabled={busyId === rejectModal.agent.id} onClick={() => setRejectModal(null)}>Cancel</button>
               <button
-                className="btn btn-danger"
+                className="btn-sm appr"
+                style={{ background: 'var(--clr-fg)', borderColor: 'var(--clr-fg)' }}
                 disabled={busyId === rejectModal.agent.id || !rejectModal.reason.trim()}
                 onClick={() => handleReject(rejectModal.agent, rejectModal.reason)}
               >

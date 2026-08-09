@@ -7,8 +7,11 @@ function msLabel(set, placeholder) {
 }
 
 /**
- * Multi-select dropdown — ported from the original .ms-wrap/.ms-btn/.ms-list
- * pattern in Agent-lib.html (checkbox list under a button).
+ * Multi-select dropdown — .ms-wrap/.ms-btn trigger over the SHARED .dd-panel
+ * (2026-08-08). It used to own a private .ms-list/.ms-item panel that was a
+ * near-copy of the single-select one; both now render the same rows, so the
+ * two controls can no longer drift apart visually. The only difference left
+ * is the leading glyph: a checkbox here, a check mark in Dropdown.jsx.
  */
 export default function MultiSelect({ label, options, selected, onChange }) {
   const [open, setOpen] = useState(false);
@@ -38,19 +41,23 @@ export default function MultiSelect({ label, options, selected, onChange }) {
       >
         {msLabel(selected, label)}
       </button>
-      <div className={`ms-list ${open ? 'open' : ''}`}>
-        {options.map((opt) => (
-          <label key={opt} className={`ms-item ${selected.has(opt) ? 'checked' : ''}`}>
-            <input type="checkbox" checked={selected.has(opt)} onChange={() => toggleValue(opt)} />
-            {opt}
-          </label>
-        ))}
-        {options.length === 0 && (
-          <div className="ms-item" style={{ color: 'var(--mu2)', cursor: 'default' }}>
-            (no options)
-          </div>
-        )}
-      </div>
+      {open && (
+        <div className="dd-panel" role="listbox" aria-multiselectable="true" aria-label={label}>
+          {options.map((opt) => (
+            <div
+              key={opt}
+              role="option"
+              aria-selected={selected.has(opt)}
+              className={`dd-opt ${selected.has(opt) ? 'sel' : ''}`}
+              onClick={() => toggleValue(opt)}
+            >
+              <span className="dd-check">✓</span>
+              {opt}
+            </div>
+          ))}
+          {options.length === 0 && <div className="dd-empty">(no options)</div>}
+        </div>
+      )}
     </div>
   );
 }

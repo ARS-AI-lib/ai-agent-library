@@ -17,12 +17,17 @@ import { normalizeProgress, agentUseCaseNames } from './agentUtils';
 // recolored from olive to the old To-Do blue to stay consistent with the
 // library legend's same-day recolor; On track recolored from blue to the old
 // olive Pilot green so it no longer clashes with Pilot's new blue.
+// bg/bd/tx are CSS var() tokens (theme.css, TL_ST family) — 2026-08-08, same
+// dark-mode pattern as ST_DEF/TIER_DEF. These are also read directly by
+// <canvas> drawing code in TimelinePage.jsx, which can't resolve var() itself
+// — drawTimeline() resolves the SAME token names via getComputedStyle() at
+// draw time instead, so the two never drift apart into two palettes.
 export const TL_ST = {
-  done:     { bg: '#dcfce7', bd: '#16a34a', tx: '#14532d', ic: '✓', lb: 'Done' },
-  pilot:    { bg: '#edf2f9', bd: '#4a6fa5', tx: '#3d5a8e', ic: '◆', lb: 'Pilot' },
-  ontime:   { bg: '#f4f6e5', bd: '#8ea82a', tx: '#5a6b1c', ic: '●', lb: 'On track' },
-  risk:     { bg: '#fef3c7', bd: '#d97706', tx: '#78350f', ic: '!', lb: 'At risk' },
-  delay:    { bg: '#fee2e2', bd: '#dc2626', tx: '#7f1d1d', ic: '✕', lb: 'Delayed' },
+  done:     { bg: 'var(--tl-done-bg)', bd: 'var(--tl-done-bd)', tx: 'var(--tl-done-fg)', ic: '✓', lb: 'Done' },
+  pilot:    { bg: 'var(--tl-pilot-bg)', bd: 'var(--tl-pilot-bd)', tx: 'var(--tl-pilot-fg)', ic: '◆', lb: 'Pilot' },
+  ontime:   { bg: 'var(--tl-ontime-bg)', bd: 'var(--tl-ontime-bd)', tx: 'var(--tl-ontime-fg)', ic: '●', lb: 'On track' },
+  risk:     { bg: 'var(--tl-risk-bg)', bd: 'var(--tl-risk-bd)', tx: 'var(--tl-risk-fg)', ic: '!', lb: 'At risk' },
+  delay:    { bg: 'var(--tl-delay-bg)', bd: 'var(--tl-delay-bd)', tx: 'var(--tl-delay-fg)', ic: '✕', lb: 'Delayed' },
 };
 
 const DAY = 864e5;

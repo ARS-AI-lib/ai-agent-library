@@ -704,14 +704,15 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
 
   return (
     <>
+      {/* Wolfy logo only appears once the panel is actually open (collapsed
+          to a circle) — the closed pill is text-only now, per explicit
+          request to keep the logo as a "chat is open" signal rather than
+          branding on the always-visible entry point. */}
       <button className={`chat-fab ${open ? 'chat-fab-closed' : ''}`} onClick={() => setOpen((v) => !v)} title="AI Agent Library Chat Assistant">
         {open ? (
           <img src="/wolfy-chat.png" alt="" className="chat-fab-logo" />
         ) : (
-          <>
-            <img src="/wolfy-chat.png" alt="" className="chat-fab-logo" />
-            <span className="chat-fab-label">Ask ALPHA</span>
-          </>
+          <span className="chat-fab-label">Ask ALPHA</span>
         )}
       </button>
 
@@ -780,8 +781,8 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               disabled={thinking}
             />
-            <button className="btn btn-success chat-send-btn" onClick={handleSend} disabled={thinking || !input.trim()}>
-              ส่ง
+            <button className="chat-send" onClick={handleSend} disabled={thinking || !input.trim()} title="ส่ง" aria-label="ส่ง">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
             </button>
           </div>
         </div>

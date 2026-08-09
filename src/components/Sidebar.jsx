@@ -1,4 +1,4 @@
-import { agentCategories, agentStages } from '../lib/agentUtils';
+import { agentCategories, agentStages, categoryColor } from '../lib/agentUtils';
 
 // Left-hand shortcut menu (2026-08) — a faster path into the 242-item
 // library alongside (not instead of) the horizontal filter bar in ControlBar.
@@ -61,7 +61,8 @@ export default function Sidebar({
               className={`sidebar-item ${category.has(c) ? 'active' : ''}`}
               onClick={() => setCategory(toggle(category, c))}
             >
-              <span>{c}</span>
+              <span className="sb-dot" style={{ background: categoryColor(c) }} />
+              <span className="sb-label">{c}</span>
               <span className="sidebar-count">{n}</span>
             </button>
           );
@@ -82,7 +83,8 @@ export default function Sidebar({
               className={`sidebar-item ${stage.has(s) ? 'active' : ''}`}
               onClick={() => setStage(toggle(stage, s))}
             >
-              <span>{s}</span>
+              <span className="sb-dot" style={{ background: categoryColor(s) }} />
+              <span className="sb-label">{s}</span>
               <span className="sidebar-count">{n}</span>
             </button>
           );
@@ -96,7 +98,8 @@ export default function Sidebar({
           className={`sidebar-item ${platformTools ? 'active' : ''}`}
           onClick={() => setPlatformTools(!platformTools)}
         >
-          <span>Platform Tools</span>
+          <span className="sb-dot" style={{ background: 'var(--mu2)' }} />
+          <span className="sb-label">Platform Tools</span>
           <span className="sidebar-count">{countFor(agents, (a) => a.internalTool === true)}</span>
         </button>
       </div>

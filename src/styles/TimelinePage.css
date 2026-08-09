@@ -15,9 +15,9 @@
   .tl-mobile-banner {
     display: block;
     font-size: 11.5px;
-    color: #92400e;
-    background: #fffbeb;
-    border: 1px solid #fde68a;
+    color: var(--st-ip-fg);
+    background: var(--st-ip-bg);
+    border: 1px solid var(--st-ip-bd);
     border-radius: var(--r-md);
     padding: 9px 12px;
     margin-bottom: 12px;
@@ -30,18 +30,18 @@
 .tl-legend-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
 
 .tl-canvas-wrap { background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-md); overflow: hidden; margin-bottom: 14px; box-shadow: var(--sh); }
-.tl-canvas-hdr { background: var(--tx); color: #fff; padding: 11px 18px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.tl-canvas-hdr { background: var(--canvas-hdr-bg); color: #fff; padding: 11px 18px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 
-.tl-out-card { background: #fffbf0; border: 1.5px solid #fde68a; border-top: 3px solid #d97706; border-radius: var(--r-md); padding: 13px 16px; box-shadow: var(--sh); cursor: pointer; transition: box-shadow .18s, transform .12s; margin-top: 14px; }
+.tl-out-card { background: var(--tl-out-bg); border: 1px solid var(--tl-out-bd); border-top: 3px solid #d97706; border-radius: var(--r-md); padding: 13px 16px; box-shadow: var(--sh); cursor: pointer; transition: box-shadow .18s, transform .12s; margin-top: 14px; }
 .tl-out-card:hover { transform: translateY(-1px); box-shadow: var(--shm); }
-.tl-out-card.on { border: 1.5px solid #d97706; border-top: 3px solid #d97706; box-shadow: 0 0 0 2px #d9770633, var(--sh); }
+.tl-out-card.on { border: 1px solid #d97706; border-top: 3px solid #d97706; box-shadow: 0 0 0 2px #d9770633, var(--sh); }
 .tl-out-hdr { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tl-out-title { font-size: 15px; font-weight: 700; color: #d97706; }
 .tl-out-active { font-size: 9px; background: #d97706; color: #fff; padding: 1px 8px; border-radius: 99px; font-weight: 700; }
 
 /* ── Milestone summary card — same layout, distinct blue palette so it
    doesn't read as "Out of Milestone" ── */
-.tl-ms-card { background: #eff6ff; border: 1.5px solid #bfdbfe; border-top: 3px solid #2f6bff; border-radius: var(--r-md); padding: 13px 16px; box-shadow: var(--sh); cursor: pointer; transition: box-shadow .18s, transform .12s; }
+.tl-ms-card { background: var(--tl-ms-bg); border: 1px solid var(--tl-ms-bd); border-top: 3px solid #2f6bff; border-radius: var(--r-md); padding: 13px 16px; box-shadow: var(--sh); cursor: pointer; transition: box-shadow .18s, transform .12s; }
 .tl-ms-card:hover { transform: translateY(-1px); box-shadow: var(--shm); }
 .tl-ms-title { font-size: 15px; font-weight: 700; }
 .tl-ms-active { font-size: 9px; background: #2f6bff; color: #fff; padding: 1px 8px; border-radius: 99px; font-weight: 700; }

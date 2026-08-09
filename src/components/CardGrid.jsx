@@ -1,12 +1,16 @@
 import AgentCard from './AgentCard';
-import { groupAgents } from '../lib/agentUtils';
+import { groupAgents, categoryColor } from '../lib/agentUtils';
 
-const GROUP_COLOR = { owner: '#2f6bff', ability: '#6d28d9', role: '#0b7a68' };
+// Group-header bar colour. Was one fixed hex per view (owner/ability/role),
+// which made every group in a view identical and gave the eye nothing to
+// track when scrolling a 240-item library. Each group now gets its own hue
+// from the decorative --c1..--c6 ramp, hashed off the group NAME so it stays
+// put as data changes (same helper and same reasoning as the sidebar dots).
+
 
 export default function CardGrid({ agents, allAgents, view, onCardClick }) {
   const key = view === 'by-role' ? 'role' : view === 'by-ability' ? 'ability' : 'owner';
   const { groups, byGroup } = groupAgents(agents, key);
-  const color = GROUP_COLOR[key];
 
   const unassigned =
     key === 'owner' ? agents.filter((a) => !(a.owner || '')) : [];
@@ -23,8 +27,8 @@ export default function CardGrid({ agents, allAgents, view, onCardClick }) {
         return (
           <div className="sb" key={g}>
             <div className="sh">
-              <div className="sbar" style={{ background: color }} />
-              <span className="sname" style={{ color }}>{g}</span>
+              <div className="sbar" style={{ background: categoryColor(g) }} />
+              <span className="sname">{g}</span>
               <span className="sbadge">{gAgents.length}</span>
             </div>
             <div className="agrid">
@@ -38,8 +42,8 @@ export default function CardGrid({ agents, allAgents, view, onCardClick }) {
       {unassigned.length > 0 && (
         <div className="sb">
           <div className="sh">
-            <div className="sbar" style={{ background: '#9ca3af' }} />
-            <span className="sname" style={{ color: '#9ca3af' }}>(unassigned)</span>
+            <div className="sbar" style={{ background: 'var(--mu2)' }} />
+            <span className="sname" style={{ color: 'var(--mu)' }}>(unassigned)</span>
             <span className="sbadge">{unassigned.length}</span>
           </div>
           <div className="agrid">

@@ -217,14 +217,17 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       <div className="mbox">
         <button className="mclose" onClick={onClose}>✕</button>
 
-        <div className="mtitle" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {agent.agentName}
+        {/* Flattened (2026-08-08 redesign) — this used to wrap everything
+            below in a nested .mac card whose header repeated the agent name
+            already shown in .mtitle above. The mockup treats Agent Detail as
+            one flat sheet: title row → type/tier/scope badges → progress →
+            deploy status → a plain field list. No information was dropped,
+            only the redundant inner card frame. */}
+        <div className="mtitle-row">
+          <h2 className="mtitle">{agent.agentName}</h2>
           {mayEditDetails && (
-            <button
-              className="btn-icon" style={{ width: 22, height: 22 }} title="Edit Details"
-              onClick={() => onEditAgent?.(agent)}
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <button className="mi-btn" title="Edit Details" onClick={() => onEditAgent?.(agent)}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 21v-7" /><path d="M4 10V3" /><path d="M12 21v-9" /><path d="M12 8V3" /><path d="M20 21v-5" /><path d="M20 12V3" />
                 <path d="M1 14h6" /><path d="M9 8h6" /><path d="M17 16h6" />
               </svg>
@@ -232,18 +235,39 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           )}
           {mayArchive && (
             <button
-              className="btn-icon"
-              style={{ width: 22, height: 22 }}
+              className="mi-btn"
               title={isArchived ? 'นำกลับเข้า Library' : 'Archive ออกจาก Library'}
               disabled={archiving}
               onClick={() => (isArchived ? handleUnarchive() : setArchiveOpen(true))}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
                 {isArchived ? <path d="M12 18v-6M9 15l3-3 3 3" /> : <line x1="9" y1="13" x2="15" y2="13" />}
               </svg>
             </button>
           )}
+        </div>
+
+        <div className="mbadges">
+          <span className={`tb ${type === 'agent' ? 'tbag' : 'tbsk'}`}>{type === 'agent' ? 'AGENT' : 'SKILL'}</span>
+          <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
+            {tier} · {tierDef.label.split(' · ')[1] || tierDef.label}
+          </span>
+          <span className="ac-scope" style={{ margin: 0, color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
+            {scope === 'External' ? (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="2" width="16" height="20" rx="1" />
+                <line x1="9" y1="10" x2="9" y2="10" /><line x1="15" y1="10" x2="15" y2="10" />
+                <line x1="9" y1="14" x2="9" y2="14" /><line x1="15" y1="14" x2="15" y2="14" />
+                <path d="M9 22v-4h6v4" />
+              </svg>
+            )}
+          </span>
           {isArchived && (
             <span
               className="ttag"
@@ -254,33 +278,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             </span>
           )}
         </div>
-        <div className="msub">1 agent/skill</div>
 
         <div className="msec">Details</div>
-        <div className="mac">
-          <div className="machdr">
-            <span className={`tb ${type === 'agent' ? 'tbag' : 'tbsk'}`}>{type === 'agent' ? 'AGENT' : 'SKILL'}</span>
-            <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
-              {tier}
-            </span>
-            <span className="macname">{agent.agentName}</span>
-            <span className="scope-badge" style={{ position: 'static', marginLeft: 'auto', color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
-              {scope === 'External' ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="4" y="2" width="16" height="20" rx="1" />
-                  <line x1="9" y1="10" x2="9" y2="10" /><line x1="15" y1="10" x2="15" y2="10" />
-                  <line x1="9" y1="14" x2="9" y2="14" /><line x1="15" y1="14" x2="15" y2="14" />
-                  <path d="M9 22v-4h6v4" />
-                </svg>
-              )}
-            </span>
-          </div>
-
+        <div>
           {agent.description && (
             <div className="mrow" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
               <span className="mk">Description</span>
@@ -331,7 +331,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           <div className="mrow"><span className="mk">Role</span><span>{role || '—'}</span></div>
           <div className="mrow"><span className="mk">Process</span><span style={{ color: 'var(--mu)', fontSize: 11 }}>{process || '—'}</span></div>
           <div className="mrow"><span className="mk">Phase</span>
-            <span className="ph" style={{ background: sd.bg, color: sd.color, border: `1px solid ${sd.bd}` }}>{sd.lb}</span>
+            <span className="status-pill" style={{ color: sd.color, background: sd.bg }}>
+              <span className="status-dot" style={{ background: sd.dot || sd.color }} />
+              {sd.lb}
+            </span>
           </div>
 
           {!editing && (
@@ -367,7 +370,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{progress}%</strong>
                   {canEdit && (
-                    <button className="btn-icon" style={{ width: 20, height: 20 }} title="Update progress" onClick={startEdit}>
+                    <button className="mi-btn" style={{ width: 20, height: 20 }} title="Update progress" onClick={startEdit}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                         <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -387,14 +390,13 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               {mayEditThisAgent && !lockedSubSkill && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                   {deploymentStatus !== 'none' && (
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `${DEPLOY_STATUS_COLOR[deploymentStatus]}15`, border: `1px solid ${DEPLOY_STATUS_COLOR[deploymentStatus]}40`, padding: '2px 7px', borderRadius: 4 }}>
+                    <span className="deploy-badge" style={{ color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `${DEPLOY_STATUS_COLOR[deploymentStatus]}15` }}>
                       {DEPLOY_STATUS_LABEL[deploymentStatus]}
                     </span>
                   )}
                   {canRequestDeploy && (
                     <button
-                      className="btn btn-secondary"
-                      style={{ fontSize: 11, padding: '3px 9px' }}
+                      className="btn-sm rej"
                       disabled={requesting}
                       onClick={() => setConfirmingDeploy(true)}
                     >
@@ -417,9 +419,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               Agent/Skill ของท่านผ่านการทดสอบ (กรุณาส่งหลักฐานให้กับ Approver พิจารณา)
               และพร้อมที่จะ Deployment แล้วใช่หรือไม่?
             </p>
-            <div className="btn-group">
-              <button className="btn btn-secondary" onClick={() => setConfirmingDeploy(false)}>No</button>
-              <button className="btn btn-success" onClick={handleRequestDeploy}>Yes</button>
+            <div className="btn-row">
+              <button className="btn-sm rej" onClick={() => setConfirmingDeploy(false)}>No</button>
+              <button className="btn-sm appr" onClick={handleRequestDeploy}>Yes</button>
             </div>
           </div>
         </div>
@@ -485,9 +487,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
 
             {saveError && <div className="msg error" style={{ marginBottom: 10 }}>{saveError}</div>}
 
-            <div className="btn-group">
-              <button className="btn btn-secondary" disabled={archiving} onClick={() => setArchiveOpen(false)}>ยกเลิก</button>
-              <button className="btn btn-success" disabled={archiving} onClick={handleArchive}>
+            <div className="btn-row">
+              <button className="btn-sm rej" disabled={archiving} onClick={() => setArchiveOpen(false)}>ยกเลิก</button>
+              <button className="btn-sm appr" disabled={archiving} onClick={handleArchive}>
                 {archiving
                   ? 'กำลัง Archive…'
                   : `Archive${subSkills.length ? ` (${1 + subSkills.length - keepIds.size} items)` : ''}`}

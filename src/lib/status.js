@@ -10,11 +10,16 @@
 
 export const ST_ORDER = ['td', 'ip', 'pilot', 'ru'];
 
+// color/bg/bd are CSS var() references (tokens defined in theme.css, light +
+// dark) — 2026-08-08, so a dark-mode toggle can repaint every consumer of
+// this object without touching a single call site. `dot` stays a literal hex
+// on purpose: a legend swatch/KPI bar should read the same saturated hue in
+// both themes, it's the pale bg+text PAIR that has to adapt (see theme.css).
 export const ST_DEF = {
-  td: { lb: 'To Do', color: '#6b7280', bg: '#f9fafb', bd: '#e5e7eb', dot: '#9ca3af' },
-  ip: { lb: 'In Progress', color: '#92400e', bg: '#fffbeb', bd: '#fde68a', dot: '#f5a623' },
-  pilot: { lb: 'Pilot', color: '#3d5a8e', bg: '#edf2f9', bd: '#b0c4de', dot: '#4a6fa5' },
-  ru: { lb: 'Ready to Use', color: '#15803d', bg: '#f0fdf4', bd: '#bbf7d0', dot: '#15803d' },
+  td: { lb: 'To Do', color: 'var(--st-td-fg)', bg: 'var(--st-td-bg)', bd: 'var(--st-td-bd)', dot: '#9ca3af' },
+  ip: { lb: 'In Progress', color: 'var(--st-ip-fg)', bg: 'var(--st-ip-bg)', bd: 'var(--st-ip-bd)', dot: '#f5a623' },
+  pilot: { lb: 'Pilot', color: 'var(--st-pilot-fg)', bg: 'var(--st-pilot-bg)', bd: 'var(--st-pilot-bd)', dot: '#4a6fa5' },
+  ru: { lb: 'Ready to Use', color: 'var(--st-ru-fg)', bg: 'var(--st-ru-bg)', bd: 'var(--st-ru-bd)', dot: '#15803d' },
 };
 
 export function phaseForProgress(p) {

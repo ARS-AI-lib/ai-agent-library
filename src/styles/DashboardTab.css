@@ -5,9 +5,15 @@
 
 /* ── KPI row ── */
 .dash-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-.dash-kpi { background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-md); box-shadow: var(--sh); padding: 14px 16px; }
-.dash-kpi-n { font-size: 26px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--tx); line-height: 1.1; }
-.dash-kpi-l { font-size: 11px; font-weight: 600; color: var(--mu); margin-top: 3px; }
+/* KPI gains a leading colour tile — the row was five identical white boxes
+   whose only differentiator was the number's own colour, a weak signal at a
+   glance. The tile reuses that same KPI colour, so nothing new is introduced
+   semantically; it just gives the eye a bigger target. */
+.dash-kpi { background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-md); box-shadow: var(--sh); padding: 14px 15px; display: flex; align-items: center; gap: 11px; }
+.dash-kpi-icon { width: 34px; height: 34px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.dash-kpi-body { min-width: 0; }
+.dash-kpi-n { font-size: 19px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--tx); line-height: 1.1; }
+.dash-kpi-l { font-size: 10.5px; font-weight: 600; color: var(--mu); margin-top: 1px; }
 .dash-kpi-sub { font-size: 10px; color: var(--mu2); margin-top: 2px; }
 
 /* ── cards ── */
@@ -47,7 +53,7 @@
 .dash-procs { display: flex; flex-wrap: wrap; gap: 5px; }
 .dash-proc { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; color: var(--tx2); background: var(--sf2); border: 1px solid var(--bd-soft); border-radius: 6px; padding: 2px 7px; cursor: default; }
 .dash-proc b { font-size: 9.5px; color: #fff; background: var(--accent); border-radius: 999px; min-width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; padding: 0 3px; }
-.dash-proc.gap { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+.dash-proc.gap { color: var(--gap-fg); background: var(--gap-bg); border-color: var(--gap-bd); }
 .dash-proc.clickable { cursor: pointer; }
 .dash-proc.clickable:hover { border-color: var(--accent); background: var(--sf); }
 

@@ -52,11 +52,14 @@ export function getTier(agent) {
 // Tier display names (2026-07-07) — shown as the full tooltip/label wherever
 // space allows; the compact "T1"–"T4" badge alone remains fine in tight UI
 // (cards, timeline dots) per user's explicit sign-off.
+// color/bg/bd are CSS var() tokens (theme.css) — 2026-08-08, same reasoning
+// as ST_DEF in status.js: lets the dark-mode toggle repaint every tier badge
+// without editing a call site.
 export const TIER_DEF = {
-  T1: { label: 'T1 · Alpha Skill', color: '#0b7a68', bg: '#0b7a6815', bd: '#0b7a6840' },
-  T2: { label: 'T2 · Incubate Agent', color: '#2f6bff', bg: '#2f6bff15', bd: '#2f6bff40' },
-  T3: { label: 'T3 · Public Skill', color: '#6d28d9', bg: '#6d28d915', bd: '#6d28d940' },
-  T4: { label: 'T4 · Enterprise Agent', color: '#b45309', bg: '#b4530915', bd: '#b4530940' },
+  T1: { label: 'T1 · Alpha Skill', color: 'var(--tier-t1-fg)', bg: 'var(--tier-t1-bg)', bd: 'var(--tier-t1-bd)' },
+  T2: { label: 'T2 · Incubate Agent', color: 'var(--tier-t2-fg)', bg: 'var(--tier-t2-bg)', bd: 'var(--tier-t2-bd)' },
+  T3: { label: 'T3 · Public Skill', color: 'var(--tier-t3-fg)', bg: 'var(--tier-t3-bg)', bd: 'var(--tier-t3-bd)' },
+  T4: { label: 'T4 · Enterprise Agent', color: 'var(--tier-t4-fg)', bg: 'var(--tier-t4-bg)', bd: 'var(--tier-t4-bd)' },
 };
 
 export const TIER_ORDER = ['T1', 'T2', 'T3', 'T4'];

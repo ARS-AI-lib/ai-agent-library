@@ -3,6 +3,7 @@ import { collection, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebas
 import { db } from '../lib/firebase';
 import { getDirectoryMeta, syncDirectoryToFirestore } from '../lib/directory';
 import MultiSelect from './MultiSelect';
+import Dropdown from './Dropdown';
 import useEscapeKey from '../hooks/useEscapeKey';
 
 function fmtSyncTime(ts) {
@@ -107,21 +108,28 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
       <div className="mbox wide">
         <button className="mclose" onClick={onClose}>✕</button>
-        <div className="mtitle">User Management</div>
-        <div className="msub">{users.length} ผู้ใช้ · กำหนด role และ approve area</div>
+        <div className="m-head">
+          <div className="m-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div>
+            <h2 className="mtitle">User Management</h2>
+            <p>{users.length} ผู้ใช้ · กำหนด role และ approve area</p>
+          </div>
+        </div>
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
 
         <input
           type="text"
+          className="um-search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="ค้นหาชื่อหรืออีเมล…"
-          style={{ width: '100%', height: 32, padding: '0 10px', border: '1.5px solid var(--bd2)', borderRadius: 8, fontSize: 12.5, background: 'var(--sf)', color: 'var(--tx)', fontFamily: 'inherit', outline: 'none', margin: '2px 2px 8px' }}
         />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 2px', borderBottom: '1px solid var(--bd)', marginBottom: 4 }}>
-          <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }} disabled={dirSyncing} onClick={handleSyncDirectory}>
+          <button className="btn-sm rej" disabled={dirSyncing} onClick={handleSyncDirectory}>
             {dirSyncing ? 'กำลัง sync…' : 'Sync directory now'}
           </button>
           <span style={{ fontSize: 11, color: 'var(--mu)' }}>
@@ -140,17 +148,26 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
           const isSelf = u.uid === currentUid;
           return (
             <div key={u.uid} style={UM_ROW}>
-              <div style={{ minWidth: 0 }}>
-                <div className="dup-name" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {u.displayName || u.email || u.uid}{isSelf && <span style={{ color: 'var(--mu)', fontWeight: 400 }}> (คุณ)</span>}
+              <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="um-avatar">{(u.displayName || u.email || '?').trim().charAt(0).toUpperCase()}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div className="dup-name" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {u.displayName || u.email || u.uid}{isSelf && <span style={{ color: 'var(--mu)', fontWeight: 400 }}> (คุณ)</span>}
+                  </div>
+                  <div className="queue-meta" style={{ fontSize: 11 }}>{u.email || '—'}</div>
                 </div>
-                <div className="queue-meta" style={{ fontSize: 11 }}>{u.email || '—'}</div>
               </div>
               <div>
                 <div style={UM_LABEL}>Role</div>
-                <select value={d.role} onChange={(e) => setDraft(u.uid, { role: e.target.value })} style={UM_CTRL}>
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
+                {/* Last native <select> in the app — swapped for the shared
+                    listbox so the role picker matches the Approve-areas
+                    MultiSelect sitting immediately beside it in the same row. */}
+                <Dropdown
+                  options={ROLES.map((r) => [r, r])}
+                  value={d.role}
+                  onChange={(r) => setDraft(u.uid, { role: r })}
+                  ariaLabel={`Role ของ ${u.displayName || u.email || u.uid}`}
+                />
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={UM_LABEL}>Approve areas</div>
@@ -161,7 +178,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
                   onChange={(s) => setDraft(u.uid, { approveAreas: s })}
                 />
               </div>
-              <button style={UM_SAVE(dirty && busyId !== u.uid)} disabled={!dirty || busyId === u.uid} onClick={() => save(u)}>
+              <button className={`btn-sm ${dirty && busyId !== u.uid ? 'appr' : 'rej'}`} disabled={!dirty || busyId === u.uid} onClick={() => save(u)}>
                 {busyId === u.uid ? 'บันทึก…' : 'Save'}
               </button>
             </div>
@@ -175,7 +192,5 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
 // Compact, aligned row styling — deliberately NOT using .fg/.btn (those are
 // full-form-sized). Every control is the same 26px height so Role, Approve
 // areas and Save line up on one baseline.
-const UM_ROW = { display: 'grid', gridTemplateColumns: '1fr 110px 150px 62px', gap: 10, alignItems: 'end', padding: '9px 2px', borderBottom: '1px solid var(--bd)' };
+const UM_ROW = { display: 'grid', gridTemplateColumns: '1fr 110px 150px 62px', gap: 10, alignItems: 'end', padding: '9px 2px', borderBottom: '1px solid var(--bd-soft)' };
 const UM_LABEL = { fontSize: 10, fontWeight: 700, color: 'var(--mu)', marginBottom: 3, letterSpacing: '.03em' };
-const UM_CTRL = { width: '100%', height: 26, padding: '0 8px', border: '1.5px solid var(--bd2)', borderRadius: 8, fontSize: 12, background: 'var(--sf)', color: 'var(--tx)', fontFamily: 'inherit', outline: 'none' };
-const UM_SAVE = (active) => ({ height: 26, padding: '0 12px', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, background: active ? 'var(--ok)' : 'var(--bd2)', color: '#fff', cursor: active ? 'pointer' : 'not-allowed', fontFamily: 'inherit' });

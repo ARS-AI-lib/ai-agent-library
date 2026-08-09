@@ -12,6 +12,8 @@ import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import AgentDetailModal from './AgentDetailModal';
 import MilestoneEditor from './MilestoneEditor';
+import ThemeToggle from './ThemeToggle';
+import { useTheme } from '../hooks/useTheme';
 import '../styles/SDLCTab.css';
 import '../styles/TimelinePage.css';
 
@@ -36,6 +38,9 @@ export default function TimelinePage() {
   const [listPopup, setListPopup] = useState(null); // { launch, agents:[timelineItem] } | null
   const [editMs, setEditMs] = useState(false);
   const canvasRef = useRef(null);
+  const [theme] = useTheme(); // <canvas> can't read CSS var() itself — drawTimeline
+  // re-resolves the palette by name on every draw, so this just needs to be a
+  // dependency that changes when the toggle flips (see drawTimeline below).
 
   // Live config: viewers allowlist + milestones live in one /config/timeline doc.
   useEffect(() => {
@@ -62,14 +67,14 @@ export default function TimelinePage() {
   useEffect(() => {
     if (!canView) return;
     drawTimeline(canvasRef.current, items, milestones, range, filter, setListPopup, setFilter);
-  }, [canView, items, milestones, range, filter]);
+  }, [canView, items, milestones, range, filter, theme]);
 
   useEffect(() => {
     if (!canView) return;
     const onResize = () => drawTimeline(canvasRef.current, items, milestones, range, filter, setListPopup, setFilter);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [canView, items, milestones, range, filter]);
+  }, [canView, items, milestones, range, filter, theme]);
 
   if (loading) {
     return <div className="tl-center"><div className="spin" /><span>กำลังโหลด…</span></div>;
@@ -108,10 +113,19 @@ export default function TimelinePage() {
             ← Back to Library
           </button>
         </div>
-        <div className="nav-r" style={{ marginLeft: 'auto' }}>
+        <div className="nav-r" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* This page has no ☰ menu of its own, so the toggle (which renders
+              as a bare menu row — see ThemeToggle.jsx) gets a .menu wrapper
+              here to pick up the same row styling instead of falling through
+              to an unstyled UA button. */}
+          <div className="menu" style={{ position: 'static', minWidth: 0, marginTop: 0 }}>
+            <ThemeToggle />
+          </div>
           {user && (
             <div className="nav-user">
-              {user.photoURL && <img src={user.photoURL} alt="" />}
+              {user.photoURL
+                ? <img src={user.photoURL} alt="" />
+                : <span className="nav-user-fallback">{(user.displayName || user.email || '?').trim().charAt(0).toUpperCase()}</span>}
               <div className="nav-user-name">
                 {(() => {
                   const full = (user.displayName || user.email || '').trim();
@@ -333,10 +347,39 @@ function Stat({ n, l, c }) {
   );
 }
 
+// <canvas> fillStyle/strokeStyle can't read CSS var() strings directly —
+// unlike every other themed surface in this app, the chart is painted by
+// hand each frame, so its palette has to be resolved to real hex/rgba values
+// up front. Reading it fresh on every call (rather than caching) is what
+// makes the dark-mode toggle repaint the chart: TimelinePage's draw effect
+// already re-runs on `theme` change, so the next drawTimeline() call just
+// picks up whatever the cascade currently resolves these tokens to.
+function themeColors() {
+  const css = getComputedStyle(document.documentElement);
+  const v = (name, fallback) => (css.getPropertyValue(name).trim() || fallback);
+  return {
+    hdrBg: v('--tlc-hdr-bg', '#f8fafd'), gutBg: v('--tlc-gut-bg', '#f1f5fb'),
+    mu: v('--tlc-mu', '#7784a0'), tx2: v('--tlc-tx2', '#46516d'), tx: v('--tlc-tx', '#182135'),
+    rowA: v('--tlc-row-a', '#fff'), rowB: v('--tlc-row-b', '#fafbfd'),
+    line: v('--tlc-line', '#e8edf6'), line2: v('--tlc-line2', '#c8d0e0'), dim: v('--tlc-dim', '#9ca3af'),
+  };
+}
+
+// TL_ST's bg/bd/tx are var(--tl-...) strings (see timeline.js) for the DOM
+// legend; canvas needs the resolved value, same reasoning as themeColors().
+function resolveTlSt(css) {
+  const v = (name) => css.getPropertyValue(name.replace(/^var\(|\)$/g, '')).trim();
+  const out = {};
+  for (const [k, st] of Object.entries(TL_ST)) out[k] = { ...st, bg: v(st.bg), bd: v(st.bd), tx: v(st.tx) };
+  return out;
+}
+
 // ── canvas drawing (ported from reference, adapted: auto-fit range, our
 //    theme colors, Firestore-backed milestones) ──
 function drawTimeline(cv, items, milestones, range, filter, onDotsClick, onFilter) {
   if (!cv) return;
+  const T = themeColors();
+  const TL = resolveTlSt(getComputedStyle(document.documentElement));
   const today = startOfToday();
   const { start: S, end: E } = range;
   const totalDays = Math.max(1, (E - S) / DAY);
@@ -363,24 +406,24 @@ function drawTimeline(cv, items, milestones, range, filter, onDotsClick, onFilte
   const tx = dx(today);
 
   // month header
-  ctx.fillStyle = '#f8fafd'; ctx.fillRect(0, 0, W, HH);
-  ctx.fillStyle = '#f1f5fb'; ctx.fillRect(0, 0, LW, HH);
-  ctx.fillStyle = '#7784a0'; ctx.font = `bold 11px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = T.hdrBg; ctx.fillRect(0, 0, W, HH);
+  ctx.fillStyle = T.gutBg; ctx.fillRect(0, 0, LW, HH);
+  ctx.fillStyle = T.mu; ctx.font = `bold 11px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('Owner', 14, HH / 2);
   monthTicks(S, E).forEach((m) => {
     const x1 = Math.max(dx(m.start), LW), x2 = Math.min(dx(new Date(m.end.getTime() + DAY)), LW + tw);
     if (x2 <= x1) return;
-    ctx.strokeStyle = '#e8edf6'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1, HH); ctx.stroke();
-    ctx.fillStyle = '#46516d'; ctx.font = `bold 11px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.strokeStyle = T.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1, HH); ctx.stroke();
+    ctx.fillStyle = T.tx2; ctx.font = `bold 11px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(m.label, (x1 + x2) / 2, HH / 2);
   });
-  ctx.strokeStyle = '#c8d0e0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, HH); ctx.lineTo(W, HH); ctx.stroke();
+  ctx.strokeStyle = T.line2; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, HH); ctx.lineTo(W, HH); ctx.stroke();
 
   // milestone axis
   const ay = HH;
-  ctx.fillStyle = '#f8fafd'; ctx.fillRect(0, ay, W, AH);
-  ctx.fillStyle = '#f1f5fb'; ctx.fillRect(0, ay, LW, AH);
-  ctx.fillStyle = '#7784a0'; ctx.font = `10px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = T.hdrBg; ctx.fillRect(0, ay, W, AH);
+  ctx.fillStyle = T.gutBg; ctx.fillRect(0, ay, LW, AH);
+  ctx.fillStyle = T.mu; ctx.font = `10px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('Milestones', 14, ay + AH / 2);
   const msClicks = [];
   milestones.forEach((m) => {
@@ -396,22 +439,22 @@ function drawTimeline(cv, items, milestones, range, filter, onDotsClick, onFilte
     ctx.font = `8.5px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.fillStyle = col + 'cc'; ctx.fillText(`${sL}–${eL}`, x1 + w / 2, ay + AH / 2 + 8);
     msClicks.push({ x1, y1: ay, x2, y2: ay + AH, id: m.id });
   });
-  ctx.strokeStyle = '#e8edf6'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, ay + AH); ctx.lineTo(W, ay + AH); ctx.stroke();
+  ctx.strokeStyle = T.line; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(0, ay + AH); ctx.lineTo(W, ay + AH); ctx.stroke();
 
   // team rows
   const dotClicks = [];
   vis.forEach((team, ti) => {
     const tAgs = items.filter((a) => a.team === team);
     const ry = HH + AH + ti * RH, my = ry + RH / 2 - 8;
-    ctx.fillStyle = ti % 2 === 0 ? '#fff' : '#fafbfd'; ctx.fillRect(0, ry, W, RH);
-    ctx.fillStyle = '#f4f6fb'; ctx.fillRect(0, ry, LW, RH);
-    ctx.strokeStyle = '#e8edf6'; ctx.lineWidth = 1;
+    ctx.fillStyle = ti % 2 === 0 ? T.rowA : T.rowB; ctx.fillRect(0, ry, W, RH);
+    ctx.fillStyle = T.gutBg; ctx.fillRect(0, ry, LW, RH);
+    ctx.strokeStyle = T.line; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, ry + RH); ctx.lineTo(W, ry + RH); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(LW, ry); ctx.lineTo(LW, ry + RH); ctx.stroke();
-    ctx.fillStyle = '#182135'; ctx.font = `bold 12.5px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = T.tx; ctx.font = `bold 12.5px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillText(team, 14, ry + 10);
     const rN = tAgs.filter((a) => a.progress >= 70).length;
-    ctx.fillStyle = '#7784a0'; ctx.font = `10px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.fillText(`${tAgs.length} items · ${rN} ≥70%`, 14, ry + 27);
+    ctx.fillStyle = T.mu; ctx.font = `10px 'IBM Plex Sans Thai Looped',sans-serif`; ctx.fillText(`${tAgs.length} items · ${rN} ≥70%`, 14, ry + 27);
 
     // milestone band tint per row
     milestones.forEach((m) => {
@@ -429,11 +472,11 @@ function drawTimeline(cv, items, milestones, range, filter, onDotsClick, onFilte
       const inMs = inAnyMilestone(d, milestones);
       const dim = (filter === 'out') ? inMs : (filter && (!inMs || !inRange(d, milestones.find((m) => m.id === filter))));
       const cx = dx(d);
-      if (dim) { ctx.globalAlpha = .15; ctx.beginPath(); ctx.arc(cx, my, IR, 0, Math.PI * 2); ctx.fillStyle = '#9ca3af'; ctx.fill(); ctx.globalAlpha = 1; return; }
+      if (dim) { ctx.globalAlpha = .15; ctx.beginPath(); ctx.arc(cx, my, IR, 0, Math.PI * 2); ctx.fillStyle = T.dim; ctx.fill(); ctx.globalAlpha = 1; return; }
       const order = ['delay', 'risk', 'ontime', 'pilot', 'done'];
       const statuses = ags.map((a) => timelineStatus(a, S, today));
       const pr = order.find((s) => statuses.includes(s)) || 'ontime';
-      const st = TL_ST[pr]; const n = ags.length;
+      const st = TL[pr]; const n = ags.length;
       ctx.shadowColor = 'rgba(0,0,0,0.12)'; ctx.shadowBlur = 4;
       ctx.beginPath(); ctx.arc(cx, my, IR, 0, Math.PI * 2); ctx.fillStyle = st.bg; ctx.fill();
       ctx.shadowBlur = 0; ctx.strokeStyle = st.bd; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, my, IR, 0, Math.PI * 2); ctx.stroke();
@@ -448,7 +491,7 @@ function drawTimeline(cv, items, milestones, range, filter, onDotsClick, onFilte
   // today line
   ctx.save(); ctx.strokeStyle = '#ef4444aa'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
   ctx.beginPath(); ctx.moveTo(tx, HH); ctx.lineTo(tx, H); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
-  ctx.strokeStyle = '#c8d0e0'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(LW, HH); ctx.lineTo(LW, H); ctx.stroke();
+  ctx.strokeStyle = T.line2; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(LW, HH); ctx.lineTo(LW, H); ctx.stroke();
 
   cv.onclick = (e) => {
     const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
