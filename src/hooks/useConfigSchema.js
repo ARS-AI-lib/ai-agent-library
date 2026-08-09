@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
+const MAX_ATTEMPTS = 5;
+
 /**
  * Reads /config/schema — the single document holding all choice-field
  * options (SDLC Stage, SDLC Process Mapping, Development Phase,
@@ -18,8 +20,21 @@ import { db } from '../lib/firebase';
  *   relatedRole: string[],
  *   category: string[],   // 2026-08: left-sidebar shortcuts — see agent-skill-structured-horizon plan
  * }
+ *
+ * `enabled` gates the subscription the same way useApprovedAgents/
+ * usePendingAgents/useDeploymentRequests do (useAgents.js) — this hook used
+ * to subscribe unconditionally on mount, before Firebase Auth had finished
+ * restoring the session. The very first onSnapshot attached while
+ * auth.currentUser was still null, the read got denied by
+ * firestore.rules' isKnownUser() check, and — unlike a transient network
+ * error — Firestore treats permission-denied as terminal: it does NOT
+ * retry once auth later resolves. The sidebar's Category/SDLC Stage groups
+ * (driven by this schema) stayed empty until something created a brand new
+ * listener, i.e. a manual page refresh. The retry-with-backoff loop below
+ * covers the remaining case where the role doc itself hasn't propagated yet
+ * even after auth is ready (same reasoning as useAgents.js's identical loop).
  */
-export function useConfigSchema() {
+export function useConfigSchema(enabled = true) {
   const [schema, setSchema] = useState({
     sdlcStage: [],
     sdlcProcessMapping: [],
@@ -32,17 +47,46 @@ export function useConfigSchema() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!enabled) return;
+
+    let unsub = null;
+    let retryTimer = null;
+    let cancelled = false;
+    let attempts = 0;
+
     const ref = doc(db, 'config', 'schema');
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (snap.exists()) setSchema((prev) => ({ ...prev, ...snap.data() }));
-        setLoading(false);
-      },
-      () => setLoading(false)
-    );
-    return unsub;
-  }, []);
+
+    const subscribe = () => {
+      if (cancelled) return;
+      attempts += 1;
+      unsub = onSnapshot(
+        ref,
+        (snap) => {
+          if (cancelled) return;
+          attempts = 0; // a successful read means auth is settled
+          if (snap.exists()) setSchema((prev) => ({ ...prev, ...snap.data() }));
+          setLoading(false);
+        },
+        (err) => {
+          if (cancelled) return;
+          if (attempts < MAX_ATTEMPTS) {
+            if (unsub) { unsub(); unsub = null; }
+            retryTimer = setTimeout(subscribe, 400 * attempts);
+          } else {
+            setLoading(false);
+          }
+        }
+      );
+    };
+
+    subscribe();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (unsub) unsub();
+    };
+  }, [enabled]);
 
   // Grow-only: any known user may add newly-typed Related Role values to the
   // shared list (firestore.rules scopes this write to ONLY the relatedRole

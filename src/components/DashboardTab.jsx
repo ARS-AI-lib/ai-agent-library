@@ -124,10 +124,10 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
       {/* ── KPI row ── */}
       <div className="dash-kpis">
         <Kpi n={agents.length} label="Total" sub={`${agentN} Agents · ${skillN} Skills`} icon={KPI_ICON.total} />
-        <Kpi n={stCounts.ru} label="Ready to Use" color={ST_DEF.ru.dot} icon={KPI_ICON.ready} />
-        <Kpi n={stCounts.ip + stCounts.pilot} label="In Development" sub={`${stCounts.ip} In Progress · ${stCounts.pilot} Pilot`} color={ST_DEF.ip.dot} icon={KPI_ICON.dev} />
+        <Kpi n={stCounts.ru} label="Ready to Use" color={ST_DEF.ru.color} icon={KPI_ICON.ready} />
+        <Kpi n={stCounts.ip + stCounts.pilot} label="In Development" sub={`${stCounts.ip} In Progress · ${stCounts.pilot} Pilot`} color={ST_DEF.ip.color} icon={KPI_ICON.dev} />
         <Kpi n={`${avgProgress}%`} label="Avg Progress" icon={KPI_ICON.progress} />
-        <Kpi n={launch90} label="Launch ใน 90 วัน" color="#2f6bff" icon={KPI_ICON.launch} />
+        <Kpi n={launch90} label="Launch ใน 90 วัน" color="var(--accent)" icon={KPI_ICON.launch} />
       </div>
 
       {/* ── Status + Tier + Reusable ── */}

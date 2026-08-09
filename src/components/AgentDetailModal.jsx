@@ -271,7 +271,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           {isArchived && (
             <span
               className="ttag"
-              style={{ color: '#92400e', background: '#fef3c7', fontWeight: 700 }}
+              style={{ color: 'var(--msg-warn-fg)', background: 'var(--msg-warn-bg)', fontWeight: 700 }}
               title={agent.archiveReason ? `เหตุผล: ${agent.archiveReason}` : 'ถูก archive ออกจาก Library'}
             >
               ARCHIVED

@@ -919,7 +919,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                       <strong style={{ fontSize: 12.5, color: 'var(--ag)' }}>Skill #{idx + 1}</strong>
                       {idx > 0 && (
                         <button type="button" onClick={() => removeSkill(s._id)} title="ลบ Skill นี้"
-                          style={{ border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', borderRadius: 6, padding: '2px 9px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          style={{ border: '1px solid var(--clr-bd)', background: 'var(--clr-bg)', color: 'var(--clr-fg)', borderRadius: 6, padding: '2px 9px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
                           ✕ ลบ
                         </button>
                       )}

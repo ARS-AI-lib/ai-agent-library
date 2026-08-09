@@ -37,6 +37,23 @@ function GoogleGlyph() {
 }
 
 function LoginScreen({ onSignIn, error }) {
+  // The sign-in screen has exactly one look — no dark variant — since the
+  // theme toggle itself lives inside the authenticated app's ☰ menu, there's
+  // no way to reach it from here anyway. Forcing the attribute (not touching
+  // the stored preference in localStorage) means this affects only what's
+  // on screen right now: signing out drops back to this component, which
+  // re-forces light immediately, and signing back in hands control straight
+  // back to useTheme's own effect, which re-applies whatever the user had
+  // actually chosen — their preference is never silently reset.
+  useEffect(() => {
+    const prev = document.documentElement.dataset.theme;
+    document.documentElement.dataset.theme = 'light';
+    return () => {
+      if (prev === undefined) delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = prev;
+    };
+  }, []);
+
   return (
     <div className="signin-page">
       <div className="signin-card">
@@ -72,7 +89,7 @@ export default function App() {
   const { agents, allAgents, loading: agentsLoading } = useApprovedAgents(!!role);
   const { pending } = usePendingAgents(!!role);
   const { deployRequests } = useDeploymentRequests(!!role);
-  const { schema, addRelatedRoles } = useConfigSchema();
+  const { schema, addRelatedRoles } = useConfigSchema(!!role);
 
   // Directory sync is no longer auto-run at login: the People API scope is now
   // requested on-demand only when an admin clicks "Sync directory now" in User
