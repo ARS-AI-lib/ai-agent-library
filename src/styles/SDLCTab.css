@@ -15,7 +15,12 @@
 .adopt-board { display: flex; width: 100%; min-width: 780px; border: 1px solid var(--bd-soft); border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shm); background: var(--sf); }
 .adopt-grp { display: flex; flex-direction: column; border-right: 1px solid var(--bd-soft); min-width: 0; }
 .adopt-grp:last-child { border-right: none; }
-.adopt-grp-hdr { height: var(--hdr-mega); display: flex; align-items: center; justify-content: center; background: var(--sf2); color: var(--tx); text-align: center; font-weight: 700; font-size: 12px; padding: 0 14px; letter-spacing: .02em; white-space: nowrap; border-bottom: 1px solid var(--bd-soft); }
+/* text-transform here (not baked into the label strings) so the mega-group
+   header ("Discovery", "Development"...) reads uppercase to match its own
+   sub-headers ("DISCOVERY", "DESIGN"...), which are already hardcoded
+   uppercase in SDLCTab.jsx — one visual rule, not two different casings
+   depending on which array a label happens to come from. */
+.adopt-grp-hdr { height: var(--hdr-mega); display: flex; align-items: center; justify-content: center; background: var(--sf2); color: var(--tx); text-align: center; font-weight: 700; font-size: 12px; padding: 0 14px; letter-spacing: .02em; white-space: nowrap; border-bottom: 1px solid var(--bd-soft); text-transform: uppercase; }
 /* The merged "Post Development" header spans BOTH header rows, so its height
    must equal mega-row + sub-row exactly. This used to be a hand-tuned
    `min-height: 72.5px` that had to be re-guessed whenever either row's padding
