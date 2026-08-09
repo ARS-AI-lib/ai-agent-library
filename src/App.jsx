@@ -39,7 +39,6 @@ function GoogleGlyph() {
 function LoginScreen({ onSignIn, error }) {
   return (
     <div className="signin-page">
-      <div className="signin-bgpattern" aria-hidden="true" />
       <div className="signin-card">
         <div className="signin-logos">
           <img src="/logo1.png" alt="Infinitas by Krungthai" />

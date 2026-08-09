@@ -376,3 +376,23 @@ export function groupAgents(agents, key) {
   const byGroup = (g) => agents.filter((a) => (a.owner || '') === g);
   return { groups, byGroup };
 }
+
+// ── Decorative category colour (2026-08-08 redesign) ────────────────────
+// Sidebar category rows carry a small colour dot purely for scanability.
+// Categories are dynamic (/config/schema.category grows as admins approve
+// proposals), so the colour CANNOT come from the option's index — approving
+// one new category would re-colour every row below it, and users navigate
+// this list by remembered colour position.
+//
+// A hash of the name is stable for the life of that name instead. Collisions
+// are fine and expected: the dot is a scanning aid next to a text label, not
+// an identifier. Returns a --c1..--c6 token, never a raw hex, so the ramp
+// stays theme-aware (see theme.css).
+export function categoryColor(name) {
+  const s = String(name || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return `var(--c${(Math.abs(h) % 6) + 1})`;
+}

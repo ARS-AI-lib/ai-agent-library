@@ -701,7 +701,15 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
 
         {tab === 'form' && (
           <div className="tab-panel">
-            <h2 style={{ fontSize: 16, marginBottom: 14 }}>New Agent / Skill</h2>
+            <div className="m-head">
+              <div className="m-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              </div>
+              <div>
+                <h2 className="mtitle">Register a new Agent / Skill</h2>
+                <p>AI checks for duplicates before you submit</p>
+              </div>
+            </div>
 
             {validationMsg && (
               <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{validationMsg}</div>
@@ -715,36 +723,42 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             <div className="grid2">
               <div className="fg">
                 <label>Type <span className="req">*</span></label>
-                <div className="radio-row">
+                <div className="toggle2" role="radiogroup" aria-label="Type">
                   {['Agent', 'Skill', 'Agent+Skill'].map((t) => (
-                    <label key={t}>
-                      <input
-                        type="radio"
-                        name="type"
-                        value={t}
-                        checked={form.type === t}
-                        onChange={() => setForm((f) => ({
-                          ...f,
-                          type: t,
-                          // Default the first skill row in immediately — it's
-                          // the only one that can't be deleted, so it should
-                          // always exist the moment the type is selected.
-                          skills: t === 'Agent+Skill' && f.skills.length === 0 ? [emptySkill()] : f.skills,
-                        }))}
-                      />
+                    <button
+                      key={t}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.type === t}
+                      className={form.type === t ? 'sel' : ''}
+                      onClick={() => setForm((f) => ({
+                        ...f,
+                        type: t,
+                        // Default the first skill row in immediately — it's
+                        // the only one that can't be deleted, so it should
+                        // always exist the moment the type is selected.
+                        skills: t === 'Agent+Skill' && f.skills.length === 0 ? [emptySkill()] : f.skills,
+                      }))}
+                    >
                       {t}
-                    </label>
+                    </button>
                   ))}
                 </div>
               </div>
               <div className="fg">
                 <label>Scope <span className="req">*</span></label>
-                <div className="radio-row">
+                <div className="toggle2" role="radiogroup" aria-label="Scope">
                   {[['Internal', 'Internal Use'], ['External', 'Customer Facing']].map(([v, lbl]) => (
-                    <label key={v}>
-                      <input type="radio" name="scope" value={v} checked={form.scope === v} onChange={() => setField('scope', v)} />
+                    <button
+                      key={v}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.scope === v}
+                      className={form.scope === v ? 'sel' : ''}
+                      onClick={() => setField('scope', v)}
+                    >
                       {lbl}
-                    </label>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -921,12 +935,18 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                     </div>
                     <div className="fg">
                       <label>Scope <span className="req">*</span></label>
-                      <div className="radio-row">
+                      <div className="toggle2" role="radiogroup" aria-label={`Scope ของ ${s.name || 'skill นี้'}`}>
                         {[['Internal', 'Internal Use'], ['External', 'Customer Facing']].map(([v, lbl]) => (
-                          <label key={v}>
-                            <input type="radio" name={`scope-${s._id}`} value={v} checked={s.scope === v} onChange={() => setSkillField(s._id, 'scope', v)} />
+                          <button
+                            key={v}
+                            type="button"
+                            role="radio"
+                            aria-checked={s.scope === v}
+                            className={s.scope === v ? 'sel' : ''}
+                            onClick={() => setSkillField(s._id, 'scope', v)}
+                          >
                             {lbl}
-                          </label>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -992,6 +1012,15 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
 
         {tab === 'analysis' && ranked !== null && (
           <div className="tab-panel">
+            <div className="m-head">
+              <div className="m-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+              </div>
+              <div>
+                <h2 className="mtitle">Duplicate check result</h2>
+                <p>{form.agentName || 'ผลการวิเคราะห์'}</p>
+              </div>
+            </div>
             {submitError && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{submitError}</div>}
 
             {analyzing && (

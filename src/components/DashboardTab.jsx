@@ -123,11 +123,11 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
     <div className="dash-page">
       {/* ── KPI row ── */}
       <div className="dash-kpis">
-        <Kpi n={agents.length} label="Total" sub={`${agentN} Agents · ${skillN} Skills`} />
-        <Kpi n={stCounts.ru} label="Ready to Use" color={ST_DEF.ru.dot} />
-        <Kpi n={stCounts.ip + stCounts.pilot} label="In Development" sub={`${stCounts.ip} In Progress · ${stCounts.pilot} Pilot`} color={ST_DEF.ip.dot} />
-        <Kpi n={`${avgProgress}%`} label="Avg Progress" />
-        <Kpi n={launch90} label="Launch ใน 90 วัน" color="#2f6bff" />
+        <Kpi n={agents.length} label="Total" sub={`${agentN} Agents · ${skillN} Skills`} icon={KPI_ICON.total} />
+        <Kpi n={stCounts.ru} label="Ready to Use" color={ST_DEF.ru.dot} icon={KPI_ICON.ready} />
+        <Kpi n={stCounts.ip + stCounts.pilot} label="In Development" sub={`${stCounts.ip} In Progress · ${stCounts.pilot} Pilot`} color={ST_DEF.ip.dot} icon={KPI_ICON.dev} />
+        <Kpi n={`${avgProgress}%`} label="Avg Progress" icon={KPI_ICON.progress} />
+        <Kpi n={launch90} label="Launch ใน 90 วัน" color="#2f6bff" icon={KPI_ICON.launch} />
       </div>
 
       {/* ── Status + Tier + Reusable ── */}
@@ -307,12 +307,56 @@ function pillStyle(st) {
   return { background: st.bg, color: st.tx, border: `1px solid ${st.bd}` };
 }
 
-function Kpi({ n, label, sub, color }) {
+// Semantic pictograms per KPI (mockup .kpi-icon) — was a plain 10×10 colour
+// swatch, which only ever repeated the number's own colour rather than
+// telling the tile apart from its neighbours at a glance.
+const KPI_ICON = {
+  total: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  ),
+  ready: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  ),
+  dev: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+    </svg>
+  ),
+  progress: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="20" x2="4" y2="12" /><line x1="12" y1="20" x2="12" y2="7" /><line x1="20" y1="20" x2="20" y2="15" />
+    </svg>
+  ),
+  launch: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  ),
+};
+
+function Kpi({ n, label, sub, color, icon }) {
   return (
     <div className="dash-kpi">
-      <div className="dash-kpi-n" style={color ? { color } : undefined}>{n}</div>
-      <div className="dash-kpi-l">{label}</div>
-      {sub && <div className="dash-kpi-sub">{sub}</div>}
+      {/* The tile is a tinted wash of the KPI's own colour (14%), not a new
+          hue — it must not read as a separate signal from the number. */}
+      <div
+        className="dash-kpi-icon"
+        style={{ background: color ? `color-mix(in srgb, ${color} 14%, transparent)` : 'var(--sf2)', color: color || 'var(--mu)' }}
+        aria-hidden="true"
+      >
+        {icon}
+      </div>
+      <div className="dash-kpi-body">
+        <div className="dash-kpi-n" style={color ? { color } : undefined}>{n}</div>
+        <div className="dash-kpi-l">{label}</div>
+        {sub && <div className="dash-kpi-sub">{sub}</div>}
+      </div>
     </div>
   );
 }

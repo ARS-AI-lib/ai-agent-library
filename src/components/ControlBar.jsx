@@ -1,10 +1,17 @@
 import MultiSelect from './MultiSelect';
+import Dropdown from './Dropdown';
 import { TIER_ORDER } from '../lib/tier';
 
 const VIEWS = [
   ['by-owner', 'By Owner'],
   ['by-role', 'By Role'],
   ['by-ability', 'By Ability'],
+];
+
+const TYPES = [
+  ['all', 'All types'],
+  ['agent', 'Agent'],
+  ['skill', 'Skill'],
 ];
 
 export default function ControlBar({
@@ -22,11 +29,7 @@ export default function ControlBar({
     <div className="cbar">
       <div className="cg">
         <span className="cl">VIEW</span>
-        <select className="dd" value={view} onChange={(e) => setView(e.target.value)}>
-          {VIEWS.map(([v, lbl]) => (
-            <option key={v} value={v}>{lbl}</option>
-          ))}
-        </select>
+        <Dropdown options={VIEWS} value={view} onChange={setView} ariaLabel="จัดกลุ่มตาม" />
       </div>
 
       <div className="csep" />
@@ -62,11 +65,7 @@ export default function ControlBar({
       <div className="csep" />
       <div className="cg">
         <span className="cl">TYPE</span>
-        <select className="dd" value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="all">All types</option>
-          <option value="agent">Agent</option>
-          <option value="skill">Skill</option>
-        </select>
+        <Dropdown options={TYPES} value={type} onChange={setType} ariaLabel="ประเภท" />
       </div>
 
       {/* Icon-only toggle rather than another labelled dropdown: it is a single

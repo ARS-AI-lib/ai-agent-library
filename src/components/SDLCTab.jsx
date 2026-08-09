@@ -5,6 +5,7 @@ import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { uniq, splitRoles, relationshipLabel, fmtDate, extractProcessId, agentProcessIds, agentUseCaseNames } from '../lib/agentUtils';
 import MultiSelect from './MultiSelect';
+import Dropdown from './Dropdown';
 import StatusLegend from './StatusLegend';
 import '../styles/SDLCTab.css';
 
@@ -536,8 +537,10 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
 
   return (
     <div className="sdlc-tab">
-      <h2 className="sdlc-title">SDLC AI Adoption</h2>
-
+      {/* No page title here on purpose — the Nav tab above already reads
+          "SDLC AI Adoption", so a repeated heading was pure redundancy.
+          .sdlc-title stays defined in SDLCTab.css in case something else
+          ever needs it, it's just not rendered on this page. */}
       <StatusLegend agents={legendAgents} actions={legendActions} onStatusClick={setSelectedStatus} selectedStatus={selectedStatus} />
 
       <div className="cbar">
@@ -547,10 +550,12 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
           <>
             <div className="csep" />
             <div className="cg"><span className="cl">VIEW</span>
-              <select className="dd" value={adoptView} onChange={(e) => changeAdoptView(e.target.value)}>
-                <option value="by-stage">By Stage</option>
-                <option value="by-process">By Process</option>
-              </select>
+              <Dropdown
+                options={[['by-stage', 'By Stage'], ['by-process', 'By Process']]}
+                value={adoptView}
+                onChange={changeAdoptView}
+                ariaLabel="จัดกลุ่ม Use Case ตาม"
+              />
             </div>
           </>
         )}
@@ -558,10 +563,12 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
           <>
             <div className="csep" />
             <div className="cg"><span className="cl">STAGE</span>
-              <select className="dd" value={stage} onChange={(e) => setStage(e.target.value)}>
-                <option value="all">All</option>
-                {ALL_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Dropdown
+                options={[['all', 'All'], ...ALL_STAGES.map((s) => [s, s])]}
+                value={stage}
+                onChange={setStage}
+                ariaLabel="กรองตาม Stage"
+              />
             </div>
           </>
         )}
