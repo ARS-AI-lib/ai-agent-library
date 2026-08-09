@@ -523,13 +523,30 @@ button.lg-item.on { border-color: currentColor; background: var(--sf); }
 .signin-logos img { height: 52px; width: auto; object-fit: contain; display: block; }
 .signin-logos img:first-of-type { height: 60px; }
 .signin-logos-sep { width: 1px; height: 40px; background: var(--bd2); }
+/* Both logo PNGs bake in dark navy wordmark text ("INFINITAS", "by
+   INFINITAS") on a transparent background — designed for a light page. On
+   a dark page that text was nearly invisible (it IS the dark colour the
+   background became). Rather than filter the images (which would also wash
+   out the actual brand blues), give them a light backing card in dark mode
+   only, so the marks render on the light ground they were designed for. */
+:root[data-theme="dark"] .signin-logos {
+  background: #fff; border-radius: var(--r-md); padding: 18px 28px; box-shadow: var(--shm);
+}
+/* Google's button must stay a fixed white/light surface regardless of page
+   theme (brand guideline) — but its text used var(--tx), which flips to
+   near-white in dark mode, so "Sign in with Google" went white-on-white.
+   Text colour is now fixed to the light-mode --tx value, independent of
+   theme, matching the button's own fixed white background. */
 .signin-google-btn {
-  display: flex; align-items: center; gap: 10px; background: #fff; color: var(--tx);
+  display: flex; align-items: center; gap: 10px; background: #fff; color: #182135;
   border: 1px solid var(--bd-soft); border-radius: var(--r-md); padding: 9px 18px; font-size: 13px;
   font-weight: 600; font-family: inherit; cursor: pointer; box-shadow: var(--sh); transition: box-shadow .15s;
 }
 .signin-google-btn:hover { box-shadow: var(--shm); }
-.signin-domain-hint { font-size: 10.5px; color: var(--mu2); margin: 0; }
+/* var(--mu2) measured 3.45:1 on the dark background — under the 4.5:1 text
+   minimum, which is why the domain hint read as barely-there in dark mode.
+   var(--mu) clears 5.82:1. */
+.signin-domain-hint { font-size: 10.5px; color: var(--mu); margin: 0; }
 .signin-footer {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 1;
   display: flex; align-items: center; justify-content: space-between;
