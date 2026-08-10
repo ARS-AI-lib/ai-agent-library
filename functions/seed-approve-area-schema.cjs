@@ -29,12 +29,22 @@ const src = fs
   .readFileSync(path.join(__dirname, '..', 'src', 'lib', 'approveAreas.js'), 'utf8')
   .replace(/^\s*import\s[^;]*;\s*$/gm, '')
   .replace(/^export\s+/gm, '');
-const { AREA_ORDER } = new Function(`${src}\n;return { AREA_ORDER };`)();
+const { AREA_ORDER, CATEGORY_AREA } = new Function(`${src}\n;return { AREA_ORDER, CATEGORY_AREA };`)();
 
-const NEW_CATEGORIES = ['Security', 'Data & Analytics'];
+// The category list is now DERIVED from CATEGORY_AREA's keys rather than a
+// hand-kept constant (2026-08-10). That table is the thing that guarantees
+// every category maps to exactly one approver area, so making it the single
+// source for the option list too means the two cannot drift.
+const CATEGORIES = Object.keys(CATEGORY_AREA);
 
-if (!Array.isArray(AREA_ORDER) || AREA_ORDER.length < 1) {
-  console.error('✗ could not read AREA_ORDER from src/lib/approveAreas.js');
+if (!Array.isArray(AREA_ORDER) || AREA_ORDER.length < 1 || !CATEGORIES.length) {
+  console.error('✗ could not read AREA_ORDER / CATEGORY_AREA from src/lib/approveAreas.js');
+  process.exit(1);
+}
+const unmapped = CATEGORIES.filter((c) => !AREA_ORDER.includes(CATEGORY_AREA[c]));
+if (unmapped.length) {
+  console.error('✗ these categories map to an area that is not in AREA_ORDER — aborting:');
+  unmapped.forEach((c) => console.error(`  "${c}" -> ${CATEGORY_AREA[c]}`));
   process.exit(1);
 }
 
@@ -45,26 +55,29 @@ const db = getFirestore(app, 'ai-agent-lib');
   const ref = db.doc('config/schema');
   const cur = (await ref.get()).data() || {};
   const curCats = Array.isArray(cur.category) ? cur.category : [];
-  const adding = NEW_CATEGORIES.filter((c) => !curCats.includes(c));
+  const adding = CATEGORIES.filter((c) => !curCats.includes(c));
+  const removing = curCats.filter((c) => !CATEGORIES.includes(c));
 
-  console.log('=== approveArea (new field) ===');
+  console.log(`=== approveArea (${AREA_ORDER.length}) ===`);
   AREA_ORDER.forEach((a, i) => console.log(`  ${String(i + 1).padStart(2)}. ${a}`));
-  console.log(`\n  existing value: ${cur.approveArea ? JSON.stringify(cur.approveArea) : '(none)'}`);
+  console.log(`\n  existing: ${cur.approveArea ? JSON.stringify(cur.approveArea) : '(none)'}`);
 
-  console.log(`\n=== category (grow-only) — currently ${curCats.length} ===`);
-  console.log(adding.length ? `  adding: ${adding.join(', ')}` : '  nothing to add (already present)');
+  console.log(`\n=== category: ${curCats.length} -> ${CATEGORIES.length} ===`);
+  adding.forEach((c) => console.log(`  +  ${c}   -> ${CATEGORY_AREA[c]}`));
+  // Removal is normally impossible (the list is grow-only for users, enforced
+  // by firestore.rules and CategoryApprovalPanel's arrayUnion). This script
+  // runs on the admin SDK, which bypasses rules, and is the ONLY sanctioned
+  // way to retire a category — an admin taxonomy decision, not user input.
+  // Anything listed here must already have been migrated off every agent by
+  // functions/realign-categories.cjs, or those agents keep a dangling label.
+  removing.forEach((c) => console.log(`  -  ${c}   (RETIRED)`));
+  if (!adding.length && !removing.length) console.log('  (no change)');
 
   console.log('\n  note: sdlcStage is left untouched — it is still a real agent');
   console.log('  field and drives the SDLC board; it just no longer defines approver scope.');
 
   if (!APPLY) { console.log('\nDRY RUN — re-run with --apply to write.'); return; }
 
-  await ref.set(
-    {
-      approveArea: AREA_ORDER,
-      ...(adding.length ? { category: FieldValue.arrayUnion(...adding) } : {}),
-    },
-    { merge: true }
-  );
+  await ref.set({ approveArea: AREA_ORDER, category: CATEGORIES }, { merge: true });
   console.log('\n✓ written');
 })();

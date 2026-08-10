@@ -79,6 +79,8 @@ export const AREA_ORDER = [
   'QA',
   'Security',
   'Platform, DevOps & Operations',
+  'SRE & Reliability',
+  'Incident & Problem Management',
   'Data & Analytics',
 ];
 
@@ -164,14 +166,19 @@ export const PROCESS_AREA = {
   '14.3A': 'Development',                         // owner: Developer, Deployment, Platform Lead — IVT
   '14.3B': 'QA',                                  // owner: PO — PVT
   '14.4': 'Development',                          // owner: Deployment
-  // Post Development — every one of these has an empty owner
-  'Incident Management': 'Platform, DevOps & Operations',
-  'Problem Management': 'Platform, DevOps & Operations',
-  'E2E Monitoring': 'Platform, DevOps & Operations',
-  'Capacity Planning': 'Platform, DevOps & Operations',
-  'FinOps': 'Platform, DevOps & Operations',
-  'Capacity Monitoring': 'Platform, DevOps & Operations',
-  'Self Repairing': 'Platform, DevOps & Operations',
+  // Post Development (2026-08-10) — every one of these has an empty owner in
+  // sdlcProcesses and ZERO live agents today, so these rows are pure
+  // forward-looking config, split along the ITIL/SRE line the org actually
+  // staffs: "keep it healthy and within budget" vs "something broke".
+  // Platform, DevOps & Operations keeps the build-and-ship side (CI/CD,
+  // Environment Provisioning, DevOps, 14.4 CAB) rather than run-the-service.
+  'E2E Monitoring': 'SRE & Reliability',
+  'Capacity Planning': 'SRE & Reliability',
+  'Capacity Monitoring': 'SRE & Reliability',
+  'Self Repairing': 'SRE & Reliability',
+  'FinOps': 'SRE & Reliability',
+  'Incident Management': 'Incident & Problem Management',
+  'Problem Management': 'Incident & Problem Management',
 };
 
 // ── Layer 2: role → area, for roles whose area has NO category ───────
@@ -191,36 +198,54 @@ export const ROLE_FIRST_AREA = {
 
 // ── Layer 3: category → area ─────────────────────────────────────────
 // Covers 243/243 agents (vs sdlcStage's 139/243), which is what makes the
-// orphan backfill possible at all. `null` marks a category that legitimately
-// spans more than one area — it must fall through to the role layer rather
-// than pick a side:
-//   Software Development   → Architecture vs Development vs Platform (this
-//                            category alone can't tell a coder from an
-//                            architect from a DevOps engineer — see the file
-//                            header for the DevOps Engineer bug this caused
-//                            before it was nulled out here, 2026-08-10)
-//   Requirements & Product → Business Analysis vs Business & Product
-//   DevOps & Performance   → Platform/DevOps vs Quality (Performance lives
-//                            in Quality per the 2026-08-10 decision)
-//   Orchestration & Automation → genuinely cross-cutting; its top roles
-//                            (Operations 6, AI Creator 3, UAT 2, Delivery
-//                            Manager 2, CRM Manager 2) show no dominant
-//                            discipline at all.
+// orphan backfill possible at all.
+//
+// REALIGNED 2026-08-10. As areas were split (Architecture/Development,
+// SIT/QA, and the post-dev pair) the category list drifted badly out of step:
+// five categories had to be nulled as "too coarse to pick a side", and they
+// happened to be the five LARGEST (Software Development 81, Testing & QA 36,
+// Requirements & Product 25, Orchestration & Automation 25, DevOps &
+// Performance 20) — i.e. the resolver's most-used layer had become its least
+// decisive. Six areas had no category at all.
+//
+// The list is now built on one rule: **every category maps to exactly one
+// area, and there are no nulls.** Two kinds of category exist —
+//   • discipline — 1:1 with an area; answers "what kind of work is this"
+//   • business vertical — the bank's actual products; all route to
+//     Business & Product, and exist because people browse by product
+// A category that cannot satisfy the one-area rule does not belong in the
+// list: 'Orchestration & Automation' was retired for exactly that reason
+// (its agents were spread across 8 areas and 23 of its 25 already carried a
+// second, more meaningful category), and 'Testing & QA' was replaced by the
+// SIT/QA pair it had been masking.
+//
+// Consequence worth knowing: because there are no nulls, the category layer
+// is now fully decisive and the MERGE_ROLE_CATEGORIES workaround that layer 5
+// needed while they existed has been removed (see the resolver below).
 export const CATEGORY_AREA = {
+  // ── Discipline: 1:1 with an area ──
   'Compliance & Governance': 'Governance, Risk & Procurement',
-  'Design & UI': 'UI & Visual Design',
-  'UX Research': 'UX Research',
-  'Writing & Content': 'Content & UX Writing',
   'Project & Delivery': 'Delivery Management',
-  'Investment': 'Business & Product',        // business vertical → discipline
-  'Lending & Credit': 'Business & Product',  // business vertical → discipline
-  'Security': 'Security',                    // added 2026-08-10
-  'Data & Analytics': 'Data & Analytics',    // added 2026-08-10
-  'Software Development': null,              // nulled 2026-08-10 — see note above
-  'Testing & QA': null,                      // nulled 2026-08-10 — spans SIT / QA / Development now
-  'Requirements & Product': null,
-  'DevOps & Performance': null,
-  'Orchestration & Automation': null,
+  'Requirements & Product': 'Business Analysis',
+  'UX Research': 'UX Research',
+  'Design & UI': 'UI & Visual Design',
+  'Writing & Content': 'Content & UX Writing',
+  'Architecture': 'Architecture',                              // added 2026-08-10
+  'Software Development': 'Development',                       // now unambiguous: Architecture split out
+  'SIT': 'SIT',                                                // added 2026-08-10
+  'QA': 'QA',                                                  // added 2026-08-10
+  'Security': 'Security',
+  'DevOps & Platform': 'Platform, DevOps & Operations',        // renamed from 'DevOps & Performance'
+  'SRE & Reliability': 'SRE & Reliability',                    // added 2026-08-10
+  'Incident Management': 'Incident & Problem Management',      // added 2026-08-10
+  'Data & Analytics': 'Data & Analytics',
+  // ── Business verticals: the bank's products, all approved by Business ──
+  'Investment': 'Business & Product',
+  'Lending & Credit': 'Business & Product',
+  'NEXT': 'Business & Product',                                // added 2026-08-10
+  'เป๋าตัง & เป๋าตุง': 'Business & Product',                      // added 2026-08-10
+  'CLIX': 'Business & Product',                                // added 2026-08-10
+  'Core bank': 'Business & Product',                           // added 2026-08-10
 };
 
 // ── Layer 4: role → area (tiebreak + last resort) ────────────────────
@@ -393,33 +418,14 @@ export function agentApproveAreas(agent, categoryAreaOverrides) {
     const override = isKnownArea(overrides[c]) ? overrides[c] : null;
     add(byCategory, override || CATEGORY_AREA[c]);
   });
-  // MERGE_ROLE_CATEGORIES are the categories that got nulled because a whole
-  // discipline was SPLIT out from under them (Software Development →
-  // Architecture/Development/Platform; Testing & QA → SIT/QA/Development).
-  // Both are very often paired with a REAL category on the same agent — the
-  // Figma skill pack carries 'Design & UI' + 'Software Development', and
-  // Figma Audit Design System carries 'Design & UI' + 'Testing & QA'. Left as
-  // a plain short-circuit, that pairing silently drops the signal the agent's
-  // ROLE carries (Developer → Development, QA → QA), even though role layer 6
-  // below would supply it — the only reason it never runs is that byCategory
-  // already has a hit from the other category. So when one of these is
-  // present alongside a resolved category, merge the role layer in here
-  // instead of waiting for a fallback that will never fire.
-  //
-  // Deliberately NOT "any null category": the other three (Requirements &
-  // Product, DevOps & Performance, Orchestration & Automation) are ambiguous
-  // for a different reason — nothing was split out of them, they were simply
-  // always cross-cutting — and were reviewed and left as pure fallbacks.
-  // Verified against live data: the general form would additionally have
-  // changed 7 unrelated VD/DE and Workshop agents, while this scoped form
-  // changes exactly the agents each split actually affected (8 for Software
-  // Development, 1 for Testing & QA).
-  const MERGE_ROLE_CATEGORIES = ['Software Development', 'Testing & QA'];
-  if (byCategory.size && cats.some((c) => MERGE_ROLE_CATEGORIES.includes(c))) {
-    const combined = new Set(byCategory);
-    roles.forEach((r) => add(combined, ROLE_AREA[r]));
-    return [...combined].sort();
-  }
+  // (A MERGE_ROLE_CATEGORIES workaround used to sit here: while 'Software
+  // Development' and 'Testing & QA' were nulled, an agent carrying one of
+  // them alongside a real category short-circuited before the role layer and
+  // silently lost the signal its role held. The 2026-08-10 category realign
+  // removed every null, so the category layer is decisive on its own and the
+  // workaround was deleted rather than left to rot — an agent with cats
+  // ['Design & UI','Software Development'] now resolves to
+  // ['Development','UI & Visual Design'] straight from this table.)
   if (byCategory.size) return [...byCategory].sort();
 
   // 6. Role.

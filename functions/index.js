@@ -53,10 +53,15 @@ async function getCoreAbilityOptions() {
 // proposed_new_category escape hatch below, which routes through admin approval
 // rather than writing straight to the list (2026-08 decision — see plan
 // agent-skill-structured-horizon.md).
+// Mirrors CATEGORY_AREA's key set in src/lib/approveAreas.js (realigned
+// 2026-08-10 so every category maps to exactly one approver area). Only a
+// fallback for when /config/schema is unreachable — that doc is the live list.
 const FALLBACK_CATEGORY = [
-  'Design & UI', 'UX Research', 'Writing & Content', 'Requirements & Product',
-  'Software Development', 'DevOps & Performance', 'Testing & QA',
-  'Lending & Credit', 'Investment', 'Project & Delivery',
+  'Compliance & Governance', 'Project & Delivery', 'Requirements & Product',
+  'UX Research', 'Design & UI', 'Writing & Content', 'Architecture',
+  'Software Development', 'SIT', 'QA', 'Security', 'DevOps & Platform',
+  'SRE & Reliability', 'Incident Management', 'Data & Analytics',
+  'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง & เป๋าตุง', 'CLIX', 'Core bank',
 ];
 let categoryCache = null;
 async function getCategoryOptions() {
@@ -81,7 +86,8 @@ const FALLBACK_APPROVE_AREA = [
   'Business & Product', 'Governance, Risk & Procurement', 'Delivery Management',
   'Business Analysis', 'UX Research', 'UI & Visual Design', 'Content & UX Writing',
   'Architecture', 'Development', 'SIT', 'QA', 'Security',
-  'Platform, DevOps & Operations', 'Data & Analytics',
+  'Platform, DevOps & Operations', 'SRE & Reliability',
+  'Incident & Problem Management', 'Data & Analytics',
 ];
 let approveAreaCache = null;
 async function getApproveAreaOptions() {
