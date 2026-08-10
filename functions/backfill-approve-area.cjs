@@ -75,6 +75,39 @@ function explain(a) {
   return 'UNRESOLVED';
 }
 
+// ── Manual overrides (decided 2026-08-10, before the first --apply) ──
+// The dry run surfaced six agents where the CATEGORY layer beat the ROLE
+// layer and produced a placement a human could see was wrong. Recorded here
+// rather than fixed by weakening the resolver, because each is a one-off
+// judgement about a specific agent, not a rule — bending the general chain to
+// suit six rows would misroute others.
+//
+// They are written as a normal approveArea value, i.e. exactly what an admin
+// would have set by hand in EditAgentModal afterwards; layer 1 of the chain
+// then keeps them stable forever.
+const MANUAL_AREA = {
+  // Sibling of 20 other AIPhbt lending agents, all of which land in
+  // Business & Product; only this one's Software Development category
+  // pulled it into engineering.
+  'AIPhbt - Document Anomaly': ['Business & Product'],
+  // Both ALPHA entries: user's call, overriding the script's category-driven
+  // answer of Architecture & Engineering.
+  'ALPHA - Jira Information Retrieval': ['Business Analysis'],
+  'ALPHA - Doc Extraction': ['Delivery Management'],
+  // Operations-owned document pipelines for the Nok product; their
+  // Writing & Content category describes the payload, not the discipline.
+  'Nok - document extraction (PDF > TEXT)': ['Business & Product'],
+  'Nok - document extraction (from document)': ['Business & Product'],
+};
+
+// Not an area fix — a missed flag. This entry is one of ALPHA's own prompt
+// fragments (siblings 1.identity.md, 2.voice.md, 4.orchestrator.md … are all
+// flagged) but flag-internal.cjs never matched it, because its name lacks the
+// ".md" suffix the script keys on. Setting the flag here fixes its approver
+// routing AND its chat search ranking, which is the actual bug.
+// The flag-internal.cjs gap itself is filed separately.
+const FLAG_INTERNAL = ['1. knowledge selector'];
+
 // Guidance only — printed, never written. See header note.
 const STAGE_HINT = {
   Initiation: 'Business & Product / Governance, Risk & Procurement',
@@ -108,8 +141,10 @@ const db = getFirestore(app, 'ai-agent-lib');
     if (a.approvalStatus !== 'approved' || a.archived === true) return;
     considered++;
 
-    const resolved = agentApproveAreas(a);
-    const source = explain(a);
+    const override = MANUAL_AREA[a.agentName];
+    const flagInternal = FLAG_INTERNAL.includes(a.agentName);
+    const resolved = override || agentApproveAreas(flagInternal ? { ...a, internalTool: true } : a);
+    const source = override ? 'manual-override' : (flagInternal ? 'internalTool (flag fixed here)' : explain(a));
     bySource[source] = (bySource[source] || 0) + 1;
 
     if (!resolved.length) { unresolved.push(a.agentName); return; }
@@ -123,7 +158,7 @@ const db = getFirestore(app, 'ai-agent-lib');
     const oldEmpty = a.customerFacing !== true && !stages.length;
     if (oldEmpty) wasOrphan.push(`${a.agentName}  →  ${resolved.join(' + ')}   [${source}]`);
 
-    if (source !== 'already-set') writes.push({ id: a.id, name: a.agentName, areas: resolved, source });
+    if (source !== 'already-set') writes.push({ id: a.id, name: a.agentName, areas: resolved, source, flagInternal });
     if (VERBOSE) console.log(`  ${a.agentName}  →  ${resolved.join(' + ')}   [${source}]`);
   });
 
@@ -159,7 +194,10 @@ const db = getFirestore(app, 'ai-agent-lib');
 
   for (let i = 0; i < writes.length; i += 400) {
     const batch = db.batch();
-    writes.slice(i, i + 400).forEach((w) => batch.update(db.collection('agents').doc(w.id), { approveArea: w.areas }));
+    writes.slice(i, i + 400).forEach((w) => batch.update(db.collection('agents').doc(w.id), {
+      approveArea: w.areas,
+      ...(w.flagInternal ? { internalTool: true } : {}),
+    }));
     await batch.commit();
     console.log(`  committed ${Math.min(i + 400, writes.length)}/${writes.length}`);
   }
