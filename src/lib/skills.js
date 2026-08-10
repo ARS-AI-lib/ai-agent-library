@@ -20,7 +20,7 @@ import { rankCandidates, findDuplicates, scoreDraftAgainst } from './similarity'
 import { findConnectionSuggestions } from './connections';
 import { getType, getTier, isInternalOrExternal } from './tier';
 import { agentStatus, ST_DEF } from './status';
-import { splitRoles, agentProcessIds, agentUseCaseNames } from './agentUtils';
+import { splitRoles, agentProcessIds, agentUseCaseNames, agentCategories } from './agentUtils';
 
 function norm(s) {
   return (Array.isArray(s) ? s.join(' ') : (s || '')).toString().toLowerCase().trim();
@@ -409,15 +409,16 @@ export const SKILLS = {
         scope: '"Internal" | "External" (optional)',
         sdlcStage: 'array of SDLC stage names (optional, requires ctx.processes)',
         sdlcProcessMapping: 'array of process ids e.g. "2.2" (optional)',
+        category: 'array of category names (optional) — หมวดโดเมนงาน เช่น "Investment", "Design & UI" — matches if the agent has ANY of these',
         useCase: 'array of use case name strings (optional) — matches if the agent has ANY of these',
         keyword: 'string — free-text search across name/owner/description/ability/role (optional)',
-        groupBy: '"owner" | "creator" | "tier" | "status" | "relatedRole" | "coreAbility" (optional) — if set, returns counts per group instead of a flat list',
+        groupBy: '"owner" | "creator" | "tier" | "status" | "relatedRole" | "coreAbility" | "category" (optional) — if set, returns counts per group instead of a flat list',
       },
     },
     run: (args, ctx) => {
       const {
         type = 'all', tier, owner, creator, relatedRole, coreAbility, reusable, status,
-        scope, sdlcStage, sdlcProcessMapping, useCase, keyword, groupBy,
+        scope, sdlcStage, sdlcProcessMapping, useCase, category, keyword, groupBy,
       } = args || {};
 
       // Resolve stage→processId set once (sdlcUseCases/sdlcProcesses don't
@@ -485,6 +486,12 @@ export const SKILLS = {
           const names = agentUseCaseNames(a).map(norm);
           if (!useCase.some((u) => names.includes(norm(u)))) return false;
         }
+        // Category is multi-value per agent (one entry can sit in several
+        // domains), so ANY-of, matching how useCase/relatedRole behave.
+        if (category?.length) {
+          const cats = agentCategories(a).map(norm);
+          if (!category.some((c) => cats.includes(norm(c)))) return false;
+        }
         if (keyword && !matchesKeyword(a, keyword) && !semanticKeywordIds?.has(a.id)) return false;
         return true;
       });
@@ -495,11 +502,12 @@ export const SKILLS = {
           tier: (a) => getTier(a),
           status: (a) => ST_DEF[agentStatus({ devProgress: progressNum(a) })].lb,
         }[groupBy] || null;
-        if (groupBy === 'relatedRole' || groupBy === 'coreAbility' || groupBy === 'creator') {
+        if (groupBy === 'relatedRole' || groupBy === 'coreAbility' || groupBy === 'creator' || groupBy === 'category') {
           // Multi-value group: one agent can contribute to several buckets.
           // creator is a comma-joined display string → split like roles.
           const valsOf = (a) => {
             if (groupBy === 'relatedRole') return splitRoles(a.relatedRole);
+            if (groupBy === 'category') return agentCategories(a);
             if (groupBy === 'coreAbility') return Array.isArray(a.coreAbility) ? a.coreAbility : [a.coreAbility];
             return String(a.creator || '').split(',').map((s) => s.trim());
           };
@@ -527,6 +535,7 @@ export const SKILLS = {
             creator: a.creator || '',
             ...readinessOf(a),
             reusable: a.reusable || '', scope: isInternalOrExternal(a),
+            category: agentCategories(a),
           }))
           .sort((x, y) => READINESS_RANK[x.readiness] - READINESS_RANK[y.readiness]),
       };
@@ -679,6 +688,7 @@ export const SKILLS = {
         description: (a.description || '').slice(0, 300),
         input: a.input || '', output: a.output || '', businessValue: (a.businessValue || '').slice(0, 200),
         coreAbility: a.coreAbility,
+        category: agentCategories(a),
         owner: a.owner || '',
         creator: a.creator || '',
         // A weak hint only. Deliberately NOT thresholded — measured on the real

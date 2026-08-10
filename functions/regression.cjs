@@ -149,6 +149,57 @@ const CASES = [
       if (r.kind === 'tool') return r.name === 'capability_search' && /design/i.test(JSON.stringify(r.args)) ? null : `เรียก ${r.name} args=${JSON.stringify(r.args)}`;
       return `ตอบ text แทนการค้นใหม่: ${r.text.slice(0, 70)}`;
     } },
+
+  // ── Domain glossary (2026-08-09) ────────────────────────────────────
+  // Shipped answer to "T1-T4 คืออะไร" was fully invented: it described the
+  // tiers as an importance/support ranking (T1 highest, T3/T4 "niche or
+  // early-stage"). The real taxonomy is a 2x2 of type x scope and carries no
+  // ordering at all. Root cause: the prompt named `tier` only as a filter
+  // value ('ค่าใน T1..T4') and never defined it, and no tool answers
+  // definitional questions — so the model filled the gap itself.
+  { name: '📚 Tier — ต้องอธิบายเป็นตาราง 2 แกน (Skill/Agent × Internal/External)',
+    run: () => turn(userTurn('T1-T4 คืออะไร')),
+    check: (r) => {
+      if (r.kind === 'tool') return `ไปเรียก tool (${r.name}) ทั้งที่เป็นคำถามเชิงนิยาม ตอบได้เลย`;
+      const t = r.text;
+      if (!/Internal/i.test(t) || !/External/i.test(t)) return `ไม่ได้พูดถึงแกน Internal/External: ${t.slice(0, 110)}`;
+      if (!/Skill/i.test(t) || !/Agent/i.test(t)) return `ไม่ได้พูดถึงแกน Skill/Agent: ${t.slice(0, 110)}`;
+      // The exact hallucination that shipped. Strip correctly-NEGATED mentions
+      // first ("...ไม่ใช่ระดับความสำคัญนะครับ") — the prompt tells the model to
+      // say the tiers are not a ranking, so the phrase inside a negation is the
+      // right answer. Without this the check fails on a correct response.
+      const asserted = t.replace(/ไม่(ใช่|ได้เป็น|ได้)\s*[""']?\s*(ระดับ|ลำดับ)?\s*(ความสำคัญ|การสนับสนุน)/g, '');
+      if (/ลำดับความสำคัญ|ระดับความสำคัญ|ระดับการสนับสนุน/.test(asserted)) return `ยังอธิบายว่าเป็นลำดับ/ระดับความสำคัญ: ${t.slice(0, 110)}`;
+      if (/T1[^\n]{0,40}สำคัญ(สูง|ที่สุด|มาก)/.test(t)) return `ยังบอกว่า T1 สำคัญที่สุด: ${t.slice(0, 110)}`;
+      return null;
+    } },
+
+  { name: '📚 Tier ≠ Status — ห้ามบอกว่า tier บอกความคืบหน้า/ความพร้อม',
+    run: () => turn(userTurn('T4 แปลว่าพัฒนาเสร็จแล้วใช่ไหม')),
+    check: (r) => {
+      if (r.kind === 'tool') return `ไปเรียก tool (${r.name}) ทั้งที่เป็นคำถามเชิงนิยาม`;
+      const t = r.text;
+      if (!/ไม่ใช่|ไม่ได้|คนละ/.test(t)) return `ไม่ได้ปฏิเสธความเข้าใจผิด: ${t.slice(0, 110)}`;
+      return /Status|สถานะ|Ready to Use|ความคืบหน้า/i.test(t) ? null : `ไม่ได้ชี้ว่าความคืบหน้าอยู่ที่ Status: ${t.slice(0, 110)}`;
+    } },
+
+  { name: '📚 SDLC — ต้องรู้ว่ามี 7 stage เรียงลำดับ',
+    run: () => turn(userTurn('SDLC ในระบบนี้มี stage อะไรบ้าง')),
+    check: (r) => {
+      if (r.kind === 'tool') return r.name === 'query_sdlc' ? null : `เรียก tool ผิดตัว (${r.name})`;
+      const hit = ['Initiation', 'Discovery', 'Design', 'Build', 'Test', 'Deployment', 'Post Development']
+        .filter((st) => new RegExp(st, 'i').test(r.text));
+      return hit.length >= 6 ? null : `ระบุ stage ได้แค่ ${hit.length}/7: ${hit.join(', ')}`;
+    } },
+
+  { name: '📚 Category — คำถามรายการตามหมวด ต้องกรองด้วย category filter',
+    run: () => turn(userTurn('หมวด Investment มี agent อะไรบ้าง')),
+    check: (r) => {
+      if (r.kind !== 'tool' || r.name !== 'query_library') return `ได้ ${r.kind}:${r.name || r.text?.slice(0, 60)}`;
+      const cat = r.args?.category;
+      return Array.isArray(cat) && cat.some((c) => /investment/i.test(c))
+        ? null : `ไม่ได้ใช้ category filter: ${JSON.stringify(r.args)}`;
+    } },
 ];
 
 (async () => {
