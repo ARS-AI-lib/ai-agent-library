@@ -80,7 +80,7 @@ async function getCategoryOptions() {
 const FALLBACK_APPROVE_AREA = [
   'Business & Product', 'Governance, Risk & Procurement', 'Delivery Management',
   'Business Analysis', 'UX Research', 'UI & Visual Design', 'Content & UX Writing',
-  'Architecture & Engineering', 'Quality & Testing', 'Security',
+  'Architecture', 'Development', 'Quality & Testing', 'Security',
   'Platform, DevOps & Operations', 'Data & Analytics',
 ];
 let approveAreaCache = null;

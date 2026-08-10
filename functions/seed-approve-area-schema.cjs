@@ -33,7 +33,7 @@ const { AREA_ORDER } = new Function(`${src}\n;return { AREA_ORDER };`)();
 
 const NEW_CATEGORIES = ['Security', 'Data & Analytics'];
 
-if (!Array.isArray(AREA_ORDER) || AREA_ORDER.length !== 12) {
+if (!Array.isArray(AREA_ORDER) || AREA_ORDER.length < 1) {
   console.error('✗ could not read AREA_ORDER from src/lib/approveAreas.js');
   process.exit(1);
 }

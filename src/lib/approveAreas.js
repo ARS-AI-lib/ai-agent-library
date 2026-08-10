@@ -19,18 +19,37 @@ import { isInternalOrExternal } from './tier';
 //  3. Approver coverage was 5 people over 4 stages; Build (61 agents, the
 //     largest), Initiation, Post Development and Business had nobody.
 //
-// The 12 areas below are derived from `sdlcProcesses.owner` (~20 distinct
+// The areas below are derived from `sdlcProcesses.owner` (~20 distinct
 // real values) cross-checked against relatedRole frequency (54 distinct
 // values) — i.e. from what the org actually does, not a guessed taxonomy.
 //
 // Areas are a DIFFERENT AXIS from `category`, deliberately:
 //   category = "what is this agent about"  (user-facing browse/filter)
 //   area     = "whose expertise approves it" (routing)
-// They agree on 7 of 12; the rest need the fallback chain in tier.js. Do not
+// They agree on most of them; the rest need the fallback chain below. Do not
 // collapse them into one list — that would mean deleting Investment /
 // Lending & Credit, which are real browse categories with 44 agents between
 // them but are business verticals, not disciplines.
-
+//
+// 2026-08-10 (same day, follow-up): "Architecture & Engineering" split into
+// "Architecture" (design-level: high-level design, tech-lead-owned estimation
+// — processes 4.1/4.2) and "Development" (hands-on coding: processes 9.1,
+// 10.1-10.4, and all of 14.x per an explicit decision that "Deployment" means
+// the whole 14.x process range, not a role). Measured against the live
+// library before splitting: of the 54 agents then resolving to the combined
+// area, only 3 touched 4.1/4.2 (2 mixed-role, 1 pure architecture — role
+// "SA"), 19 touched 9.1/10.x (100% Developer/Backend/Frontend/Tech-Lead/
+// DevOps roles doing actual dev work — e.g. a "Tech Lead"-titled agent was
+// mapped to 10.3 Code Review, a coding activity, so PROCESS_AREA is trusted
+// over role title here), and 32 had no process mapping at all and fell
+// through category. That last group is also where a real bug lived: category
+// "Software Development" pointed straight at the combined area, so 6 of 7
+// DevOps Engineer agents landed there instead of "Platform, DevOps &
+// Operations" (where the 7th, resolved via role alone, correctly went) —
+// same role, two different answers, because category ran before role and
+// won first. Nulling CATEGORY_AREA['Software Development'] (see layer 5)
+// forces all of them through the role layer now, fixing this as a side
+// effect of the split rather than a separate task.
 export const AREA_ORDER = [
   'Business & Product',
   'Governance, Risk & Procurement',
@@ -39,7 +58,8 @@ export const AREA_ORDER = [
   'UX Research',
   'UI & Visual Design',
   'Content & UX Writing',
-  'Architecture & Engineering',
+  'Architecture',
+  'Development',
   'Quality & Testing',
   'Security',
   'Platform, DevOps & Operations',
@@ -73,8 +93,8 @@ export const PROCESS_AREA = {
   '3.1': 'UX Research',                           // owner: UX/UI (UX Researcher)
   '3.2': 'UI & Visual Design',                    // owner: UX/UI
   '3.3': 'UI & Visual Design',                    // owner: UX/UI
-  '4.1': 'Architecture & Engineering',            // owner: Tech Lead, Squad Lead
-  '4.2': 'Architecture & Engineering',            // owner: Squad Lead, Developer
+  '4.1': 'Architecture',                          // owner: Tech Lead, Squad Lead
+  '4.2': 'Architecture',                          // owner: Squad Lead, Developer
   '5.1': 'Data & Analytics',                      // owner: data
   'Data Requirement Gathering': 'Data & Analytics',       // owner empty
   'DevOps': 'Platform, DevOps & Operations',              // owner empty
@@ -87,11 +107,11 @@ export const PROCESS_AREA = {
   '7.4': 'Business Analysis',                     // owner: Business Analyst
   '8.1': 'UI & Visual Design',                    // owner: UX/UI
   '8.2': 'Content & UX Writing',                  // owner: UX/UI (UX Writer)
-  '9.1': 'Architecture & Engineering',            // owner: Developer
-  '10.1': 'Architecture & Engineering',           // owner: Developer
-  '10.2': 'Architecture & Engineering',           // owner: Developer
-  '10.3': 'Architecture & Engineering',           // owner: Developer
-  '10.4': 'Architecture & Engineering',           // owner: Developer
+  '9.1': 'Development',                           // owner: Developer
+  '10.1': 'Development',                          // owner: Developer
+  '10.2': 'Development',                          // owner: Developer
+  '10.3': 'Development',                          // owner: Developer
+  '10.4': 'Development',                          // owner: Developer
   'NFR Gathering': 'Quality & Testing',                                  // owner empty
   'Performance Test Scripting': 'Quality & Testing',                     // owner empty
   'Performance Test Execution': 'Quality & Testing',                     // owner empty
@@ -111,13 +131,17 @@ export const PROCESS_AREA = {
   '12.2': 'Quality & Testing',                    // owner: SIT
   '13.1': 'Quality & Testing',                    // owner: UAT
   '13.2': 'Quality & Testing',                    // owner: UAT
-  // Deployment
-  '14.1': 'Architecture & Engineering',           // owner: Developer
-  '14.2A': 'Quality & Testing',                   // owner: Developer, Deployment, Platform Lead
-  '14.2B': 'Business & Product',                  // owner: PO
-  '14.3A': 'Quality & Testing',                   // owner: Developer, Deployment, Platform Lead
-  '14.3B': 'Business & Product',                  // owner: PO
-  '14.4': 'Platform, DevOps & Operations',        // owner: Deployment
+  // Deployment — all of 14.x routes to Development per an explicit 2026-08-10
+  // decision that "Deployment" as a scope means the whole 14.x process range,
+  // not a literal role (no agent currently uses a "Deployment" role at all).
+  // Zero live agents hit any of these six today, so this is forward-looking
+  // config, not a migration.
+  '14.1': 'Development',                          // owner: Developer
+  '14.2A': 'Development',                         // owner: Developer, Deployment, Platform Lead
+  '14.2B': 'Development',                         // owner: PO
+  '14.3A': 'Development',                         // owner: Developer, Deployment, Platform Lead
+  '14.3B': 'Development',                         // owner: PO
+  '14.4': 'Development',                          // owner: Deployment
   // Post Development — every one of these has an empty owner
   'Incident Management': 'Platform, DevOps & Operations',
   'Problem Management': 'Platform, DevOps & Operations',
@@ -148,6 +172,11 @@ export const ROLE_FIRST_AREA = {
 // orphan backfill possible at all. `null` marks a category that legitimately
 // spans more than one area — it must fall through to the role layer rather
 // than pick a side:
+//   Software Development   → Architecture vs Development vs Platform (this
+//                            category alone can't tell a coder from an
+//                            architect from a DevOps engineer — see the file
+//                            header for the DevOps Engineer bug this caused
+//                            before it was nulled out here, 2026-08-10)
 //   Requirements & Product → Business Analysis vs Business & Product
 //   DevOps & Performance   → Platform/DevOps vs Quality (Performance lives
 //                            in Quality per the 2026-08-10 decision)
@@ -160,13 +189,13 @@ export const CATEGORY_AREA = {
   'Design & UI': 'UI & Visual Design',
   'UX Research': 'UX Research',
   'Writing & Content': 'Content & UX Writing',
-  'Software Development': 'Architecture & Engineering',
   'Testing & QA': 'Quality & Testing',
   'Project & Delivery': 'Delivery Management',
   'Investment': 'Business & Product',        // business vertical → discipline
   'Lending & Credit': 'Business & Product',  // business vertical → discipline
   'Security': 'Security',                    // added 2026-08-10
   'Data & Analytics': 'Data & Analytics',    // added 2026-08-10
+  'Software Development': null,              // nulled 2026-08-10 — see note above
   'Requirements & Product': null,
   'DevOps & Performance': null,
   'Orchestration & Automation': null,
@@ -215,22 +244,26 @@ export const ROLE_AREA = {
   'Content Strategist': 'Content & UX Writing',
   'Content Manager': 'Content & UX Writing',
   'Content Analyst': 'Content & UX Writing',
-  // Architecture & Engineering
-  'Developer': 'Architecture & Engineering',
-  'Backend Engineer': 'Architecture & Engineering',
-  'Frontend Engineer': 'Architecture & Engineering',
-  'Front-End Developer': 'Architecture & Engineering',
-  'System Architect': 'Architecture & Engineering',
-  'Software Architect': 'Architecture & Engineering',
-  'Tech Lead': 'Architecture & Engineering',
-  'Dev Lead': 'Architecture & Engineering',
-  'AI Engineer': 'Architecture & Engineering',
-  'AI Creator': 'Architecture & Engineering',
-  'Reviewer': 'Architecture & Engineering',
-  // Quality & Testing (Performance lives here, not with Security)
+  // Architecture (design-level — split from Development 2026-08-10)
+  'System Architect': 'Architecture',
+  'Software Architect': 'Architecture',
+  'Tech Lead': 'Architecture',
+  'Dev Lead': 'Architecture',
+  // Development (hands-on coding — split from Architecture 2026-08-10)
+  'Developer': 'Development',
+  'Backend Engineer': 'Development',
+  'Frontend Engineer': 'Development',
+  'Front-End Developer': 'Development',
+  'Full Stack': 'Development',    // no live agent uses this yet — added proactively
+  'Full-Stack': 'Development',    // spelling variant, same reason
+  'AI Engineer': 'Development',
+  'AI Creator': 'Development',
+  // Quality & Testing (Performance lives here, not with Security; Reviewer
+  // moved here 2026-08-10 — all 4 current holders pair it with QA Engineer)
   'Tester': 'Quality & Testing',
   'QA': 'Quality & Testing',
   'QA Engineer': 'Quality & Testing',
+  'Reviewer': 'Quality & Testing',
   'Performance Engineer': 'Quality & Testing',
   'UAT': 'Quality & Testing',
   'UAT Test': 'Quality & Testing',
@@ -278,7 +311,7 @@ export function isKnownArea(a) {
 //   3. sdlcProcessMapping → PROCESS_AREA   — most authoritative signal
 //   4. relatedRole → ROLE_FIRST_AREA  — Security/Data, which have no category
 //   5. category → categoryAreaOverrides, falling back to CATEGORY_AREA
-//   6. relatedRole → ROLE_AREA        — tiebreak for the 3 null categories
+//   6. relatedRole → ROLE_AREA        — tiebreak for the 4 null categories
 //   7. External with nothing else     — Business & Product
 //
 // `categoryAreaOverrides` (optional, {categoryName: areaName}) exists for
@@ -326,11 +359,34 @@ export function agentApproveAreas(agent, categoryAreaOverrides) {
   //    supersede a category that also happens to be in the baked-in table
   //    (shouldn't normally happen, but the override should win if it does).
   const overrides = categoryAreaOverrides || {};
+  const cats = agentCategories(agent);
   const byCategory = new Set();
-  agentCategories(agent).forEach((c) => {
+  cats.forEach((c) => {
     const override = isKnownArea(overrides[c]) ? overrides[c] : null;
     add(byCategory, override || CATEGORY_AREA[c]);
   });
+  // 'Software Development' is deliberately null (too coarse to pick a side —
+  // see CATEGORY_AREA's comment) and is very often paired with a REAL
+  // category like 'Design & UI' on the same agent (the Figma design-to-code
+  // skill pack: 8 agents, confirmed against live data 2026-08-10). Left as a
+  // plain short-circuit, that pairing would silently drop the Development
+  // signal a Developer/Frontend Engineer role carries, even though role
+  // layer 6 below would happily supply it — the ONLY reason it never runs is
+  // that byCategory already has a hit from the other category. So when
+  // 'Software Development' is present alongside a resolved category, merge
+  // in the role layer here rather than waiting for a fallback that will
+  // never fire. Scoped to this one category on purpose: other ambiguous
+  // categories (Requirements & Product, DevOps & Performance, Orchestration
+  // & Automation) were reviewed and left as pure fallbacks in the prior
+  // round — broadening this to "any ambiguous category" would reopen agents
+  // outside today's Architecture & Engineering split (confirmed by testing
+  // the general form against live data: it also touched 7 unrelated VD/DE
+  // and Workshop agents that were explicitly out of scope here).
+  if (byCategory.size && cats.includes('Software Development')) {
+    const combined = new Set(byCategory);
+    roles.forEach((r) => add(combined, ROLE_AREA[r]));
+    return [...combined].sort();
+  }
   if (byCategory.size) return [...byCategory].sort();
 
   // 6. Role.
