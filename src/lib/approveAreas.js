@@ -31,6 +31,21 @@ import { isInternalOrExternal } from './tier';
 // Lending & Credit, which are real browse categories with 44 agents between
 // them but are business verticals, not disciplines.
 //
+// 2026-08-10 (third revision, same day): "Quality & Testing" split into "SIT"
+// and "QA", with its load/performance and code-quality work reassigned to
+// Development and Security. Testing is not one discipline here — the org runs
+// distinct teams per phase, and the `owner` field on the 31 agents that were
+// in the combined area proves it cleanly: SIT-TQM 13 · arise-perf 6 · PQA 5 ·
+// arise-reviewer 4 · Digital Experience Team 2 · Development 1. Rules:
+//   Load/Performance test, Unit test*, Code scan*, IVT  → Development
+//   SIT, Unit test*                                      → SIT
+//   UAT, PQA, QA, PVT*                                   → QA
+//   PVT* when tied directly to PO/BU                     → Business & Product
+//   Pen test, Code scan*                                 → Security
+// (* = decided per-agent from its details/input/output, not by name alone —
+// e.g. `tester (QA)` sits on process 11.2 but its owner is "Development" and
+// its output is unit/e2e test files, so it is Development, not SIT.)
+//
 // 2026-08-10 (same day, follow-up): "Architecture & Engineering" split into
 // "Architecture" (design-level: high-level design, tech-lead-owned estimation
 // — processes 4.1/4.2) and "Development" (hands-on coding: processes 9.1,
@@ -60,7 +75,8 @@ export const AREA_ORDER = [
   'Content & UX Writing',
   'Architecture',
   'Development',
-  'Quality & Testing',
+  'SIT',
+  'QA',
   'Security',
   'Platform, DevOps & Operations',
   'Data & Analytics',
@@ -112,9 +128,9 @@ export const PROCESS_AREA = {
   '10.2': 'Development',                          // owner: Developer
   '10.3': 'Development',                          // owner: Developer
   '10.4': 'Development',                          // owner: Developer
-  'NFR Gathering': 'Quality & Testing',                                  // owner empty
-  'Performance Test Scripting': 'Quality & Testing',                     // owner empty
-  'Performance Test Execution': 'Quality & Testing',                     // owner empty
+  'NFR Gathering': 'Development',                                        // owner empty; NFR is the requirement side of load/perf → Development
+  'Performance Test Scripting': 'Development',                           // owner empty; load/perf test → Development
+  'Performance Test Execution': 'Development',                           // owner empty; load/perf test → Development
   'Penetration Test Scenario Development': 'Security',                   // owner empty
   'Penetration Test Execution': 'Security',                              // owner empty
   'Penetration Test Report': 'Security',                                 // owner empty
@@ -123,24 +139,30 @@ export const PROCESS_AREA = {
   'CI_CD Pipeline Development': 'Platform, DevOps & Operations',         // sanitised doc-id spelling
   'Data Development': 'Data & Analytics',                                // owner empty
   'Data Test Support': 'Data & Analytics',                               // owner empty
-  // Test
-  '11.1': 'Quality & Testing',                    // owner: Test Management
-  '11.2': 'Quality & Testing',                    // owner: Test Management
-  '11.3': 'Quality & Testing',                    // owner: Test Management
-  '12.1': 'Quality & Testing',                    // owner: SIT
-  '12.2': 'Quality & Testing',                    // owner: SIT
-  '13.1': 'Quality & Testing',                    // owner: UAT
-  '13.2': 'Quality & Testing',                    // owner: UAT
-  // Deployment — all of 14.x routes to Development per an explicit 2026-08-10
-  // decision that "Deployment" as a scope means the whole 14.x process range,
-  // not a literal role (no agent currently uses a "Deployment" role at all).
-  // Zero live agents hit any of these six today, so this is forward-looking
+  // Test — 11.x is nominally "Test Management" in sdlcProcesses, but every
+  // live agent on those three processes is owned by the SIT-TQM team and
+  // carries the "Tester" role, so it routes to SIT rather than QA.
+  '11.1': 'SIT',                                  // owner: Test Management (run by SIT-TQM here)
+  '11.2': 'SIT',                                  // owner: Test Management (run by SIT-TQM here)
+  '11.3': 'SIT',                                  // owner: Test Management (run by SIT-TQM here)
+  '12.1': 'SIT',                                  // owner: SIT
+  '12.2': 'SIT',                                  // owner: SIT
+  '13.1': 'QA',                                   // owner: UAT
+  '13.2': 'QA',                                   // owner: UAT
+  // Deployment — "Deployment" as a scope means the whole 14.x process range
+  // (2026-08-10), not a literal role; no agent uses a "Deployment" role.
+  // REVISED later the same day: IVT stays Development, but PVT (14.2B/14.3B)
+  // moved to QA — PVT is a user-acceptance-flavoured verification, and its
+  // sdlcProcesses owner is "PO". A PVT agent tied DIRECTLY to PO/BU work
+  // belongs in Business & Product instead; that is a per-agent call made from
+  // its details, so it is a stored-approveArea override rather than a table
+  // entry here. Zero live agents hit any of these six today — forward-looking
   // config, not a migration.
   '14.1': 'Development',                          // owner: Developer
-  '14.2A': 'Development',                         // owner: Developer, Deployment, Platform Lead
-  '14.2B': 'Development',                         // owner: PO
-  '14.3A': 'Development',                         // owner: Developer, Deployment, Platform Lead
-  '14.3B': 'Development',                         // owner: PO
+  '14.2A': 'Development',                         // owner: Developer, Deployment, Platform Lead — IVT
+  '14.2B': 'QA',                                  // owner: PO — PVT
+  '14.3A': 'Development',                         // owner: Developer, Deployment, Platform Lead — IVT
+  '14.3B': 'QA',                                  // owner: PO — PVT
   '14.4': 'Development',                          // owner: Deployment
   // Post Development — every one of these has an empty owner
   'Incident Management': 'Platform, DevOps & Operations',
@@ -189,13 +211,13 @@ export const CATEGORY_AREA = {
   'Design & UI': 'UI & Visual Design',
   'UX Research': 'UX Research',
   'Writing & Content': 'Content & UX Writing',
-  'Testing & QA': 'Quality & Testing',
   'Project & Delivery': 'Delivery Management',
   'Investment': 'Business & Product',        // business vertical → discipline
   'Lending & Credit': 'Business & Product',  // business vertical → discipline
   'Security': 'Security',                    // added 2026-08-10
   'Data & Analytics': 'Data & Analytics',    // added 2026-08-10
   'Software Development': null,              // nulled 2026-08-10 — see note above
+  'Testing & QA': null,                      // nulled 2026-08-10 — spans SIT / QA / Development now
   'Requirements & Product': null,
   'DevOps & Performance': null,
   'Orchestration & Automation': null,
@@ -258,16 +280,22 @@ export const ROLE_AREA = {
   'Full-Stack': 'Development',    // spelling variant, same reason
   'AI Engineer': 'Development',
   'AI Creator': 'Development',
-  // Quality & Testing (Performance lives here, not with Security; Reviewer
-  // moved here 2026-08-10 — all 4 current holders pair it with QA Engineer)
-  'Tester': 'Quality & Testing',
-  'QA': 'Quality & Testing',
-  'QA Engineer': 'Quality & Testing',
-  'Reviewer': 'Quality & Testing',
-  'Performance Engineer': 'Quality & Testing',
-  'UAT': 'Quality & Testing',
-  'UAT Test': 'Quality & Testing',
-  'Test management': 'Quality & Testing',
+  // Performance Engineer and Reviewer both moved OUT of testing 2026-08-10:
+  // every live holder of either is doing developer-facing work (the
+  // Performance Engineer agents output "Load Test Scripts" from code, the
+  // Reviewer agents take a Pull Request and output review comments), and
+  // load/perf test + code scan both route to Development under the split.
+  'Performance Engineer': 'Development',
+  'Reviewer': 'Development',
+  // SIT — "Tester" is the SIT-TQM team's role here (15 of 15 live holders),
+  // not a generic testing title.
+  'Tester': 'SIT',
+  // QA — user-acceptance side (UAT/PQA/PVT).
+  'QA': 'QA',
+  'QA Engineer': 'QA',
+  'UAT': 'QA',
+  'UAT Test': 'QA',
+  'Test management': 'QA',
   // Platform, DevOps & Operations
   'DevOps Engineer': 'Platform, DevOps & Operations',
   'Operations': 'Platform, DevOps & Operations',
@@ -365,24 +393,29 @@ export function agentApproveAreas(agent, categoryAreaOverrides) {
     const override = isKnownArea(overrides[c]) ? overrides[c] : null;
     add(byCategory, override || CATEGORY_AREA[c]);
   });
-  // 'Software Development' is deliberately null (too coarse to pick a side —
-  // see CATEGORY_AREA's comment) and is very often paired with a REAL
-  // category like 'Design & UI' on the same agent (the Figma design-to-code
-  // skill pack: 8 agents, confirmed against live data 2026-08-10). Left as a
-  // plain short-circuit, that pairing would silently drop the Development
-  // signal a Developer/Frontend Engineer role carries, even though role
-  // layer 6 below would happily supply it — the ONLY reason it never runs is
-  // that byCategory already has a hit from the other category. So when
-  // 'Software Development' is present alongside a resolved category, merge
-  // in the role layer here rather than waiting for a fallback that will
-  // never fire. Scoped to this one category on purpose: other ambiguous
-  // categories (Requirements & Product, DevOps & Performance, Orchestration
-  // & Automation) were reviewed and left as pure fallbacks in the prior
-  // round — broadening this to "any ambiguous category" would reopen agents
-  // outside today's Architecture & Engineering split (confirmed by testing
-  // the general form against live data: it also touched 7 unrelated VD/DE
-  // and Workshop agents that were explicitly out of scope here).
-  if (byCategory.size && cats.includes('Software Development')) {
+  // MERGE_ROLE_CATEGORIES are the categories that got nulled because a whole
+  // discipline was SPLIT out from under them (Software Development →
+  // Architecture/Development/Platform; Testing & QA → SIT/QA/Development).
+  // Both are very often paired with a REAL category on the same agent — the
+  // Figma skill pack carries 'Design & UI' + 'Software Development', and
+  // Figma Audit Design System carries 'Design & UI' + 'Testing & QA'. Left as
+  // a plain short-circuit, that pairing silently drops the signal the agent's
+  // ROLE carries (Developer → Development, QA → QA), even though role layer 6
+  // below would supply it — the only reason it never runs is that byCategory
+  // already has a hit from the other category. So when one of these is
+  // present alongside a resolved category, merge the role layer in here
+  // instead of waiting for a fallback that will never fire.
+  //
+  // Deliberately NOT "any null category": the other three (Requirements &
+  // Product, DevOps & Performance, Orchestration & Automation) are ambiguous
+  // for a different reason — nothing was split out of them, they were simply
+  // always cross-cutting — and were reviewed and left as pure fallbacks.
+  // Verified against live data: the general form would additionally have
+  // changed 7 unrelated VD/DE and Workshop agents, while this scoped form
+  // changes exactly the agents each split actually affected (8 for Software
+  // Development, 1 for Testing & QA).
+  const MERGE_ROLE_CATEGORIES = ['Software Development', 'Testing & QA'];
+  if (byCategory.size && cats.some((c) => MERGE_ROLE_CATEGORIES.includes(c))) {
     const combined = new Set(byCategory);
     roles.forEach((r) => add(combined, ROLE_AREA[r]));
     return [...combined].sort();
