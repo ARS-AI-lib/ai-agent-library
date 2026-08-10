@@ -18,7 +18,6 @@ export default function ControlBar({
   view, setView,
   ownerOptions, owner, setOwner,
   roleOptions, role, setRole,
-  abilityOptions, ability, setAbility,
   tier, setTier,
   type, setType,
   reusableOptions, reusable, setReusable,
@@ -42,12 +41,6 @@ export default function ControlBar({
       <div className="cg">
         <span className="cl">ROLE</span>
         <MultiSelect label="Role" options={roleOptions} selected={role} onChange={setRole} />
-      </div>
-
-      <div className="csep" />
-      <div className="cg">
-        <span className="cl">ABILITY</span>
-        <MultiSelect label="Ability" options={abilityOptions} selected={ability} onChange={setAbility} />
       </div>
 
       <div className="csep" />

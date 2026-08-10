@@ -142,7 +142,6 @@ export default function App() {
   const [view, setView] = useState('by-owner');
   const [owner, setOwner] = useState(new Set());
   const [role_, setRole_] = useState(new Set());
-  const [ability, setAbility] = useState(new Set());
   const [tier, setTier] = useState(new Set());
   const [type, setType] = useState('all');
   const [reusable, setReusable] = useState(new Set());
@@ -219,7 +218,7 @@ export default function App() {
   );
 
   const filtered = useMemo(() => {
-    let pred = buildAgentFilter({ type, owner, role: role_, ability, tier, reusable, hasEndpoint, category, stage, platformTools, search });
+    let pred = buildAgentFilter({ type, owner, role: role_, tier, reusable, hasEndpoint, category, stage, platformTools, search });
     let result = agents.filter(pred);
     if (selectedStatus.size > 0) {
       result = result.filter((a) => selectedStatus.has(agentStatus(a)));
@@ -228,7 +227,7 @@ export default function App() {
       result = result.filter((a) => isMyAgent(a, user));
     }
     return result;
-  }, [agents, type, owner, role_, ability, tier, reusable, hasEndpoint, category, stage, platformTools, search, selectedStatus, myAI, user]);
+  }, [agents, type, owner, role_, tier, reusable, hasEndpoint, category, stage, platformTools, search, selectedStatus, myAI, user]);
 
   const agentCount = filtered.filter((a) => getType(a) === 'agent').length;
   const skillCount = filtered.filter((a) => getType(a) === 'skill').length;
@@ -276,7 +275,6 @@ export default function App() {
     setView('by-owner');
     setOwner(new Set());
     setRole_(new Set());
-    setAbility(new Set());
     setTier(new Set());
     setType('all');
     setReusable(new Set());
@@ -369,7 +367,6 @@ export default function App() {
             view={view} setView={setView}
             ownerOptions={ownerOptions} owner={owner} setOwner={setOwner}
             roleOptions={roleOptions} role={role_} setRole={setRole_}
-            abilityOptions={abilityOptions} ability={ability} setAbility={setAbility}
             tier={tier} setTier={setTier}
             type={type} setType={setType}
             reusableOptions={reusableOptions} reusable={reusable} setReusable={setReusable}

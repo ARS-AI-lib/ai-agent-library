@@ -1,6 +1,6 @@
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
-import { fmtDate } from '../lib/agentUtils';
+import { fmtDate, safeEndpointUrl } from '../lib/agentUtils';
 
 // Card anatomy (2026-08-08 redesign): eyebrow (type + tier + scope) → title
 // → progress bar → 2×2 meta grid (Owner / Ability / Status / Launch).
@@ -8,12 +8,13 @@ import { fmtDate } from '../lib/agentUtils';
 // The status pill USED to sit beside the title and the meta grid carried six
 // fields (Owner, Ability, Use case, the paired Agent/Skill, Role, Launch) plus
 // an endpoint link in the eyebrow. Per the redesign sign-off the preview card
-// is now deliberately lean: those four extra fields and the endpoint link live
-// in AgentDetailModal only, and the pill became its own labelled meta cell.
+// went lean and the endpoint link moved into AgentDetailModal only — reachable
+// one click deeper instead of removed from the product.
 //
-// Consequence worth knowing before "restoring" anything here: the endpoint
-// link is a real shipped feature (Aug 2026) that is now reachable one click
-// deeper, not removed from the product. That was the explicit call.
+// 2026-08-10: brought back, per explicit request, as a small top-right icon
+// (independent of the eyebrow/meta grid) rather than reverting the whole
+// redesign — same target (safeEndpointUrl(agent.endpoint)) as the modal's
+// link, just a second, faster entry point for cards that have one.
 //
 // The fixed 2×2 grid keeps the old alignment guarantee — every card in a row
 // has the same four cells in the same order with an em-dash fallback, so
@@ -27,6 +28,7 @@ export default function AgentCard({ agent, allAgents, onClick }) {
   const progress = typeof agent.devProgress === 'number' ? agent.devProgress : 0;
   const scope = isInternalOrExternal(agent);
   const ability = Array.isArray(agent.coreAbility) ? agent.coreAbility.join(', ') : agent.coreAbility;
+  const endpointHref = safeEndpointUrl(agent.endpoint);
 
   return (
     // The whole card is the click target, so it also has to be a real control
@@ -49,6 +51,23 @@ export default function AgentCard({ agent, allAgents, onClick }) {
         onClick(agent);
       }}
     >
+      {endpointHref && (
+        <a
+          className="ac-link"
+          href={endpointHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={endpointHref}
+          aria-label={`เปิดลิงก์ใช้งาน ${agent.agentName}`}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+      )}
       <div className="ac-eyebrow">
         <span className={`tb ${type === 'agent' ? 'tbag' : 'tbsk'}`}>{type === 'agent' ? 'AGENT' : 'SKILL'}</span>
         <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>

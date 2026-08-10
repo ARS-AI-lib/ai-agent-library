@@ -311,14 +311,14 @@ export function relationshipLabel(agent, allAgents) {
  * Builds the predicate used by both the card grid and the counters —
  * mirrors `tOk()` from the original dashboard.
  */
-export function buildAgentFilter({ type, owner, role, ability, tier, reusable, hasEndpoint, category, stage, platformTools, search }) {
+export function buildAgentFilter({ type, owner, role, tier, reusable, hasEndpoint, category, stage, platformTools, search }) {
   return (agent) => {
     if (type !== 'all' && getType(agent) !== type) return false;
     // Platform Tools shortcut (2026-08 sidebar) reuses the existing
     // internalTool flag (flag-internal.cjs) rather than a new field.
     if (platformTools && agent.internalTool !== true) return false;
     // Category shortcut (2026-08 sidebar): OR within the selected categories,
-    // same as ability/role below — this whole predicate ANDs across groups.
+    // same as role below — this whole predicate ANDs across groups.
     if (category && category.size > 0) {
       const cats = agentCategories(agent);
       if (!cats.some((c) => category.has(c))) return false;
@@ -338,10 +338,6 @@ export function buildAgentFilter({ type, owner, role, ability, tier, reusable, h
     if (role && role.size > 0) {
       const roles = splitRoles(agent.relatedRole);
       if (!roles.some((r) => role.has(r))) return false;
-    }
-    if (ability && ability.size > 0) {
-      const abilities = Array.isArray(agent.coreAbility) ? agent.coreAbility : [agent.coreAbility];
-      if (!abilities.some((a) => ability.has(a))) return false;
     }
     if (reusable && reusable.size > 0 && !reusable.has(agent.reusable || '')) return false;
     if (search) {

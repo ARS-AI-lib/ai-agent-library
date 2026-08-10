@@ -297,8 +297,10 @@ button.lg-item.on { border-color: currentColor; background: var(--sf); }
    Every cell always renders (em-dash fallback), so "Launch" sits in the same
    position on every card in a row instead of drifting with the data.
    The status pill lives IN that grid now, and Use case / Role / the paired
-   Agent-Skill relation / the endpoint link moved to AgentDetailModal — see
-   AgentCard.jsx for why that was deliberate. */
+   Agent-Skill relation stayed in AgentDetailModal only — see AgentCard.jsx.
+   The endpoint link also moved to the modal in that redesign, then came back
+   (2026-08-10) as the standalone top-right .ac-link icon below — a second,
+   faster entry point, not a reversal of the rest of the redesign. */
 .agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 13px; margin-top: 10px; }
 .ac { background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-md); padding: 15px; box-shadow: var(--sh); transition: box-shadow .15s, transform .15s; cursor: pointer; position: relative; }
 .ac:hover { box-shadow: var(--shm); transform: translateY(-2px); }
@@ -307,7 +309,18 @@ button.lg-item.on { border-color: currentColor; background: var(--sf); }
    eyebrow badge already carries that signal here. The left accent bar is
    reserved for the SDLC Adoption process view (its own .uc-arow classes). */
 
-.ac-eyebrow { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+/* Corner icon link (2026-08-10) — absolutely positioned over the card, so the
+   eyebrow row needs right padding to keep .ac-scope's icon (margin-left:auto)
+   from sitting directly under it. */
+.ac-link {
+  position: absolute; top: 11px; right: 11px; z-index: 1;
+  width: 21px; height: 21px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; color: var(--mu); background: var(--sf2); border: 1px solid var(--bd-soft);
+  transition: color .12s, background .12s, border-color .12s;
+}
+.ac-link:hover, .ac-link:focus-visible { color: var(--accent); background: var(--accent-soft, var(--sf2)); border-color: var(--accent); }
+
+.ac-eyebrow { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; padding-right: 24px; }
 .ac-scope { margin-left: auto; display: flex; align-items: center; color: var(--mu); }
 
 /* The title no longer shares a row with the status pill — the pill moved into
