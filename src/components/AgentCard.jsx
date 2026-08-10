@@ -51,34 +51,19 @@ export default function AgentCard({ agent, allAgents, onClick }) {
         onClick(agent);
       }}
     >
-      {endpointHref && (
-        <a
-          className="ac-link"
-          href={endpointHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={endpointHref}
-          aria-label={`เปิดลิงก์ใช้งาน ${agent.agentName}`}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-          </svg>
-        </a>
-      )}
       <div className="ac-eyebrow">
         <span className={`tb ${type === 'agent' ? 'tbag' : 'tbsk'}`}>{type === 'agent' ? 'AGENT' : 'SKILL'}</span>
         <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
           {tier}
         </span>
-        {/* Flat/neutral on the card (mockup .ac-scope: var(--mu)) — colouring
-            this per-scope was extra emphasis the card grid doesn't need; the
-            AGENT/SKILL badge and tier already carry the primary signal here.
-            The colored version is intentionally kept in AgentDetailModal and
-            the SDLC nested-card view, where scope is the point of the row. */}
-        <span className="ac-scope" title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
+        {/* .ac-scope + .ac-link (when present) form ONE trailing group, right-
+            aligned as a unit via margin-left:auto on .ac-scope — not two
+            independently-positioned icons. That is what keeps .ac-scope
+            flush against the card's right edge on a card with no endpoint,
+            instead of leaving a gap where .ac-link would have been. Both
+            share the same box size/shape (.ac-icon) so the two never look
+            like different-weight controls sitting side by side. */}
+        <span className="ac-scope ac-icon" title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
           {scope === 'External' ? (
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
@@ -93,6 +78,23 @@ export default function AgentCard({ agent, allAgents, onClick }) {
             </svg>
           )}
         </span>
+        {endpointHref && (
+          <a
+            className="ac-link ac-icon"
+            href={endpointHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={endpointHref}
+            aria-label={`เปิดลิงก์ใช้งาน ${agent.agentName}`}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
+        )}
       </div>
 
       <h3 className="ac-title">{agent.agentName}</h3>
