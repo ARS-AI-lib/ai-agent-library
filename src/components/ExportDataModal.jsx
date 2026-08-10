@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { getType, agentApproveAreas } from '../lib/tier';
+import { getType } from '../lib/tier';
+import { agentApproveAreas } from '../lib/approveAreas';
 import { isMyAgent, normalizeProgress } from '../lib/agentUtils';
 import useEscapeKey from '../hooks/useEscapeKey';
 

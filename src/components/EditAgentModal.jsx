@@ -5,6 +5,7 @@ import { isInternalOrExternal, isSkill } from '../lib/tier';
 import { splitRoles, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
+import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
 import MultiSelect from './MultiSelect';
 import TagMultiSelect from './TagMultiSelect';
 import AgentMultiSelect from './AgentMultiSelect';
@@ -85,6 +86,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     launchDate: toDateInputValue(agent.launchDate),
     compatibleAgents: Array.isArray(agent.compatibleAgents) ? agent.compatibleAgents : [],
     sdlcStage: new Set(Array.isArray(agent.sdlcStage) ? agent.sdlcStage : [agent.sdlcStage].filter(Boolean)),
+    approveArea: new Set(Array.isArray(agent.approveArea) ? agent.approveArea.filter(Boolean) : []),
     sdlcProcessMapping: new Set(Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping : [agent.sdlcProcessMapping].filter(Boolean)),
     useCase: new Set(agentUseCaseNames(agent)),
   }));
@@ -112,6 +114,11 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   }, []);
 
   const stageOptions = schema.sdlcStage?.length ? schema.sdlcStage : [];
+  const areaOptions = schema.approveArea?.length ? schema.approveArea : AREA_ORDER;
+  // What the agent WOULD resolve to if approveArea were left blank — shown as
+  // a hint so an editor can see the automatic answer before overriding it,
+  // rather than having to guess what the fallback chain would pick.
+  const derivedAreas = useMemo(() => agentApproveAreas({ ...agent, approveArea: [] }), [agent]);
   // Process Mapping is cascaded from the selected Stage(s) via the real
   // stage↔process link in /sdlcProcesses (same rule as PreRegModal).
   const processOptions = useMemo(() => {
@@ -256,6 +263,10 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           sdlcStage: isExternal ? [] : [...form.sdlcStage],
           sdlcProcessMapping: isExternal ? [] : [...form.sdlcProcessMapping],
           useCase: isExternal ? [] : [...form.useCase],
+          // NOT blanked for External — unlike the SDLC fields above, an
+          // External agent still needs a routable approver area (that is the
+          // whole point of replacing the old 'Business' catch-all).
+          approveArea: [...form.approveArea],
           updatedAt: serverTimestamp(),
         });
       }
@@ -468,6 +479,27 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
             </div>
           </fieldset>
         )}
+
+        {/* ── Approver area ──
+            Outside the internalShown guard on purpose: External agents need a
+            routable area too (they used to get the single catch-all
+            'Business'). Same edit right as the SDLC block because it is the
+            same protected field set in firestore.rules, and because sdlcStage
+            — the field that USED to decide approver scope — has always been
+            editable here. Leaving it empty is safe and normal: the resolver
+            falls back to process/category/role, and the hint below shows
+            exactly what that fallback produces. */}
+        <fieldset disabled={!canEditSDLCFlag} style={{ ...FS, opacity: !canEditSDLCFlag ? 0.6 : 1 }}>
+          <div className="fg">
+            <label>Approve Area</label>
+            <MultiSelect label="เลือก Approve Area…" options={areaOptions} selected={form.approveArea} onChange={(s) => setField('approveArea', s)} />
+            <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 5, lineHeight: 1.5 }}>
+              {form.approveArea.size > 0
+                ? 'กำหนดเองแล้ว — จะไม่ใช้ค่าที่ระบบคำนวณให้'
+                : `เว้นว่างได้ ระบบจะใช้: ${derivedAreas.join(' + ') || '(คำนวณไม่ได้ — ควรเลือกเอง)'}`}
+            </div>
+          </div>
+        </fieldset>
 
         {/* ── Sensitive: creator list ── */}
         <div className="fg">

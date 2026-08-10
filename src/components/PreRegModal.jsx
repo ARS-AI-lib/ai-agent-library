@@ -439,6 +439,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         dataPrivacy: form.dataPrivacy.trim(),
         businessValue: form.businessValue.trim(),
         category: aiResult?.suggested_category ? [aiResult.suggested_category] : [],
+        // Server-side validated against /config/schema.approveArea, so this is
+        // safe to store directly. Empty is fine — agentApproveAreas() then
+        // falls back to process/category/role rather than leaving the entry
+        // unroutable, which is the failure mode this field exists to prevent.
+        approveArea: Array.isArray(aiResult?.suggested_approve_area) ? aiResult.suggested_approve_area : [],
       };
 
       const agentRef = await addDoc(collection(db, 'agents'), {
@@ -551,6 +556,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 integration_suggestions: aiResult.integration_suggestions || [],
                 suggested_matching_agent: aiResult.suggested_matching_agent || null,
                 suggested_ability: aiResult.suggested_ability || null,
+                suggested_approve_area: aiResult.suggested_approve_area || [],
               },
               outcome: 'pending',   // ← becomes approved/rejected when a reviewer acts
               createdBy,
@@ -1080,12 +1086,18 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                   // from what the user already picked in the form — if the AI
                   // just confirms the existing choice, showing it is noise.
                   const abilityDiffers = aiResult.suggested_ability && !form.coreAbility.has(aiResult.suggested_ability);
-                  const showBlock = aiResult.suggested_matching_agent || abilityDiffers;
+                  // Unlike ability, the area is always worth showing: the
+                  // submitter has no field for it anywhere in this form, so
+                  // this line is the only place they learn who will review the
+                  // entry. Server-validated against the approved area list.
+                  const areas = Array.isArray(aiResult.suggested_approve_area) ? aiResult.suggested_approve_area : [];
+                  const showBlock = aiResult.suggested_matching_agent || abilityDiffers || areas.length > 0;
                   if (!showBlock) return null;
                   return (
                     <div className="msg info" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
                       {aiResult.suggested_matching_agent && <div>ควรผูกเป็น Skill/Agent คู่กับ: <strong>{aiResult.suggested_matching_agent}</strong></div>}
                       {abilityDiffers && <div>แนะนำ Core Ability: <strong>{aiResult.suggested_ability}</strong></div>}
+                      {areas.length > 0 && <div>สายงานที่จะเป็นผู้อนุมัติ: <strong>{areas.join(' + ')}</strong></div>}
                     </div>
                   );
                 })()}

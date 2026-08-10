@@ -72,14 +72,13 @@ export function getType(agent) {
   return 'agent';
 }
 
-// ── Approval areas (for the pending-approval queue + progress-update gate) ──
-// An agent's approve area is computed at runtime from its own data — there is
-// no separate "group" field anywhere. External agents (Tier T3/T4) always
-// fall under the single "Business" area; everything else is gated by the
-// agent's own SDLC stage(s) (an agent can span more than one).
-export function agentApproveAreas(agent) {
-  if (isInternalOrExternal(agent) === 'External') return ['Business'];
-  const stage = agent?.sdlcStage;
-  if (!stage) return [];
-  return Array.isArray(stage) ? stage.filter(Boolean) : [stage].filter(Boolean);
-}
+// ── Approval areas ───────────────────────────────────────────────────
+// MOVED 2026-08-10 to src/lib/approveAreas.js — `agentApproveAreas()` now
+// resolves against 12 discipline-based areas instead of the 7 SDLC stages,
+// and needs helpers from agentUtils.js (which imports THIS file), so keeping
+// it here would make the two modules circular. tier.js stays import-free.
+//
+// The old rule was: External → ['Business'], else agent.sdlcStage verbatim.
+// That left 79 of 243 agents (Internal, no sdlcStage) with an empty area —
+// invisible to every scoped approver. See approveAreas.js for the full
+// rationale and the replacement fallback chain.

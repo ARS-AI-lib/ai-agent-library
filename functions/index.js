@@ -71,6 +71,31 @@ async function getCategoryOptions() {
   return categoryCache;
 }
 
+// The 12 approver areas (2026-08-10). Mirrors AREA_ORDER in
+// src/lib/approveAreas.js — Cloud Functions cannot import the client ESM
+// module, so this is the one unavoidable copy. It is only ever a FALLBACK:
+// /config/schema.approveArea is the live list and is seeded from AREA_ORDER
+// by functions/seed-approve-area-schema.cjs, so the two can only diverge if
+// the config doc is missing entirely.
+const FALLBACK_APPROVE_AREA = [
+  'Business & Product', 'Governance, Risk & Procurement', 'Delivery Management',
+  'Business Analysis', 'UX Research', 'UI & Visual Design', 'Content & UX Writing',
+  'Architecture & Engineering', 'Quality & Testing', 'Security',
+  'Platform, DevOps & Operations', 'Data & Analytics',
+];
+let approveAreaCache = null;
+async function getApproveAreaOptions() {
+  if (approveAreaCache) return approveAreaCache;
+  try {
+    const snap = await db.collection('config').doc('schema').get();
+    const opts = snap.data()?.approveArea;
+    approveAreaCache = Array.isArray(opts) && opts.length ? opts : FALLBACK_APPROVE_AREA;
+  } catch {
+    approveAreaCache = FALLBACK_APPROVE_AREA;
+  }
+  return approveAreaCache;
+}
+
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'wolfy-481609';
 const LOCATION = 'asia-southeast1';
 const MODEL = 'gemini-2.5-flash';
@@ -93,7 +118,7 @@ const GENERATION_CONFIG = {
   thinkingConfig: { thinkingBudget: 0 },
 };
 
-function buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions, categoryOptions) {
+function buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions, categoryOptions, approveAreaOptions) {
   const candidatesShort = candidates.slice(0, 15).map((c, i) => ({
     i,
     agentName: c.agentName,
@@ -198,6 +223,14 @@ verdict ที่แปลว่าไม่ซ้ำ เช่น 70 คู่�
    ไม่เหมาะสมเลย (ไม่ใช่แค่ "ใกล้เคียงแต่ไม่เป๊ะ" — กรณีนั้นให้ใช้ suggested_category แทน)
    ถ้ามี ตอบเป็น {"name": "ชื่อหมวดใหม่สั้นๆ ภาษาอังกฤษ", "reason": "เหตุผลสั้นๆ ภาษาไทยว่าทำไมหมวดเดิมไม่พอ"}
    ไม่งั้นตอบ null
+6b. suggested_approve_area: "สายงานไหนควรเป็นคนอนุมัติ Draft นี้" — คนละมิติกับ Category
+   (Category = Draft นี้เกี่ยวกับเรื่องอะไร ใช้ค้นหา, Approve Area = ใครมีความเชี่ยวชาญพอ
+   จะตรวจว่างานนี้ทำได้จริง/ซ้ำของเดิม/คุณภาพผ่าน) เลือกจากรายการนี้เท่านั้น ห้ามคิดคำใหม่:
+   [${approveAreaOptions.map((a) => `"${a}"`).join(', ')}]
+   ตอบเป็น array ได้ถ้างานคร่อมสายงานจริงๆ (เช่น skill ที่แปลง design เป็น code
+   = ["UI & Visual Design", "Architecture & Engineering"]) แต่ปกติควรมีตัวเดียว
+   เลือกตามเนื้องานจริง ไม่ใช่ตามโดเมนธุรกิจ เช่น agent คำนวณวงเงินสินเชื่อ
+   → "Business & Product" ไม่ใช่ "Architecture & Engineering" แม้จะเขียนด้วยโค้ดก็ตาม
 7. overall_risk: high | medium | low — ประเมินจาก verdict ที่แรงที่สุด
    (มี clear_duplicate=high, มี likely_overlap=medium, นอกนั้น low)
    ⭐ กฎ breadth เพิ่มเติม (ตัวเหมารวม/kitchen-sink): ถ้า Draft ทับงานย่อยกับของเดิม "ตั้งแต่ 3 ตัวขึ้นไป"
@@ -223,6 +256,7 @@ verdict 4 ระดับ:
   "suggested_ability": "..." หรือ null,
   "suggested_category": "...",
   "proposed_new_category": {"name": "...", "reason": "..."} หรือ null,
+  "suggested_approve_area": ["..."],
   "overall_risk": "high" | "medium" | "low",
   "summary": "..."
 }
@@ -259,11 +293,13 @@ exports.analyzeDuplicate = onCall(
     const { draft, candidates, connectionCandidates } = request.data || {};
     if (!draft || !Array.isArray(candidates) || candidates.length === 0) {
       // No candidates → nothing to analyze; return empty result without burning quota.
-      return { candidates: [], integration_suggestions: [], suggested_matching_agent: null, suggested_ability: null, suggested_category: null, proposed_new_category: null, overall_risk: 'low', summary: '' };
+      return { candidates: [], integration_suggestions: [], suggested_matching_agent: null, suggested_ability: null, suggested_category: null, proposed_new_category: null, suggested_approve_area: [], overall_risk: 'low', summary: '' };
     }
 
-    const [coreAbilityOptions, categoryOptions] = await Promise.all([getCoreAbilityOptions(), getCategoryOptions()]);
-    const prompt = buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions, categoryOptions);
+    const [coreAbilityOptions, categoryOptions, approveAreaOptions] = await Promise.all([
+      getCoreAbilityOptions(), getCategoryOptions(), getApproveAreaOptions(),
+    ]);
+    const prompt = buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions, categoryOptions, approveAreaOptions);
 
     let text = '';
     let finishReason = '';
@@ -315,6 +351,17 @@ exports.analyzeDuplicate = onCall(
     // than fabricating one client-side.
     parsed.suggested_category = categoryOptions.includes(parsed.suggested_category)
       ? parsed.suggested_category : null;
+    // Same allowlist treatment for the approver area. An empty array is a fine
+    // outcome — approveArea is optional on an agent doc and the client-side
+    // resolver falls back to process/category/role — so unlike
+    // suggested_category there is nothing lost by dropping bad values. Accepts
+    // a bare string too, since the model returns a single area often enough
+    // that being strict about the array shape would throw away good answers.
+    parsed.suggested_approve_area = (
+      Array.isArray(parsed.suggested_approve_area)
+        ? parsed.suggested_approve_area
+        : [parsed.suggested_approve_area]
+    ).filter((a) => approveAreaOptions.includes(a));
     // proposed_new_category must be a well-formed {name, reason} or null — drop
     // anything malformed rather than let a half-shaped object reach Firestore.
     parsed.proposed_new_category = (

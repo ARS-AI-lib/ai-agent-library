@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { agentApproveAreas, getTier, TIER_DEF } from '../lib/tier';
+import { getTier, TIER_DEF } from '../lib/tier';
+import { agentApproveAreas } from '../lib/approveAreas';
 import { matchingAgentNames, pairedSubSkills, isPairedSubSkill, fmtDate } from '../lib/agentUtils';
 import AgentDetailModal from './AgentDetailModal';
 import useEscapeKey from '../hooks/useEscapeKey';

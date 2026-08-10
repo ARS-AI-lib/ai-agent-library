@@ -5,6 +5,7 @@ import { getDirectoryMeta, syncDirectoryToFirestore } from '../lib/directory';
 import MultiSelect from './MultiSelect';
 import Dropdown from './Dropdown';
 import useEscapeKey from '../hooks/useEscapeKey';
+import { AREA_ORDER } from '../lib/approveAreas';
 
 function fmtSyncTime(ts) {
   if (!ts) return '';
@@ -57,9 +58,13 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
     }
   }
 
+  // Approver scope is the 12 discipline areas (2026-08-10), not SDLC stages.
+  // Falls back to the module's AREA_ORDER if /config/schema.approveArea hasn't
+  // been seeded yet, so the picker is never empty mid-rollout — same taxonomy
+  // either way, since the seed script reads AREA_ORDER too.
   const areaOptions = useMemo(
-    () => [...(schema.sdlcStage?.length ? schema.sdlcStage : []), 'Business'],
-    [schema.sdlcStage]
+    () => (schema.approveArea?.length ? schema.approveArea : AREA_ORDER),
+    [schema.approveArea]
   );
 
   useEffect(() => {
