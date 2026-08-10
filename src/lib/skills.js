@@ -597,6 +597,15 @@ export const SKILLS = {
     },
   },
 
+  list_categories: {
+    describe: {
+      name: 'list_categories',
+      description: 'คืนรายชื่อ Category ทั้งหมดที่ระบบอนุมัติแล้ว อ่านตรงจาก /config/schema.category (ไม่ใช่นับจาก agent ที่มีอยู่) — ใช้ตอบ "มีหมวดหมู่อะไรบ้าง", "Category มีกี่แบบ" เพราะ Category เป็น list ที่โตได้เรื่อยๆ (AI เสนอหมวดใหม่ตอน pre-registration แล้วรอ admin อนุมัติ) หมวดที่เพิ่งอนุมัติแต่ยังไม่มี agent ใช้จะยังไม่โผล่ใน query_library groupBy — ต้องใช้ tool นี้แทนถึงจะเห็นครบ',
+      parameters: {},
+    },
+    run: (_args, ctx) => ({ categories: ctx.categories || [] }),
+  },
+
   capability_search: {
     describe: {
       name: 'capability_search',

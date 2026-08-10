@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
 import { runSkill, resolveAgentByName, readinessOf } from '../lib/skills';
@@ -527,20 +527,26 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
           // ~244 × 256 floats is a few hundred KB, and keeping them client-side
           // is what lets cosine run inside skills.js so tier/readiness/archive
           // logic is never duplicated server-side.
-          const [procSnap, ucSnap, vecSnap] = await Promise.all([
+          const [procSnap, ucSnap, vecSnap, schemaSnap] = await Promise.all([
             getDocs(collection(db, 'sdlcProcesses')),
             getDocs(collection(db, 'sdlcUseCases')),
             getDocs(collection(db, 'agentVectors')),
+            getDoc(doc(db, 'config', 'schema')),
           ]);
           setCatalog({
             processes: procSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
             useCases: ucSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+            // Read straight from /config/schema.category rather than
+            // deriving it from agents in the library — a category can be
+            // admin-approved (CategoryApprovalPanel) before any agent uses
+            // it, and that gap must still be visible to list_categories.
+            categories: Array.isArray(schemaSnap.data()?.category) ? schemaSnap.data().category : [],
           });
           setVectors(new Map(vecSnap.docs.map((d) => [d.id, d.data()?.v]).filter(([, v]) => Array.isArray(v))));
         } catch {
           // Best-effort: query_sdlc just returns empty, and capability_search
           // falls back to its keyword arm rather than failing.
-          setCatalog({ processes: [], useCases: [] });
+          setCatalog({ processes: [], useCases: [], categories: [] });
         }
       })();
     }
@@ -637,6 +643,7 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
       libraryAll: allAgents.length ? allAgents : approvedAgents,
       processes: catalog?.processes || [],
       useCases: catalog?.useCases || [],
+      categories: catalog?.categories || [],
       vectors,
     };
     const fn = httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'chatLibrary');

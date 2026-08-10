@@ -200,6 +200,16 @@ const CASES = [
       return Array.isArray(cat) && cat.some((c) => /investment/i.test(c))
         ? null : `ไม่ได้ใช้ category filter: ${JSON.stringify(r.args)}`;
     } },
+
+  // ── Category discovery (2026-08-10) ─────────────────────────────────
+  // query_library groupBy=category only enumerates categories already
+  // attached to ≥1 agent — a category approved via CategoryApprovalPanel but
+  // not yet used by any agent would silently never appear. list_categories
+  // reads /config/schema.category directly so it's always complete.
+  { name: '📚 Category — "มีหมวดหมู่อะไรบ้าง" ต้องเรียก list_categories ไม่ใช่ groupBy',
+    run: () => turn(userTurn('ระบบนี้มี Category อะไรบ้างทั้งหมด')),
+    check: (r) => r.kind === 'tool' && r.name === 'list_categories'
+      ? null : `ได้ ${r.kind}:${r.name || r.text?.slice(0, 60)} args=${JSON.stringify(r.args || {})}` },
 ];
 
 (async () => {

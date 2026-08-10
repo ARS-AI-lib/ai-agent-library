@@ -46,6 +46,11 @@ const TOOL_DECLARATIONS = [
     },
   },
   {
+    name: 'list_categories',
+    description: 'คืนรายชื่อ Category ทั้งหมดที่อนุมัติแล้วในระบบ อ่านตรงจาก config ไม่ได้นับจาก agent ที่มีอยู่ — ใช้ตอบ "มีหมวดหมู่อะไรบ้าง", "Category มีกี่แบบทั้งหมด" เท่านั้น ⚠️ ห้ามใช้ query_library groupBy=category แทนสำหรับคำถามแบบนี้ เพราะ groupBy จะเห็นเฉพาะหมวดที่มี agent ติดอยู่แล้ว ≥1 ตัว หมวดที่เพิ่งอนุมัติใหม่แต่ยังไม่มี agent จะหายไป',
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
     name: 'capability_search',
     description: '⭐ ค่าเริ่มต้นสำหรับคำถามเชิงความสามารถแทบทุกแบบ: หา Agent/Skill ที่ "ความสามารถ" ตรงกับที่ถามเชิงความหมาย เช่น "มีตัวไหนทำ documentation generation ได้บ้าง", "ตัวไหนช่วยทำ test case ได้", "มีอะไรช่วยเรื่อง X บ้าง" — คืน candidate กว้างๆ ให้คุณ (LLM) คัดเลือกอีกชั้นจากความหมายจริงแล้วเรียบเรียงคำตอบ ห้ามตอบจากตัวเองก่อนเห็นผลลัพธ์ ทุก candidate มี status/readiness/endpoint/creator ติดมาด้วย — ใช้ตามกฎ readiness ใน system prompt เสมอ. ใช้ tool นี้ (ไม่ใช่ query_library) ทุกครั้งที่คำถามไม่ได้ระบุ filter ตรงๆ (tier/owner/status/ability) แต่พูดถึง "งาน"/"ความสามารถ"/"เรื่องที่อยากได้ AI ช่วย" เป็นประโยคอิสระ',
     parameters: {
@@ -118,6 +123,9 @@ const CHAT_SYSTEM_PROMPT = `คุณคือ "ALPHA" ผู้ช่วยส�
 ▸ Category (หมวดหมู่) — หมวดตามโดเมนงาน/ธุรกิจ เช่น Design & UI, Software Development, Investment
   ตอนลงทะเบียน AI จะเสนอหมวดที่ใกล้เคียงที่สุดให้ แล้วผู้ดูแลเป็นผู้อนุมัติเข้ารายการกลาง
   หนึ่งตัวมีได้หลายหมวด — เป็นคนละแกนกับ Tier (โครงสร้าง) และ SDLC Stage (ขั้นตอนพัฒนา) โดยสิ้นเชิง
+  ⚠️ รายการ Category "โตได้เรื่อยๆ" ไม่ใช่ list ปิดตายตัวแบบ Tier (ที่ตรึงไว้แค่ 4 ค่าเสมอ) — AI เสนอ
+  หมวดใหม่เพิ่มได้ทุกครั้งที่มีคนลงทะเบียน agent ที่ไม่เข้าหมวดเดิม ห้ามพูดว่า Category มีแค่ตามที่เคยเห็น
+  หรือท่องรายชื่อ Category จากความจำ — ถ้าถูกถามว่า "มีหมวดหมู่อะไรบ้าง" ให้เรียก list_categories เสมอ
 
 ▸ SDLC Stage / Process — ขั้นตอนในกระบวนการพัฒนาซอฟต์แวร์ขององค์กร มี 7 stage เรียงตามลำดับ:
   Initiation → Discovery → Design → Build → Test → Deployment → Post Development
