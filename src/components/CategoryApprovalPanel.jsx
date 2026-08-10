@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { collection, doc, onSnapshot, query, where, updateDoc, arrayUnion, arrayRemove, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import useEscapeKey from '../hooks/useEscapeKey';
+import Dropdown from './Dropdown';
+import { AREA_ORDER } from '../lib/approveAreas';
+
+const AREA_OPTIONS = [['', 'เลือก Approve Area…'], ...AREA_ORDER.map((a) => [a, a])];
 
 // Admin-only approve/reject queue for AI-proposed Category shortcuts
 // (2026-08). A proposal is created by analyzeDuplicate (or the backfill
@@ -12,8 +16,19 @@ import useEscapeKey from '../hooks/useEscapeKey';
 // the moment it's submitted (never uncategorized), so Approve/Reject here
 // only decide whether a NEW shortcut appears in the sidebar — never whether
 // the agent itself is findable.
+//
+// 2026-08-10: Approve now ALSO requires picking an Approve Area for the new
+// category, written to /config/schema.categoryAreaMap. Without this, a brand
+// new category has no entry in approveAreas.js's CATEGORY_AREA table (which
+// is baked into code, not editable here) — every future agent that gets this
+// category would silently fall through the resolver's category layer to the
+// role layer or, worse, resolve to nothing. That was exactly the 79-agent bug
+// this whole approver-area rework existed to fix, so it must not be possible
+// to reopen it one category at a time. Existing pre-2026-08-10 categories are
+// unaffected — they're already covered by the code-level CATEGORY_AREA table.
 export default function CategoryApprovalPanel({ onClose, user }) {
   const [proposals, setProposals] = useState([]);
+  const [areaPick, setAreaPick] = useState({}); // { proposalId: areaName }
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
   useEscapeKey(onClose);
@@ -27,12 +42,20 @@ export default function CategoryApprovalPanel({ onClose, user }) {
   }, []);
 
   async function approve(p) {
+    const area = areaPick[p.id];
+    if (!area) { setError(`เลือก Approve Area ให้ "${p.name}" ก่อนอนุมัติ`); return; }
     setBusyId(p.id);
     setError('');
     try {
       // 1. Add the new name to the official, approved list — it can now show
-      //    up as a sidebar shortcut for everyone.
-      await updateDoc(doc(db, 'config', 'schema'), { category: arrayUnion(p.name) });
+      //    up as a sidebar shortcut for everyone. Same write also seeds its
+      //    approver-area mapping (dot-path field so this can't touch any
+      //    other key in the doc) — see the file header for why this is
+      //    required, not optional, on every new category.
+      await updateDoc(doc(db, 'config', 'schema'), {
+        category: arrayUnion(p.name),
+        [`categoryAreaMap.${p.name}`]: area,
+      });
       // 2. Move the agent that triggered this proposal off its fallback
       //    category onto the newly-approved one. Two sequential writes
       //    (remove then add) rather than a transaction — this is a rare,
@@ -97,11 +120,20 @@ export default function CategoryApprovalPanel({ onClose, user }) {
                 เสนอจาก <strong>{p.agentName}</strong> · หมวดสำรองตอนนี้: {p.fallbackCategory || '—'}
               </div>
               {p.reason && <div className="catprop-reason">{p.reason}</div>}
+              <div style={{ marginTop: 8, maxWidth: 260 }}>
+                <Dropdown
+                  options={AREA_OPTIONS}
+                  value={areaPick[p.id] || ''}
+                  onChange={(v) => setAreaPick((prev) => ({ ...prev, [p.id]: v }))}
+                  ariaLabel={`Approve Area สำหรับหมวด ${p.name}`}
+                />
+              </div>
               <div className="btn-group" style={{ marginTop: 8 }}>
                 <button
                   type="button"
                   className="btn-sm appr"
-                  disabled={busyId === p.id}
+                  disabled={busyId === p.id || !areaPick[p.id]}
+                  title={!areaPick[p.id] ? 'เลือก Approve Area ก่อน' : undefined}
                   onClick={() => approve(p)}
                 >
                   {busyId === p.id ? 'กำลังทำงาน…' : 'อนุมัติ'}

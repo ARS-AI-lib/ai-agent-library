@@ -277,16 +277,27 @@ export function isKnownArea(a) {
 //   2. internalTool === true          — platform internals, not a discipline
 //   3. sdlcProcessMapping → PROCESS_AREA   — most authoritative signal
 //   4. relatedRole → ROLE_FIRST_AREA  — Security/Data, which have no category
-//   5. category → CATEGORY_AREA       — the only signal covering 243/243
+//   5. category → categoryAreaOverrides, falling back to CATEGORY_AREA
 //   6. relatedRole → ROLE_AREA        — tiebreak for the 3 null categories
 //   7. External with nothing else     — Business & Product
+//
+// `categoryAreaOverrides` (optional, {categoryName: areaName}) exists for
+// categories that didn't exist when CATEGORY_AREA was written — every
+// category approved through CategoryApprovalPanel AFTER 2026-08-10 requires
+// the admin to pick an area at approval time (see that component), and the
+// choice is stored at /config/schema.categoryAreaMap rather than requiring a
+// code change + redeploy for each new category. CATEGORY_AREA stays the
+// baked-in table for the categories that existed at ship time; the live
+// config only ever ADDS entries on top, never removes the code-level ones.
+// Callers that don't have schema loaded (or pass nothing) get CATEGORY_AREA
+// alone — same behaviour as before this existed, never worse.
 //
 // Returns a de-duplicated, stable-sorted array. An agent may legitimately
 // span two areas (15 do — e.g. the Figma skills are both design and
 // engineering work); the caller-side check is an INTERSECTION, so two areas
 // means "either area's approver may sign off", which is the existing
 // semantic, not a new one.
-export function agentApproveAreas(agent) {
+export function agentApproveAreas(agent, categoryAreaOverrides) {
   if (!agent) return [];
 
   // 1. Stored decision. Filtered against AREA_ORDER so a stale value left
@@ -311,9 +322,15 @@ export function agentApproveAreas(agent) {
   roles.forEach((r) => add(byRoleFirst, ROLE_FIRST_AREA[r]));
   if (byRoleFirst.size) return [...byRoleFirst].sort();
 
-  // 5. Category.
+  // 5. Category — live overrides checked first so a newer admin decision can
+  //    supersede a category that also happens to be in the baked-in table
+  //    (shouldn't normally happen, but the override should win if it does).
+  const overrides = categoryAreaOverrides || {};
   const byCategory = new Set();
-  agentCategories(agent).forEach((c) => add(byCategory, CATEGORY_AREA[c]));
+  agentCategories(agent).forEach((c) => {
+    const override = isKnownArea(overrides[c]) ? overrides[c] : null;
+    add(byCategory, override || CATEGORY_AREA[c]);
+  });
   if (byCategory.size) return [...byCategory].sort();
 
   // 6. Role.

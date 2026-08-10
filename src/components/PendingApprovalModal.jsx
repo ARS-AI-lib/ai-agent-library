@@ -43,9 +43,15 @@ const RISK_COLOR = { high: '#c5221f', medium: '#c96a00', low: '#137333' };
 //                     overlaps their own approveAreas.
 //   user (base)     — see only their own submissions, and may only reject
 //                     (withdraw) them — never approve their own idea.
-export default function PendingApprovalModal({ pending, deployRequests = [], onClose, user, isAdmin, isCommittee, approveAreas = [], agents = [] }) {
+export default function PendingApprovalModal({ pending, deployRequests = [], onClose, user, isAdmin, isCommittee, approveAreas = [], agents = [], schema = {} }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
+  // Wraps agentApproveAreas with the live category->area overrides an admin
+  // may have set via CategoryApprovalPanel, so a brand-new category doesn't
+  // silently misroute here even before approveAreas.js's code-level table is
+  // ever updated. Falls back to the code-level table alone if schema hasn't
+  // loaded yet — same as calling resolveAreas() with no overrides.
+  const resolveAreas = (a) => agentApproveAreas(a, schema.categoryAreaMap);
   const [rejectModal, setRejectModal] = useState(null); // { agent, reason } | null — approver reject-with-reason
   const [myRejected, setMyRejected] = useState([]);      // creator's own items rejected WITH a reason (feature B)
   useEscapeKey(onClose);
@@ -100,7 +106,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
 
   const visible = useMemo(() => {
     if (fullAccess) return pending;
-    const areaMatches = pending.filter((a) => agentApproveAreas(a).some((area) => mine.has(area)));
+    const areaMatches = pending.filter((a) => resolveAreas(a).some((area) => mine.has(area)));
     if (areaMatches.length > 0) {
       // Has approveAreas assigned → acting as an approver: area-scoped view.
       return areaMatches;
@@ -108,11 +114,11 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
     // Base "user" tier (or an approver with no matching area right now):
     // only their own submissions, so they can at least track/withdraw them.
     return pending.filter((a) => a.createdBy === user?.uid);
-  }, [pending, fullAccess, mine, user]);
+  }, [pending, fullAccess, mine, user, schema.categoryAreaMap]);
 
   function canApprove(agent) {
     if (fullAccess) return true;
-    return mine.size > 0 && agentApproveAreas(agent).some((area) => mine.has(area));
+    return mine.size > 0 && resolveAreas(agent).some((area) => mine.has(area));
   }
   function canReject(agent) {
     if (fullAccess) return true;
@@ -131,8 +137,8 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
     // decision back onto them.
     const parentsOnly = deployRequests.filter((a) => !isPairedSubSkill(a, agents));
     if (fullAccess) return parentsOnly;
-    return parentsOnly.filter((a) => agentApproveAreas(a).some((area) => mine.has(area)));
-  }, [deployRequests, fullAccess, mine, agents]);
+    return parentsOnly.filter((a) => resolveAreas(a).some((area) => mine.has(area)));
+  }, [deployRequests, fullAccess, mine, agents, schema.categoryAreaMap]);
 
   // Deploy decision cascades onto the paired sub-skills too (2026-07-06) — the
   // approver acts once on the parent Agent and the whole package flips. The
@@ -282,7 +288,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                 <div className="queue-meta">
                   {agent.aiAgent ? 'Agent' : ''}{agent.aiAgent && agent.skillMd ? ' + ' : ''}{agent.skillMd ? 'Skill' : ''}
                   {' · '}โดย {agent.creator || '—'}
-                  {' · '}<span style={{ color: 'var(--uc)' }}>{agentApproveAreas(agent).join(', ') || 'ไม่ระบุ area'}</span>
+                  {' · '}<span style={{ color: 'var(--uc)' }}>{resolveAreas(agent).join(', ') || 'ไม่ระบุ area'}</span>
                   {' · '}<span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                   {risk && (
                     <>{' · '}เสี่ยงทับซ้อน/คล้าย: <span style={{ color: RISK_COLOR[risk] || 'var(--mu)', fontWeight: 700 }}>{RISK_LABEL[risk] || risk}</span></>
@@ -361,7 +367,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                   </div>
                   <div className="queue-meta">
                     {' '}โดย {agent.creator || '—'}
-                    {' · '}<span style={{ color: 'var(--uc)' }}>{agentApproveAreas(agent).join(', ') || 'ไม่ระบุ area'}</span>
+                    {' · '}<span style={{ color: 'var(--uc)' }}>{resolveAreas(agent).join(', ') || 'ไม่ระบุ area'}</span>
                     {' · '}<span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                     {' · '}Progress: <strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{agent.devProgress}%</strong>
                     {agent.launchDate && (
@@ -370,7 +376,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                   </div>
                 </div>
                 <div className="queue-actions">
-                  {(fullAccess || (mine.size > 0 && agentApproveAreas(agent).some((area) => mine.has(area)))) && (
+                  {(fullAccess || (mine.size > 0 && resolveAreas(agent).some((area) => mine.has(area)))) && (
                     <>
                       <button className="btn-sm rej" disabled={busyId === agent.id} onClick={() => handleRejectDeploy(agent)}>
                         Reject

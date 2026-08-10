@@ -466,6 +466,7 @@ export default function App() {
           isCommittee={isCommittee}
           approveAreas={approveAreas}
           agents={agents}
+          schema={schema}
         />
       )}
 
@@ -492,6 +493,7 @@ export default function App() {
           isAdmin={isAdmin}
           isCommittee={isCommittee}
           approveAreas={approveAreas}
+          schema={schema}
         />
       )}
     </div>

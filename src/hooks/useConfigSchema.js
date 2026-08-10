@@ -19,6 +19,13 @@ const MAX_ATTEMPTS = 5;
  *   reusable: string[],
  *   relatedRole: string[],
  *   category: string[],   // 2026-08: left-sidebar shortcuts — see agent-skill-structured-horizon plan
+ *   approveArea: string[],       // 2026-08-10: the 12 approver areas — see src/lib/approveAreas.js
+ *   categoryAreaMap: object,     // 2026-08-10: {categoryName: areaName} — live overrides/additions on
+ *                                 top of approveAreas.js's baked-in CATEGORY_AREA, written by
+ *                                 CategoryApprovalPanel when an admin approves a NEW category (a category
+ *                                 that didn't exist when CATEGORY_AREA was written has no code-level
+ *                                 mapping, so without this every agent that gets it would fall through to
+ *                                 the role layer or unresolved — the exact bug this whole feature fixes).
  * }
  *
  * `enabled` gates the subscription the same way useApprovedAgents/
@@ -43,6 +50,8 @@ export function useConfigSchema(enabled = true) {
     reusable: [],
     relatedRole: [],
     category: [],
+    approveArea: [],
+    categoryAreaMap: {},
   });
   const [loading, setLoading] = useState(true);
 

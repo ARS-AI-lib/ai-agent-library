@@ -104,12 +104,16 @@ function downloadCsv(rows, filename, columns = COLUMNS) {
  *   My Area's AI — every approvalStatus, trimmed columns
  *   All Data    — every approvalStatus, EVERY field (ALL_COLUMNS/toFullRow)
  */
-export default function ExportDataModal({ onClose, approvedAgents, user, role, isAdmin, isCommittee, approveAreas }) {
+export default function ExportDataModal({ onClose, approvedAgents, user, role, isAdmin, isCommittee, approveAreas, schema = {} }) {
   const [pending, setPending] = useState([]);
   const [rejected, setRejected] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   useEscapeKey(onClose);
+  // See PendingApprovalModal for why this wrapper exists — live
+  // category->area overrides from CategoryApprovalPanel must apply here too,
+  // since Export's "My Area's AI" button uses the same area intersection.
+  const resolveAreas = (a) => agentApproveAreas(a, schema.categoryAreaMap);
 
   useEffect(() => {
     let alive = true;
@@ -138,7 +142,7 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
   }
   function exportMyArea() {
     const areaSet = new Set(approveAreas || []);
-    const rows = allAgents.filter((a) => agentApproveAreas(a).some((ar) => areaSet.has(ar))).map(toRow);
+    const rows = allAgents.filter((a) => resolveAreas(a).some((ar) => areaSet.has(ar))).map(toRow);
     downloadCsv(rows, 'my-area-ai.csv');
   }
   function exportAll() {
@@ -190,7 +194,7 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
               <button className="mac" style={{ textAlign: 'left', width: '100%', fontFamily: 'inherit', border: '1px solid var(--bd-soft)', cursor: 'pointer' }} onClick={exportMyArea}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span className="macname">My Area's AI</span>
-                  <span className="deploy-badge" style={{ marginLeft: 'auto', color: 'var(--mu)', background: 'var(--sf3)' }}>{allAgents.filter((a) => agentApproveAreas(a).some((ar) => (approveAreas || []).includes(ar))).length} items</span>
+                  <span className="deploy-badge" style={{ marginLeft: 'auto', color: 'var(--mu)', background: 'var(--sf3)' }}>{allAgents.filter((a) => resolveAreas(a).some((ar) => (approveAreas || []).includes(ar))).length} items</span>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>Approver ขึ้นไป · ทุกสถานะ ในพื้นที่ที่รับผิดชอบ</div>
               </button>
