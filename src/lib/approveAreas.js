@@ -243,7 +243,7 @@ export const CATEGORY_AREA = {
   'Investment': 'Business & Product',
   'Lending & Credit': 'Business & Product',
   'NEXT': 'Business & Product',                                // added 2026-08-10
-  'เป๋าตัง & เป๋าตุง': 'Business & Product',                      // added 2026-08-10
+  'เป๋าตัง, เป๋าตุง, ถุงเงิน': 'Business & Product',                // added 2026-08-10, renamed same day
   'CLIX': 'Business & Product',                                // added 2026-08-10
   'Core bank': 'Business & Product',                           // added 2026-08-10
 };

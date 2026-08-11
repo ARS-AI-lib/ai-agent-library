@@ -113,7 +113,7 @@ function splitOptions(values) {
   return uniq(values.flatMap((v) => splitRoles(v))).sort();
 }
 
-export default function PreRegModal({ onClose, approvedAgents, allAgents = [], schema, user, onSubmitted, onAddRelatedRole }) {
+export default function PreRegModal({ onClose, approvedAgents, allAgents = [], schema, user, onSubmitted, onAddRelatedRole, onAddTeam }) {
   const [tab, setTab] = useState('form');
   const [form, setForm] = useState(EMPTY_FORM);
   const [validationMsg, setValidationMsg] = useState('');
@@ -157,7 +157,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     return () => { alive = false; };
   }, []);
 
-  const ownerOptions = useMemo(() => uniq(approvedAgents.map((a) => a.owner)).sort(), [approvedAgents]);
+  // 2026-08-10: canonical /config/schema.team unioned with owners already in
+  // use — existing agent.owner values predate the team list and mostly don't
+  // match it (submitter codenames like "Wolfy" vs real org teams), so both
+  // sources stay visible rather than the roster silently hiding history.
+  const ownerOptions = useMemo(
+    () => uniq([...(schema.team || []), ...approvedAgents.map((a) => a.owner)]).sort(),
+    [approvedAgents, schema.team]
+  );
   const abilityOptions = useMemo(
     () => (schema.coreAbility?.length ? schema.coreAbility : splitOptions(approvedAgents.map((a) => a.coreAbility))),
     [schema.coreAbility, approvedAgents]
@@ -628,7 +635,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // so nothing lingers post-submit (per the "clear cache after submit" rule).
       analysisCacheRef.current.clear();
 
-      onSubmitted?.();
+      // Grow-only: a freshly-typed team name that isn't in the canonical list
+      // yet joins it, same self-service pattern as Related Role. Fire-and-
+      // forget — the agent is already saved; this only affects future
+      // dropdowns and must never block or fail the submission.
+      onAddTeam?.([form.owner.trim()].filter(Boolean));
       onClose();
     } catch (e) {
       setSubmitError(e.message || 'เกิดข้อผิดพลาดในการบันทึก');

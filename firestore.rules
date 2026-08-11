@@ -292,6 +292,21 @@ service cloud.firestore {
         && (!('relatedRole' in resource.data) || request.resource.data.relatedRole.hasAll(resource.data.relatedRole));
     }
 
+    // Team — grow-only self-service (2026-08-10), same shape as relatedRole
+    // above: PreRegModal's Owner field lets any known user type a team name
+    // not yet in the canonical list and have it appended, without admin
+    // rights. Separate match block (not merged into the relatedRole one)
+    // because affectedKeys().hasOnly(['relatedRole']) would otherwise also
+    // have to list 'team', and a single write must touch only one growable
+    // field at a time — keeping them as two single-field rules is what
+    // guarantees a write can never grow two lists at once under one exploit.
+    match /config/schema {
+      allow update: if isKnownUser()
+        && affectedKeys().hasOnly(['team'])
+        && request.resource.data.team is list
+        && (!('team' in resource.data) || request.resource.data.team.hasAll(resource.data.team));
+    }
+
     // ── /categoryProposals — AI-proposed new Category shortcuts ──────
     // Written whenever analyzeDuplicate (or the backfill script) decides a
     // draft/agent is novel enough that no existing /config/schema.category

@@ -60,7 +60,7 @@ const AREA_CATEGORY = {
 };
 
 // Business verticals — never derived, always preserved as-is.
-const VERTICALS = ['Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง & เป๋าตุง', 'CLIX', 'Core bank'];
+const VERTICALS = ['Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLIX', 'Core bank'];
 
 // Categories that no longer exist in the corrected list.
 const RETIRED = ['Testing & QA', 'Orchestration & Automation', 'DevOps & Performance'];

@@ -19,6 +19,12 @@ const MAX_ATTEMPTS = 5;
  *   reusable: string[],
  *   relatedRole: string[],
  *   category: string[],   // 2026-08: left-sidebar shortcuts — see agent-skill-structured-horizon plan
+ *   team: string[],       // 2026-08-10: canonical org team list (Owner field autocomplete + filter
+ *                          // options), seeded from an org roster. Grow-only self-service like
+ *                          // relatedRole — free-typing a new team name in PreRegModal appends it.
+ *                          // NOT retroactive: existing agent.owner values (free text, ~20 distinct)
+ *                          // predate this list and mostly don't match it — left untouched per
+ *                          // explicit decision, so this only shapes NEW submissions going forward.
  *   approveArea: string[],       // 2026-08-10: the 12 approver areas — see src/lib/approveAreas.js
  *   categoryAreaMap: object,     // 2026-08-10: {categoryName: areaName} — live overrides/additions on
  *                                 top of approveAreas.js's baked-in CATEGORY_AREA, written by
@@ -52,6 +58,7 @@ export function useConfigSchema(enabled = true) {
     category: [],
     approveArea: [],
     categoryAreaMap: {},
+    team: [],
   });
   const [loading, setLoading] = useState(true);
 
@@ -115,5 +122,22 @@ export function useConfigSchema(enabled = true) {
     }
   }
 
-  return { schema, loading, addRelatedRoles };
+  // Same grow-only pattern as addRelatedRoles — a user typing a team name
+  // that isn't in the list yet (PreRegModal's Owner field) appends it rather
+  // than being blocked. firestore.rules scopes this to ONLY the team field
+  // and only allows appending.
+  async function addTeams(newTeams) {
+    const existing = new Set((schema.team || []).map((t) => t.toLowerCase()));
+    const toAdd = [...new Set(newTeams.map((t) => t.trim()).filter(Boolean))]
+      .filter((t) => !existing.has(t.toLowerCase()));
+    if (!toAdd.length) return;
+    const ref = doc(db, 'config', 'schema');
+    try {
+      await updateDoc(ref, { team: arrayUnion(...toAdd) });
+    } catch {
+      await setDoc(ref, { team: toAdd }, { merge: true });
+    }
+  }
+
+  return { schema, loading, addRelatedRoles, addTeams };
 }

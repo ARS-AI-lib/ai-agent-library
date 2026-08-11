@@ -61,7 +61,7 @@ const FALLBACK_CATEGORY = [
   'UX Research', 'Design & UI', 'Writing & Content', 'Architecture',
   'Software Development', 'SIT', 'QA', 'Security', 'DevOps & Platform',
   'SRE & Reliability', 'Incident Management', 'Data & Analytics',
-  'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง & เป๋าตุง', 'CLIX', 'Core bank',
+  'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLIX', 'Core bank',
 ];
 let categoryCache = null;
 async function getCategoryOptions() {

@@ -95,7 +95,7 @@ function sortProcs(procs) {
 
 const pct = (a, b) => (b === 0 ? 0 : Math.round((a / b) * 100));
 
-export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChange, onAgentClick, legendActions }) {
+export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChange, onAgentClick, legendActions, schema = {} }) {
   const [processes, setProcesses] = useState([]);
   const [useCases, setUseCases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -144,7 +144,9 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     setStage('all'); setOwner(new Set()); setRole(new Set()); setProcOwner(new Set()); setReusable(new Set()); setSelectedStatus(new Set());
   }
 
-  const ownerOptions = uniq(agents.map((a) => a.owner)).sort();
+  // Unioned with /config/schema.team (2026-08-10) — same reasoning as App.jsx's
+  // Library-tab Owner filter.
+  const ownerOptions = uniq([...(schema.team || []), ...agents.map((a) => a.owner)]).sort();
   const roleOptions = uniq(agents.flatMap((a) => splitRoles(a.relatedRole))).sort();
   const procOwnerOptions = uniq(processes.map((p) => p.owner)).filter(Boolean).sort();
   const reusableOptions = uniq(agents.map((a) => a.reusable).filter(Boolean)).sort();

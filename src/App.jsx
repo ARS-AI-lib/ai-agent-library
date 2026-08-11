@@ -89,7 +89,7 @@ export default function App() {
   const { agents, allAgents, loading: agentsLoading } = useApprovedAgents(!!role);
   const { pending } = usePendingAgents(!!role);
   const { deployRequests } = useDeploymentRequests(!!role);
-  const { schema, addRelatedRoles } = useConfigSchema(!!role);
+  const { schema, addRelatedRoles, addTeams } = useConfigSchema(!!role);
 
   // Directory sync is no longer auto-run at login: the People API scope is now
   // requested on-demand only when an admin clicks "Sync directory now" in User
@@ -182,7 +182,13 @@ export default function App() {
   const [signInError, setSignInError] = useState('');
   const [sdlcVisAgents, setSdlcVisAgents] = useState([]);
 
-  const ownerOptions = useMemo(() => uniq(agents.map((a) => a.owner)).sort(), [agents]);
+  // Unioned with /config/schema.team (2026-08-10) so the Owner filter can
+  // select a real org team even before any agent is tagged with it yet —
+  // same reasoning as PreRegModal's Owner autocomplete.
+  const ownerOptions = useMemo(
+    () => uniq([...(schema.team || []), ...agents.map((a) => a.owner)]).sort(),
+    [agents, schema.team]
+  );
   // Merges roles already in use on agents with any newly-typed roles persisted
   // to /config/schema.relatedRole (2026-07-06) — a role someone just typed
   // shows up for everyone immediately, even before any agent uses it.
@@ -405,6 +411,7 @@ export default function App() {
           onVisibleAgentsChange={setSdlcVisAgents}
           onAgentClick={setSelectedAgent}
           legendActions={legendActions}
+          schema={schema}
         />
       )}
 
@@ -453,6 +460,7 @@ export default function App() {
           user={user}
           onSubmitted={() => {}}
           onAddRelatedRole={addRelatedRoles}
+          onAddTeam={addTeams}
         />
       )}
 
