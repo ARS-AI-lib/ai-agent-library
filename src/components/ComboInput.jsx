@@ -21,6 +21,14 @@ export default function ComboInput({ value, onChange, options = [], placeholder,
   const filtered = q
     ? options.filter((o) => o.toLowerCase().includes(q))
     : options;
+  // Same "+ Add" affordance as TagMultiSelect (2026-08-10) — free-typing a
+  // value with no exact match (case-insensitive) among the known options is
+  // silently accepted here already (onChange fires on every keystroke), but
+  // without this row nothing on screen told the user that was fine. Only
+  // meaningful when free-typing is possible at all, so readOnly fields
+  // (Reusable) never show it.
+  const exactMatch = !readOnly && options.some((o) => o.toLowerCase() === q);
+  const showAddHint = !readOnly && q && !exactMatch;
 
   return (
     <div className="combo-wrap" ref={wrapRef}>
@@ -34,7 +42,7 @@ export default function ComboInput({ value, onChange, options = [], placeholder,
         placeholder={placeholder}
         style={readOnly ? { cursor: 'pointer' } : undefined}
       />
-      {open && filtered.length > 0 && (
+      {open && (filtered.length > 0 || showAddHint) && (
         <div className="combo-list">
           {filtered.slice(0, 50).map((o) => (
             <div
@@ -45,6 +53,11 @@ export default function ComboInput({ value, onChange, options = [], placeholder,
               {o}
             </div>
           ))}
+          {showAddHint && (
+            <div className="combo-item combo-add" onMouseDown={(e) => { e.preventDefault(); setOpen(false); }}>
+              + Add "{value.trim()}"
+            </div>
+          )}
         </div>
       )}
     </div>
