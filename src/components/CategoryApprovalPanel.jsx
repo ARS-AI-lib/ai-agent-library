@@ -127,6 +127,13 @@ export default function CategoryApprovalPanel({ onClose, user }) {
                   onChange={(v) => setAreaPick((prev) => ({ ...prev, [p.id]: v }))}
                   ariaLabel={`Approve Area สำหรับหมวด ${p.name}`}
                 />
+                {/* D1 (2026-08-10): the requirement used to be visible only via
+                    the Approve button's title tooltip — invisible until hover,
+                    so a reviewer scanning several proposals had no on-screen
+                    cue why a button was greyed out. Always-on instead. */}
+                {!areaPick[p.id] && (
+                  <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 4 }}>เลือก Approve Area ก่อนอนุมัติ</div>
+                )}
               </div>
               <div className="btn-group" style={{ marginTop: 8 }}>
                 <button

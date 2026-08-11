@@ -5,6 +5,7 @@ import { agentStatus, statusCounts, ST_DEF, ST_ORDER, progressBucket } from '../
 import { getType, getTier, TIER_DEF, TIER_ORDER, isInternalOrExternal } from '../lib/tier';
 import { toTimelineItem, timelineStatus, autoFitRange, TL_ST } from '../lib/timeline';
 import { agentProcessIds, uniq, fmtDate, normalizeProgress } from '../lib/agentUtils';
+import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
 import '../styles/SDLCTab.css';
 import '../styles/DashboardTab.css';
 
@@ -28,6 +29,8 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
   const [procLoading, setProcLoading] = useState(true);
   const [milestones, setMilestones] = useState([]);
   const [procModal, setProcModal] = useState(null); // { proc, agents:[agent] } | null
+  const [approverUsers, setApproverUsers] = useState([]); // role==='approver' only — see areaApproverCounts below
+  const [areaModal, setAreaModal] = useState(null); // { area, agents:[agent] } | null — B widget's click-through
 
   useEffect(() => {
     let active = true;
@@ -44,6 +47,18 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
     const unsub = onSnapshot(doc(db, 'config', 'timeline'), (snap) => {
       setMilestones(snap.exists() ? (snap.data().milestones || []) : []);
     }, () => setMilestones([]));
+    return unsub;
+  }, []);
+
+  // Approve Area coverage widget (2026-08-10) needs to know which areas have
+  // a DEDICATED approver — self-fetched here rather than threaded as a prop
+  // from App.jsx, same pattern as `processes` above (Dashboard already fetches
+  // its own supplementary data). Same collection/query shape as
+  // UserManagementModal.jsx, filtered client-side to role==='approver' only.
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
+      setApproverUsers(snap.docs.map((d) => d.data()).filter((u) => u.role === 'approver'));
+    }, () => setApproverUsers([]));
     return unsub;
   }, []);
 
@@ -92,6 +107,26 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
       .filter((s) => s.procs.length > 0);
   }, [processes]);
   const coveredN = processes.filter((p) => (procCounts[p.id] || 0) > 0).length;
+
+  // ── Approve Area coverage (2026-08-10) ──
+  // agentAreaCounts: how many agents route to each area (same computation
+  // PendingApprovalModal uses to decide queue visibility).
+  // areaApproverCounts: how many DEDICATED approvers (role==='approver', NOT
+  // admin/committee) are assigned to each area. Admin/committee are excluded
+  // on purpose — they're the fullAccess safety net every area already has
+  // implicitly, so counting them would hide the exact gap (areas nobody has
+  // been deliberately assigned to yet) this widget exists to surface.
+  const areaAgents = useMemo(() => {
+    const map = {};
+    agents.forEach((a) => agentApproveAreas(a).forEach((ar) => { (map[ar] = map[ar] || []).push(a); }));
+    return map;
+  }, [agents]);
+  const areaApproverCounts = useMemo(() => {
+    const c = {};
+    approverUsers.forEach((u) => (u.approveAreas || []).forEach((ar) => { c[ar] = (c[ar] || 0) + 1; }));
+    return c;
+  }, [approverUsers]);
+  const areaCoveredN = AREA_ORDER.filter((ar) => (areaApproverCounts[ar] || 0) > 0).length;
 
   // ── Owner workload ──
   const ownerRows = useMemo(() => {
@@ -193,6 +228,39 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
         )}
       </div>
 
+      {/* ── Approve Area coverage (2026-08-10) ── mirrors SDLC Coverage above:
+          same dash-stages/dash-proc classes, but one flat row (areas have no
+          stage-like grouping) and the gap signal is APPROVER count, not
+          agent count — an area can be full of agents and still be a gap if
+          nobody dedicated is assigned to review them. */}
+      <div className="dash-card">
+        <div className="dash-card-hdr">
+          <span className="dash-card-title">Approve Area Coverage</span>
+          <span className="dash-card-sub">{areaCoveredN}/{AREA_ORDER.length} area มี approver ครอบคลุม · ช่องแดง = ยังไม่มี approver</span>
+        </div>
+        <div className="dash-stages">
+          <div className="dash-stage">
+            <div className="dash-procs">
+              {AREA_ORDER.map((area) => {
+                const approverN = areaApproverCounts[area] || 0;
+                const agentN2 = (areaAgents[area] || []).length;
+                const clickable = agentN2 > 0;
+                return (
+                  <span
+                    key={area}
+                    className={`dash-proc ${approverN === 0 ? 'gap' : ''} ${clickable ? 'clickable' : ''}`}
+                    title={`${area} — ${agentN2} agent${agentN2 === 1 ? '' : 's'}, ${approverN} approver${approverN === 1 ? '' : 's'}${approverN === 0 ? ' (ยังไม่มี approver)' : ''}`}
+                    onClick={clickable ? () => setAreaModal({ area, agents: areaAgents[area] || [] }) : undefined}
+                  >
+                    {area}{agentN2 > 0 && <b>{agentN2}</b>}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Delay/At-risk (60%) + Owner Workload (40%) ── */}
       <div className="dash-grid-flag">
         <div className="dash-card">
@@ -250,52 +318,26 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
             <div className="sdlc-msub">{procModal.proc.id}{procModal.proc.owner ? ` · Process Owner: ${procModal.proc.owner}` : ''}</div>
             <div className="sdlc-mtitle">{procModal.proc.name || procModal.proc.id}</div>
             <div className="sdlc-msec">Agents &amp; Skills ({procModal.agents.length})</div>
-            {procModal.agents.map((a) => {
-              const st = agentStatus(a);
-              const sd = ST_DEF[st];
-              const t = getType(a);
-              const progress = normalizeProgress(a?.devProgress);
-              const ability = Array.isArray(a.coreAbility) ? a.coreAbility.join(', ') : a.coreAbility;
-              const tier = getTier(a);
-              const tierDef = TIER_DEF[tier];
-              const scope = isInternalOrExternal(a);
-              return (
-                <div key={a.id} className="sdlc-mac" style={{ cursor: 'pointer' }} onClick={() => { setProcModal(null); onAgentClick?.(a); }}>
-                  <div className="sdlc-machdr">
-                    <span className={`uc-tb ${t === 'agent' ? 'tbag' : 'tbsk'}`}>{t.toUpperCase()}</span>
-                    <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>{tier}</span>
-                    <span className="sdlc-macname">{a.agentName}</span>
-                    <span className="scope-badge" style={{ position: 'static', marginLeft: 'auto', color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
-                      {scope === 'External' ? (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
-                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                        </svg>
-                      ) : (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="4" y="2" width="16" height="20" rx="1" />
-                          <line x1="9" y1="10" x2="9" y2="10" /><line x1="15" y1="10" x2="15" y2="10" />
-                          <line x1="9" y1="14" x2="9" y2="14" /><line x1="15" y1="14" x2="15" y2="14" />
-                          <path d="M9 22v-4h6v4" />
-                        </svg>
-                      )}
-                    </span>
-                  </div>
-                  <div className="sdlc-mrow"><span className="sdlc-mk">Owner</span><span>{a.owner || '—'}</span></div>
-                  <div className="sdlc-mrow"><span className="sdlc-mk">Ability</span><span>{ability || '—'}</span></div>
-                  <div className="sdlc-mrow"><span className="sdlc-mk">Phase</span>
-                    <span className="sdlc-ph" style={{ background: sd.bg, color: sd.color, border: `1px solid ${sd.bd}` }}>{sd.lb}</span>
-                  </div>
-                  <div className="sdlc-mrow"><span className="sdlc-mk">Launch</span><span>{fmtDate(a.launchDate) || '—'}</span></div>
-                  <div style={{ marginTop: 6 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--mu)' }}>
-                      <span>Progress</span><strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{progress}%</strong>
-                    </div>
-                    <div className="mpb"><div className={`mpf ${progressBucket(progress)}`} style={{ width: `${progress}%` }} /></div>
-                  </div>
-                </div>
-              );
-            })}
+            {procModal.agents.map((a) => (
+              <AgentQuickCard key={a.id} agent={a} onClick={() => { setProcModal(null); onAgentClick?.(a); }} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Area coverage widget's click-through — same modal shell as SDLC's,
+          no process-owner subline (areas don't have one), agent rows use the
+          shared AgentQuickCard so both modals stay visually identical. */}
+      {areaModal && (
+        <div className="sdlc-ovl" onClick={() => setAreaModal(null)}>
+          <div className="sdlc-mbox" onClick={(e) => e.stopPropagation()}>
+            <button className="sdlc-mclose" onClick={() => setAreaModal(null)}>✕</button>
+            <div className="sdlc-msub">Approve Area</div>
+            <div className="sdlc-mtitle">{areaModal.area}</div>
+            <div className="sdlc-msec">Agents &amp; Skills ({areaModal.agents.length})</div>
+            {areaModal.agents.map((a) => (
+              <AgentQuickCard key={a.id} agent={a} onClick={() => { setAreaModal(null); onAgentClick?.(a); }} />
+            ))}
           </div>
         </div>
       )}
@@ -305,6 +347,56 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
 
 function pillStyle(st) {
   return { background: st.bg, color: st.tx, border: `1px solid ${st.bd}` };
+}
+
+// Extracted 2026-08-10 (was inlined once, in the SDLC-coverage proc modal) so
+// the new Approve Area coverage modal renders identical agent rows without a
+// second copy of this block drifting from the original.
+function AgentQuickCard({ agent: a, onClick }) {
+  const st = agentStatus(a);
+  const sd = ST_DEF[st];
+  const t = getType(a);
+  const progress = normalizeProgress(a?.devProgress);
+  const ability = Array.isArray(a.coreAbility) ? a.coreAbility.join(', ') : a.coreAbility;
+  const tier = getTier(a);
+  const tierDef = TIER_DEF[tier];
+  const scope = isInternalOrExternal(a);
+  return (
+    <div className="sdlc-mac" style={{ cursor: 'pointer' }} onClick={onClick}>
+      <div className="sdlc-machdr">
+        <span className={`uc-tb ${t === 'agent' ? 'tbag' : 'tbsk'}`}>{t.toUpperCase()}</span>
+        <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>{tier}</span>
+        <span className="sdlc-macname">{a.agentName}</span>
+        <span className="scope-badge" style={{ position: 'static', marginLeft: 'auto', color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
+          {scope === 'External' ? (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="2" width="16" height="20" rx="1" />
+              <line x1="9" y1="10" x2="9" y2="10" /><line x1="15" y1="10" x2="15" y2="10" />
+              <line x1="9" y1="14" x2="9" y2="14" /><line x1="15" y1="14" x2="15" y2="14" />
+              <path d="M9 22v-4h6v4" />
+            </svg>
+          )}
+        </span>
+      </div>
+      <div className="sdlc-mrow"><span className="sdlc-mk">Owner</span><span>{a.owner || '—'}</span></div>
+      <div className="sdlc-mrow"><span className="sdlc-mk">Ability</span><span>{ability || '—'}</span></div>
+      <div className="sdlc-mrow"><span className="sdlc-mk">Phase</span>
+        <span className="sdlc-ph" style={{ background: sd.bg, color: sd.color, border: `1px solid ${sd.bd}` }}>{sd.lb}</span>
+      </div>
+      <div className="sdlc-mrow"><span className="sdlc-mk">Launch</span><span>{fmtDate(a.launchDate) || '—'}</span></div>
+      <div style={{ marginTop: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--mu)' }}>
+          <span>Progress</span><strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{progress}%</strong>
+        </div>
+        <div className="mpb"><div className={`mpf ${progressBucket(progress)}`} style={{ width: `${progress}%` }} /></div>
+      </div>
+    </div>
+  );
 }
 
 // Semantic pictograms per KPI (mockup .kpi-icon) — was a plain 10×10 colour

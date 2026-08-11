@@ -3,9 +3,38 @@ import { collection, doc, getDoc, onSnapshot, query, updateDoc, where, serverTim
 import { db } from '../lib/firebase';
 import { getTier, TIER_DEF } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
-import { matchingAgentNames, pairedSubSkills, isPairedSubSkill, fmtDate } from '../lib/agentUtils';
+import { matchingAgentNames, pairedSubSkills, isPairedSubSkill, fmtDate, categoryColor } from '../lib/agentUtils';
 import AgentDetailModal from './AgentDetailModal';
 import useEscapeKey from '../hooks/useEscapeKey';
+
+// One .tier-badge-styled chip per area (2026-08-10) — replaces a single
+// comma-joined text span. Area is the field a reviewer actually decides
+// visibility/action from, so it gets the same chip treatment Tier already
+// has rather than being the plainest thing on the line. Colour comes from
+// categoryColor() (agentUtils.js) — the same deterministic --c1..--c6 hash
+// already used for sidebar category dots — so no separate area→colour table
+// has to be hand-maintained as areas are added/renamed.
+function AreaChips({ areas }) {
+  if (!areas.length) return <span style={{ color: 'var(--mu)' }}>ไม่ระบุ area</span>;
+  return areas.map((a) => {
+    const c = categoryColor(a);
+    return (
+      <span
+        key={a}
+        className="tier-badge"
+        style={{
+          color: c,
+          background: `color-mix(in srgb, ${c} 16%, var(--sf2))`,
+          borderColor: `color-mix(in srgb, ${c} 40%, transparent)`,
+          border: '1px solid',
+          marginRight: 4,
+        }}
+      >
+        {a}
+      </span>
+    );
+  });
+}
 
 const VERDICT_LABEL = {
   clear_duplicate: 'Clear Duplicate',
@@ -115,6 +144,14 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
     // only their own submissions, so they can at least track/withdraw them.
     return pending.filter((a) => a.createdBy === user?.uid);
   }, [pending, fullAccess, mine, user, schema.categoryAreaMap]);
+
+  // D2 (2026-08-10): an approver whose areas simply have nothing pending
+  // right now used to collapse into the EXACT same view as a base "user" tier
+  // with no approver rights at all — own-submissions-only, no explanation.
+  // That reads as "you lost your approver access" when it's really just
+  // "your queue is empty today". Distinguished here so a message can say so.
+  const areaEmptyForApprover = !fullAccess && mine.size > 0
+    && !pending.some((a) => resolveAreas(a).some((area) => mine.has(area)));
 
   function canApprove(agent) {
     if (fullAccess) return true;
@@ -266,6 +303,12 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
 
+        {areaEmptyForApprover && (
+          <div className="msg info">
+            ไม่มีรายการใหม่ใน area ของคุณตอนนี้ ({[...mine].join(', ')}) — กำลังแสดงเฉพาะรายการที่คุณส่งเอง
+          </div>
+        )}
+
         <div className="sec-title" style={{ marginTop: 4 }}>New Entry</div>
         <div className="msub">
           {visible.length} รายการ
@@ -288,7 +331,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                 <div className="queue-meta">
                   {agent.aiAgent ? 'Agent' : ''}{agent.aiAgent && agent.skillMd ? ' + ' : ''}{agent.skillMd ? 'Skill' : ''}
                   {' · '}โดย {agent.creator || '—'}
-                  {' · '}<span style={{ color: 'var(--uc)' }}>{resolveAreas(agent).join(', ') || 'ไม่ระบุ area'}</span>
+                  {' · '}<AreaChips areas={resolveAreas(agent)} />
                   {' · '}<span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                   {risk && (
                     <>{' · '}เสี่ยงทับซ้อน/คล้าย: <span style={{ color: RISK_COLOR[risk] || 'var(--mu)', fontWeight: 700 }}>{RISK_LABEL[risk] || risk}</span></>
@@ -367,7 +410,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                   </div>
                   <div className="queue-meta">
                     {' '}โดย {agent.creator || '—'}
-                    {' · '}<span style={{ color: 'var(--uc)' }}>{resolveAreas(agent).join(', ') || 'ไม่ระบุ area'}</span>
+                    {' · '}<AreaChips areas={resolveAreas(agent)} />
                     {' · '}<span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                     {' · '}Progress: <strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{agent.devProgress}%</strong>
                     {agent.launchDate && (
