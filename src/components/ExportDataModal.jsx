@@ -6,14 +6,17 @@ import { agentApproveAreas } from '../lib/approveAreas';
 import { isMyAgent, normalizeProgress } from '../lib/agentUtils';
 import useEscapeKey from '../hooks/useEscapeKey';
 
-const COLUMNS = ['agentName', 'type', 'owner', 'creator', 'creatorEmails', 'approvalStatus', 'devProgress', 'reusable', 'description'];
+// 'category' and 'approveArea' added 2026-08-10 so an exported CSV carries
+// enough to analyze/pivot by discipline and domain without cross-referencing
+// the live app — the whole point of a "take it and analyze" export.
+const COLUMNS = ['agentName', 'type', 'owner', 'creator', 'creatorEmails', 'approvalStatus', 'devProgress', 'reusable', 'category', 'approveArea', 'description'];
 
 // Full field set for "All Data" — mirrors export-agents-csv.cjs's column
 // list minus the two Firebase Auth UID fields (createdBy, approvedBy),
 // deliberately excluded from any exported CSV (2026-07-04, security).
 const ALL_COLUMNS = [
   'id', 'agentName', 'description', 'aiAgent', 'skillMd', 'owner',
-  'coreAbility', 'relatedRole', 'customerFacing', 'internalUse',
+  'coreAbility', 'relatedRole', 'category', 'approveArea', 'customerFacing', 'internalUse',
   'reusable', 'reuseCondition', 'hml', 'humanJob', 'tool', 'llm',
   'dataPrivacy', 'sdlcStage', 'sdlcProcessMapping', 'useCase',
   'input', 'output', 'businessValue', 'developmentPhase', 'devProgress',
@@ -30,7 +33,11 @@ function csvCell(v) {
   return s;
 }
 
-function toRow(agent) {
+// resolveAreas is passed in rather than imported+called directly because it
+// needs the live /config/schema.categoryAreaMap override (see the component
+// below) — a plain agentApproveAreas(agent) call here would silently ignore
+// any category an admin has approved since the last code deploy.
+function toRow(agent, resolveAreas) {
   return {
     agentName: agent.agentName || '',
     type: getType(agent) === 'skill' ? 'Skill' : 'Agent',
@@ -40,6 +47,8 @@ function toRow(agent) {
     approvalStatus: agent.approvalStatus || '',
     devProgress: normalizeProgress(agent?.devProgress),
     reusable: agent.reusable || '',
+    category: (Array.isArray(agent.category) ? agent.category : []).join('; '),
+    approveArea: resolveAreas(agent).join('; '),
     description: agent.description || '',
   };
 }
@@ -56,9 +65,14 @@ function toDateStr(v) {
 
 // Every raw field, verbatim — used only by "All Data" (id included, and
 // devProgress left un-normalized so it round-trips with import-agents-csv.cjs).
-function toFullRow(agent) {
+// approveArea is the one exception to "raw, verbatim": it goes through the
+// resolver (like toRow above) rather than reading agent.approveArea directly,
+// so a doc whose stored value is stale or empty still exports the area it
+// actually resolves to today.
+function toFullRow(agent, resolveAreas) {
   const row = { id: agent.id || '' };
   ALL_COLUMNS.slice(1).forEach((field) => {
+    if (field === 'approveArea') { row[field] = resolveAreas(agent).join('; '); return; }
     const raw = agent[field];
     if (field === 'launchDate') row[field] = toDateStr(raw);
     else if (typeof raw === 'boolean') row[field] = raw ? 'TRUE' : 'FALSE';
@@ -137,16 +151,16 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
   );
 
   function exportMyAI() {
-    const rows = allAgents.filter((a) => isMyAgent(a, user)).map(toRow);
+    const rows = allAgents.filter((a) => isMyAgent(a, user)).map((a) => toRow(a, resolveAreas));
     downloadCsv(rows, 'my-ai.csv');
   }
   function exportMyArea() {
     const areaSet = new Set(approveAreas || []);
-    const rows = allAgents.filter((a) => resolveAreas(a).some((ar) => areaSet.has(ar))).map(toRow);
+    const rows = allAgents.filter((a) => resolveAreas(a).some((ar) => areaSet.has(ar))).map((a) => toRow(a, resolveAreas));
     downloadCsv(rows, 'my-area-ai.csv');
   }
   function exportAll() {
-    downloadCsv(allAgents.map(toFullRow), 'all-ai.csv', ALL_COLUMNS);
+    downloadCsv(allAgents.map((a) => toFullRow(a, resolveAreas)), 'all-ai.csv', ALL_COLUMNS);
   }
 
   // "My Area's AI" is for admin/committee/approver tiers ONLY (base "user"
