@@ -432,6 +432,8 @@ export default function App() {
         userRole={role}
         isAdmin={isAdmin}
         onEditAgent={setEditingAgent}
+        approveAreas={approveAreas}
+        schema={schema}
       />
 
       {editingAgent && (
@@ -470,6 +472,7 @@ export default function App() {
           deployRequests={parentDeployRequests}
           onClose={() => setShowPending(false)}
           user={user}
+          userRole={role}
           isAdmin={isAdmin}
           isCommittee={isCommittee}
           approveAreas={approveAreas}

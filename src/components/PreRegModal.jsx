@@ -7,6 +7,7 @@ import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import { uniq, splitRoles, extractProcessId, processLabel, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
+import { isInternalToolName } from '../lib/internalTool';
 import useEscapeKey from '../hooks/useEscapeKey';
 import ComboInput from './ComboInput';
 import MultiSelect from './MultiSelect';
@@ -191,10 +192,13 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
 
   // Use Case is scoped to the selected Process Mapping(s) — sdlcUseCases.processId
   // joins directly against the process id prefix of each selected mapping
-  // string (e.g. "4.1 High-Level Design" → "4.1"). Falls back to every use
-  // case when no process is selected yet, same permissive default as before.
+  // string (e.g. "4.1 High-Level Design" → "4.1"). Empty (not "every use
+  // case") when no process is selected yet (2026-08-11) — the full-106-item
+  // fallback used to let Use Case be picked before Stage/Process, defeating
+  // the whole point of the cascade; the field now requires Process Mapping
+  // first, same as Process Mapping requires Stage first.
   const useCaseOptions = useMemo(() => {
-    if (form.sdlcProcessMapping.size === 0) return uniq(useCases.map((u) => u.name)).sort();
+    if (form.sdlcProcessMapping.size === 0) return [];
     const selectedIds = new Set([...form.sdlcProcessMapping].map(extractProcessId));
     return uniq(useCases.filter((u) => selectedIds.has(u.processId)).map((u) => u.name)).sort();
   }, [useCases, form.sdlcProcessMapping]);
@@ -210,6 +214,18 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       return { ...f, sdlcProcessMapping: kept };
     });
   }, [processOptions]);
+
+  // Same one level down: a Use Case picked under an earlier Process Mapping
+  // selection that no longer applies once Process Mapping changes.
+  useEffect(() => {
+    setForm((f) => {
+      if (f.useCase.size === 0) return f;
+      const valid = new Set(useCaseOptions);
+      const kept = new Set([...f.useCase].filter((u) => valid.has(u)));
+      if (kept.size === f.useCase.size) return f;
+      return { ...f, useCase: kept };
+    });
+  }, [useCaseOptions]);
 
   function setField(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -463,6 +479,12 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         relatedRole: [...form.relatedRole],
         customerFacing: isExternal,
         internalUse: !isExternal,
+        // Auto-flag internal implementation entries at submit time (2026-08-11)
+        // instead of waiting for someone to remember to run flag-internal.cjs.
+        // Rule imported from src/lib/internalTool.js — the SAME module that
+        // script now loads, so the two can't drift. Demotes the entry in chat
+        // search ranking and routes its approver area; it does not hide it.
+        internalTool: isInternalToolName(agentName),
         reusable: form.reusable,
         reuseCondition: form.reusable === 'Reusable with Conditions' ? form.reuseCondition.trim() : '',
         hml: form.hml,
@@ -474,9 +496,13 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         // should never reach Firestore, so no future reader has to remember to
         // re-check it. NOT inherited by sub-skills: each has its own location.
         endpoint: safeEndpointUrl(form.endpoint),
-        sdlcStage: isExternal ? [] : [...form.sdlcStage],
-        sdlcProcessMapping: isExternal ? [] : [...form.sdlcProcessMapping],
-        useCase: isExternal ? [] : [...form.useCase],
+        // 2026-08-11: no longer blanked for External. Scope (who consumes the
+        // agent) is independent of which SDLC process it performs — a
+        // customer-facing agent can still be built through, and tracked
+        // against, a real process. Same change as EditAgentModal's Write 2.
+        sdlcStage: [...form.sdlcStage],
+        sdlcProcessMapping: [...form.sdlcProcessMapping],
+        useCase: [...form.useCase],
         // Category (2026-08 sidebar shortcuts): AI-assigned at submit time,
         // never hand-typed. suggested_category is always the closest existing
         // /config/schema.category value (fallback), even when the AI also
@@ -591,6 +617,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             relatedRole: [...s.relatedRole],
             customerFacing: sExternal,
             internalUse: !sExternal,
+            // Same auto-flag as the parent Agent above — a paired sub-skill
+            // named e.g. "3.safety.md" must be caught too.
+            internalTool: isInternalToolName(s.name.trim()),
             reusable: s.reusable,
             reuseCondition: s.reusable === 'Reusable with Conditions' ? s.reuseCondition.trim() : '',
             hml: s.hml,
@@ -601,9 +630,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             endpoint: safeEndpointUrl(s.endpoint),
             // SDLC context inherited from the Agent (blanked when the skill
             // itself is customer-facing, mirroring the Agent rule).
-            sdlcStage: sExternal ? [] : [...form.sdlcStage],
-            sdlcProcessMapping: sExternal ? [] : [...form.sdlcProcessMapping],
-            useCase: sExternal ? [] : [...form.useCase],
+            sdlcStage: [...form.sdlcStage],
+            sdlcProcessMapping: [...form.sdlcProcessMapping],
+            useCase: [...form.useCase],
             category: inheritedFromAgent.category,
             input: s.input.trim(),
             output: s.output.trim(),
@@ -648,7 +677,6 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     }
   }
 
-  const internalShown = form.scope === 'Internal';
   const aiCandidates = aiResult && !aiResult.error ? (aiResult.candidates || []) : null;
   // Fallback list when AI is unavailable: rule-based matches >= medium risk.
   const fallbackMatches = (ranked || []).filter((m) => m.confidence >= 40);
@@ -881,9 +909,13 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             </div>
 
-            {/* SDLC group (Internal only) */}
-            {internalShown && (
-              <>
+            {/* SDLC group — shown regardless of Scope (2026-08-11). It used to
+                be Internal-only, which meant a customer-facing submission
+                could never record which SDLC process it belongs to, and any
+                SDLC values already filled in were discarded on submit if the
+                user later switched Scope to External. Scope and SDLC
+                participation are independent. */}
+            <>
                 <div className="grid2">
                   <div className="fg">
                     <label>SDLC Stage</label>
@@ -900,10 +932,13 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 </div>
                 <div className="fg">
                   <label>Use Case</label>
-                  <MultiSelect label="เลือก Use Case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
+                  {form.sdlcProcessMapping.size === 0 ? (
+                    <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Process Mapping ก่อน เพื่อดูรายการ Use Case ที่ผูกกับ Process นั้น</div>
+                  ) : (
+                    <MultiSelect label="เลือก Use Case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
+                  )}
                 </div>
-              </>
-            )}
+            </>
 
             {/* Tech */}
             <div className="grid2">

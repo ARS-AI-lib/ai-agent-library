@@ -36,6 +36,16 @@ function AreaChips({ areas }) {
   });
 }
 
+// The full comma-joined creatorPicks list (up to 9+ names on a team
+// submission) reads terribly in a compact queue row — that's what caused the
+// wrap/overlap bug this whole section was rewritten for (2026-08-11). Owner
+// (the accountable team/individual, already shown this way on AgentCard) +
+// a single "Created by" name (the first submitter in the list) replaces it.
+function primaryCreatorName(agent) {
+  const first = (agent.creator || '').split(',')[0].trim();
+  return first || '—';
+}
+
 const VERDICT_LABEL = {
   clear_duplicate: 'Clear Duplicate',
   likely_overlap: 'Likely Overlap',
@@ -72,7 +82,7 @@ const RISK_COLOR = { high: '#c5221f', medium: '#c96a00', low: '#137333' };
 //                     overlaps their own approveAreas.
 //   user (base)     — see only their own submissions, and may only reject
 //                     (withdraw) them — never approve their own idea.
-export default function PendingApprovalModal({ pending, deployRequests = [], onClose, user, isAdmin, isCommittee, approveAreas = [], agents = [], schema = {} }) {
+export default function PendingApprovalModal({ pending, deployRequests = [], onClose, user, userRole, isAdmin, isCommittee, approveAreas = [], agents = [], schema = {} }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
   // Wraps agentApproveAreas with the live category->area overrides an admin
@@ -326,18 +336,21 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
             const overlapAgents = agent.analysisResult?.overlapAgents;
             return (
             <div className="queue-row" key={agent.id}>
-              <div>
+              <div className="queue-content">
                 <div className="dup-name">{agent.agentName}</div>
                 <div className="queue-meta">
-                  {agent.aiAgent ? 'Agent' : ''}{agent.aiAgent && agent.skillMd ? ' + ' : ''}{agent.skillMd ? 'Skill' : ''}
-                  {' · '}โดย {agent.creator || '—'}
-                  {' · '}<AreaChips areas={resolveAreas(agent)} />
-                  {' · '}<span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
-                  {risk && (
-                    <>{' · '}เสี่ยงทับซ้อน/คล้าย: <span style={{ color: RISK_COLOR[risk] || 'var(--mu)', fontWeight: 700 }}>{RISK_LABEL[risk] || risk}</span></>
-                  )}
-                  {breadthFlag && (
-                    <>{' · '}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
+                    <span>{agent.aiAgent ? 'Agent' : ''}{agent.aiAgent && agent.skillMd ? ' + ' : ''}{agent.skillMd ? 'Skill' : ''}</span>
+                    <span>Owner: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{agent.owner || '—'}</strong></span>
+                    <span>Created by: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{primaryCreatorName(agent)}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                    <AreaChips areas={resolveAreas(agent)} />
+                    <span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
+                    {risk && (
+                      <span>เสี่ยงทับซ้อน/คล้าย: <span style={{ color: RISK_COLOR[risk] || 'var(--mu)', fontWeight: 700 }}>{RISK_LABEL[risk] || risk}</span></span>
+                    )}
+                    {breadthFlag && (
                       <span
                         role="button"
                         tabIndex={0}
@@ -347,8 +360,8 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                       >
                         ทับซ้อนหลายตัว{overlapAgents ? ` (${overlapAgents})` : ''}
                       </span>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
                 {agent.description && (
                   <div style={{ fontSize: 11.5, color: 'var(--tx2)', marginTop: 4, maxWidth: 480 }}>{agent.description}</div>
@@ -399,7 +412,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
             const tierDef = TIER_DEF[tier];
             return (
               <div className="queue-row" key={agent.id}>
-                <div>
+                <div className="queue-content">
                   <div
                     className="dup-name"
                     style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
@@ -409,13 +422,18 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                     {agent.agentName}
                   </div>
                   <div className="queue-meta">
-                    {' '}โดย {agent.creator || '—'}
-                    {' · '}<AreaChips areas={resolveAreas(agent)} />
-                    {' · '}<span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
-                    {' · '}Progress: <strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{agent.devProgress}%</strong>
-                    {agent.launchDate && (
-                      <>{' · '}Launch: <strong>{fmtDate(agent.launchDate)}</strong></>
-                    )}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
+                      <span>Owner: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{agent.owner || '—'}</strong></span>
+                      <span>Created by: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{primaryCreatorName(agent)}</strong></span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                      <AreaChips areas={resolveAreas(agent)} />
+                      <span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
+                      <span>Progress: <strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{agent.devProgress}%</strong></span>
+                      {agent.launchDate && (
+                        <span>Launch: <strong>{fmtDate(agent.launchDate)}</strong></span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="queue-actions">
@@ -441,7 +459,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
             <div className="msub">{myRejected.length} รายการ · เหตุผลจากผู้ตรวจ</div>
             {myRejected.map((agent) => (
               <div className="queue-row" key={agent.id}>
-                <div>
+                <div className="queue-content">
                   <div className="dup-name">{agent.agentName}</div>
                   <div className="queue-meta">
                     {agent.aiAgent ? 'Agent' : ''}{agent.aiAgent && agent.skillMd ? ' + ' : ''}{agent.skillMd ? 'Skill' : ''}
@@ -534,7 +552,10 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
           allAgents={agents}
           onClose={() => setDetailAgent(null)}
           user={user}
+          userRole={userRole}
           isAdmin={fullAccess}
+          approveAreas={approveAreas}
+          schema={schema}
         />
       )}
     </div>

@@ -57,6 +57,18 @@ export function canEditSDLC(agent, user, userRole, isAdmin) {
   return !!(agent?.createdBy && agent.createdBy === user.uid);
 }
 
+// Who may see/edit Approve Area on the Edit form (2026-08-11): admin or
+// staff ONLY — narrower than canEditSDLC (which also allows approver and the
+// agent's own createdBy). Approve Area decides who gets to approve/deploy an
+// agent, so letting an approver or the submitter set their own routing would
+// let either self-assign into (or out of) their own approval queue. Deploy
+// freeze (deploymentStatus requested/approved) still applies the same as the
+// rest of the SDLC group — checked by the caller via canEditSDLC's freeze,
+// not duplicated here.
+export function canEditApproveArea(userRole, isAdmin) {
+  return !!(isAdmin || userRole === 'staff');
+}
+
 // Ready-to-Use post-freeze exception (2026-07-22): canEditDetails() above
 // freezes EVERY Tier A field once deploymentStatus is 'approved' — correct
 // for the sensitive/structural fields, but it also blocks Description and

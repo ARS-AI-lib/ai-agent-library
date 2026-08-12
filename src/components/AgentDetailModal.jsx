@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, pairedSubSkills, isPairedSubSkill, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
+import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
@@ -21,7 +22,7 @@ function toDateInputValue(d) {
 const DEPLOY_STATUS_LABEL = { requested: 'Deploy Pending', approved: 'Deploy Approved', rejected: 'Deploy Rejected' };
 const DEPLOY_STATUS_COLOR = { requested: '#c96a00', approved: '#137333', rejected: '#c5221f' };
 
-export default function AgentDetailModal({ agent, allAgents, onClose, user, userRole, isAdmin, onEditAgent }) {
+export default function AgentDetailModal({ agent, allAgents, onClose, user, userRole, isAdmin, onEditAgent, approveAreas = [], schema = {} }) {
   const [editing, setEditing] = useState(false);
   const [editProgress, setEditProgress] = useState(0);
   const [editLaunch, setEditLaunch] = useState('');
@@ -77,7 +78,15 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // Archiving is a curation decision, not an authorship one — so it is NOT
   // tied to createdBy/creator like the edit rights above. Only the roles that
   // govern the library as a whole may retire an entry from it.
-  const mayArchive = isAdmin || userRole === 'approver' || userRole === 'committee';
+  // Staff joined 2026-08-11, but SCOPED — not a blanket grant like
+  // approver/committee: a staff member may only archive an agent whose
+  // resolved Approve Area overlaps their own /users.approveAreas (the same
+  // field UserManagementModal already assigns to approvers). Mirrors the
+  // Approve Area routing model, so "staff archive rights" reads as "curation
+  // rights within your own discipline", not "any staff can retire anything".
+  const staffAreaMatch = userRole === 'staff' && approveAreas.length > 0
+    && agentApproveAreas(agent, schema.categoryAreaMap).some((ar) => approveAreas.includes(ar));
+  const mayArchive = isAdmin || userRole === 'approver' || userRole === 'committee' || staffAreaMatch;
   const isArchived = agent.archived === true;
   // Paired sub-skills that would be dragged along by archiving this Agent —
   // the user gets to tick any worth keeping (e.g. a genuinely reusable skill).

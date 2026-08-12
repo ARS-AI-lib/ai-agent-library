@@ -8,6 +8,15 @@
 //
 //   node functions/flag-internal.cjs          # dry run
 //   node functions/flag-internal.cjs --apply
+//
+// 2026-08-11: this script no longer declares the rule. It lives in
+// src/lib/internalTool.js so the client (PreRegModal, which now stamps the
+// flag at submit time) and this backfill share ONE definition — same
+// anti-drift discipline as normalizeProgress / agentApproveAreas. This file
+// now only backfills entries that predate the submit-time stamp, or that were
+// renamed into scope afterwards.
+const fs = require('fs');
+const path = require('path');
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
@@ -15,32 +24,28 @@ const APPLY = process.argv.includes('--apply');
 const app = initializeApp({ credential: applicationDefault(), projectId: 'wolfy-481609' });
 const db = getFirestore(app, 'ai-agent-lib');
 
-// 2026-08-04 addition: ALPHA's own tool skills are registered as agent docs in
-// the SAME library it searches (query_library, capability_search, …, plus the
-// two "AI Agent Library ..." meta entries describing ALPHA/its orchestrator
-// itself). Found the same way as the .md files: a user asked "แสดงทั้งหมด"
-// after a capped list, the model fell back to a vague capability_search, and
-// `get_agent_detail` / `query_library` came back as top "Ready to Use" hits —
-// their descriptions are generic filter/search boilerplate ("กรอง/นับ/จัดกลุ่ม
-// Agent/Skill ในไลบรารี…") that embeds close to nearly any library-related
-// question, the same failure mode as the prompt fragments.
-//
-// `owner === 'Wolfy'` looked like it might be a shortcut but is NOT safe to use
-// — verified against real data it also covers legitimate, pick-up-and-use
-// agents (Epic Writer, User Story Writer, ALPHA - Summarizer, …). An exact name
-// allowlist is the only rule precise enough here; these names are the fixed,
-// deterministic set in functions/chatPrompt.js's TOOL_DECLARATIONS plus the two
-// self-referential library entries — not something to pattern-match.
-const SELF_REFERENTIAL_NAMES = new Set([
-  'get_agent_detail', 'query_library', 'capability_search', 'query_sdlc',
-  'duplicate_check', 'search_library', 'agent_library_connection_suggest',
-  'AI Agent Library Chat Assistant', 'AI Agent Library Copilot',
-]);
+// Load the real client module (same technique as backfill-approve-area.cjs):
+// strip ESM syntax, evaluate, pick out what we need. Guarantees this script
+// exercises the exact rule the app runs.
+const SRC = path.join(__dirname, '..', 'src', 'lib');
+function loadEsm(file, injected = {}) {
+  const code = fs
+    .readFileSync(path.join(SRC, file), 'utf8')
+    .replace(/^\s*import\s[^;]*;\s*$/gm, '')
+    .replace(/^export\s+/gm, '');
+  const names = Object.keys(injected);
+  const decls = [...code.matchAll(/^(?:function|const|let)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
+  const body = `${code}\n;return { ${[...new Set(decls)].join(', ')} };`;
+  return new Function(...names, body)(...names.map((n) => injected[n]));
+}
 
-// Narrow, explicit rule: the name ends in ".md", OR is one of the fixed
-// self-referential names above. Everything else is left alone — no guessing
-// at intent from descriptions.
-const isInternal = (a) => /\.md$/i.test(a.agentName || '') || SELF_REFERENTIAL_NAMES.has(a.agentName);
+const { isInternalToolName } = loadEsm('internalTool.js');
+if (typeof isInternalToolName !== 'function') {
+  console.error('✗ could not load isInternalToolName from src/lib/internalTool.js — aborting rather than flagging with a guessed rule');
+  process.exit(1);
+}
+
+const isInternal = (a) => isInternalToolName(a.agentName);
 
 (async () => {
   const snap = await db.collection('agents').get();

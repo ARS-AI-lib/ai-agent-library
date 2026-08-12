@@ -3,6 +3,7 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { useApprovedAgents } from '../hooks/useAgents';
+import { useConfigSchema } from '../hooks/useConfigSchema';
 import {
   TL_ST, toTimelineItem, timelineStatus, autoFitRange, monthTicks,
   inAnyMilestone, toDate, startOfToday,
@@ -29,8 +30,9 @@ function withProgress(agent) {
 }
 
 export default function TimelinePage() {
-  const { user, isAdmin, loading, roleReady, role } = useAuth();
+  const { user, isAdmin, loading, roleReady, role, approveAreas } = useAuth();
   const { agents } = useApprovedAgents(!!role);
+  const { schema } = useConfigSchema(!!role);
   const [config, setConfig] = useState(null);   // { viewers:[], milestones:[] } | null
   const [cfgLoaded, setCfgLoaded] = useState(false);
   const [filter, setFilter] = useState(null);    // milestone id | 'out' | null
@@ -267,7 +269,10 @@ export default function TimelinePage() {
           allAgents={agents}
           onClose={() => setDetailAgent(null)}
           user={user}
+          userRole={role}
           isAdmin={isAdmin}
+          approveAreas={approveAreas}
+          schema={schema}
         />
       )}
       {editMs && (

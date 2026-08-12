@@ -156,13 +156,19 @@ service cloud.firestore {
         // committee and creator-by-email. Written as its own single-field-group
         // update by EditAgentModal so this branch matches exactly. Frozen once a
         // deployment request is filed, same as the detail edits.
-        // approveArea joined this set 2026-08-10: it replaced sdlcStage as the
-        // field that decides approver scope, and EditAgentModal writes it in
-        // the same single update as the SDLC fields. Scoping itself stays
-        // UI-side (see the approve/reject branch above) — this only controls
-        // WHO may set the field, not who the field then lets approve.
-        || (affectedKeys().hasOnly(['sdlcStage', 'sdlcProcessMapping', 'useCase', 'approveArea', 'updatedAt'])
+        || (affectedKeys().hasOnly(['sdlcStage', 'sdlcProcessMapping', 'useCase', 'updatedAt'])
             && (userRole() in ['staff', 'approver', 'admin'] || resource.data.createdBy == request.auth.uid)
+            && !(resource.data.deploymentStatus in ['requested', 'approved']))
+        // approveArea (2026-08-10, narrowed 2026-08-11): split into its OWN
+        // branch — it decides who gets to approve/deploy THIS agent, so unlike
+        // the rest of the SDLC group above (which any approver or the
+        // registrant may edit), only staff may set it (admin already has
+        // unconditional access via isAdmin() above). Letting an approver or
+        // the submitter self-assign their own routing would be a self-serve
+        // bug, not just an odd permission. EditAgentModal writes this as its
+        // own separate updateDoc call so affectedKeys matches exactly.
+        || (affectedKeys().hasOnly(['approveArea', 'updatedAt'])
+            && userRole() == 'staff'
             && !(resource.data.deploymentStatus in ['requested', 'approved']))
         // Deployment decision: approver-or-above approves/rejects a pending
         // deployment request (area scoping is UI-side, same pattern as the
@@ -179,7 +185,14 @@ service cloud.firestore {
         // background context; only `archived` changes what the app shows.
         // Deliberately NOT frozen by deploymentStatus — a deployed-then-retired
         // agent is exactly a case that must be archivable.
-        || (isApproverOrAbove()
+        // staff joined 2026-08-11, role-gated here same as the rest — WHICH
+        // agent a given staff member may archive (their own Approve Area only)
+        // is enforced client-side (AgentDetailModal's staffAreaMatch), same
+        // "scoping stays UI-side" pattern already used for approve/reject and
+        // deploy-decision above; duplicating the full agentApproveAreas()
+        // fallback chain into rules would violate the single-source-of-truth
+        // rule this whole taxonomy was built to satisfy.
+        || ((isApproverOrAbove() || userRole() == 'staff')
             && affectedKeys().hasOnly(['archived', 'archivedAt', 'archivedBy', 'archiveReason', 'updatedAt'])
             && request.resource.data.archived is bool)
         // Ready-to-Use post-freeze exception (2026-07-22): every detail tier

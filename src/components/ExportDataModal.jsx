@@ -113,16 +113,30 @@ function downloadCsv(rows, filename, columns = COLUMNS) {
  * (same creatorEmails-based ownership, just team-grouped) to justify a
  * separate button.
  *
- * Status/field scope per button (2026-07-04 decision):
- *   My AI       — every approvalStatus (approved/pending/rejected), trimmed columns
- *   My Area's AI — every approvalStatus, trimmed columns
- *   All Data    — every approvalStatus, EVERY field (ALL_COLUMNS/toFullRow)
+ * Status/field scope per button:
+ *   My AI        — trimmed columns, always Active only (approved, not archived)
+ *   My Area's AI — trimmed columns, always Active only
+ *   All Data     — EVERY field (ALL_COLUMNS/toFullRow); Active only by
+ *                  default, with its own two checkboxes (2026-08-11) to opt
+ *                  into pending/rejected and/or archived — scoped to this
+ *                  button alone, not a global export policy. Previously
+ *                  every button always included every approvalStatus
+ *                  unconditionally, which silently mixed drafts/rejects into
+ *                  what reads as "the library" in the exported CSV.
  */
 export default function ExportDataModal({ onClose, approvedAgents, user, role, isAdmin, isCommittee, approveAreas, schema = {} }) {
   const [pending, setPending] = useState([]);
   const [rejected, setRejected] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Active-only by default (2026-08-11) — every button used to export EVERY
+  // approvalStatus unconditionally (see the removed header note below); that
+  // silently mixed still-pending drafts and rejected ideas into what reads as
+  // "the library" to whoever opens the CSV. Active = approved AND not
+  // archived. These two checkboxes opt back into the wider set per pull,
+  // rather than a permanent per-button policy — unchecked means active-only.
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
   useEscapeKey(onClose);
   // See PendingApprovalModal for why this wrapper exists — live
   // category->area overrides from CategoryApprovalPanel must apply here too,
@@ -150,17 +164,33 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
     [approvedAgents, pending, rejected]
   );
 
+  // Active = approved and not archived. My AI / My Area's AI always stay
+  // active-only — the includeInactive/includeArchived checkboxes are scoped
+  // to All Data ONLY (2026-08-11, explicit request), not a global export
+  // policy, so each button reads from its own filtered set below.
+  const activeAgents = useMemo(
+    () => allAgents.filter((a) => a.approvalStatus === 'approved' && a.archived !== true),
+    [allAgents]
+  );
+  const allDataAgents = useMemo(
+    () => allAgents.filter((a) =>
+      (includeInactive || a.approvalStatus === 'approved')
+      && (includeArchived || a.archived !== true)
+    ),
+    [allAgents, includeInactive, includeArchived]
+  );
+
   function exportMyAI() {
-    const rows = allAgents.filter((a) => isMyAgent(a, user)).map((a) => toRow(a, resolveAreas));
+    const rows = activeAgents.filter((a) => isMyAgent(a, user)).map((a) => toRow(a, resolveAreas));
     downloadCsv(rows, 'my-ai.csv');
   }
   function exportMyArea() {
     const areaSet = new Set(approveAreas || []);
-    const rows = allAgents.filter((a) => resolveAreas(a).some((ar) => areaSet.has(ar))).map((a) => toRow(a, resolveAreas));
+    const rows = activeAgents.filter((a) => resolveAreas(a).some((ar) => areaSet.has(ar))).map((a) => toRow(a, resolveAreas));
     downloadCsv(rows, 'my-area-ai.csv');
   }
   function exportAll() {
-    downloadCsv(allAgents.map((a) => toFullRow(a, resolveAreas)), 'all-ai.csv', ALL_COLUMNS);
+    downloadCsv(allDataAgents.map((a) => toFullRow(a, resolveAreas)), 'all-ai.csv', ALL_COLUMNS);
   }
 
   // "My Area's AI" is for admin/committee/approver tiers ONLY (base "user"
@@ -183,7 +213,7 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
           </div>
           <div>
             <h2 className="mtitle">Export Data</h2>
-            <p>ดาวน์โหลดเป็น CSV — My AI/My Area's AI รวมทุกสถานะ, All Data ทุกสถานะ+ทุก field</p>
+            <p>ดาวน์โหลดเป็น CSV</p>
           </div>
         </div>
 
@@ -194,41 +224,55 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
             {/* .mac reused as a clickable option row (2026-08-08) — was a plain
                 one-line button; each download is now a small card with a count
-                badge and a description of exactly what it exports, matching
-                the redesign's treatment of every other clickable option row
-                (SDLC process cards, the SDLC modal's nested agent cards). */}
+                badge, matching the redesign's treatment of every other
+                clickable option row (SDLC process cards, the SDLC modal's
+                nested agent cards). Per-button description line removed
+                (2026-08-11, explicit request) — the name + item count already
+                say enough. */}
             <button className="mac" style={{ textAlign: 'left', width: '100%', fontFamily: 'inherit', border: '1px solid var(--bd-soft)', cursor: 'pointer' }} onClick={exportMyAI}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span className="macname">My AI</span>
-                <span className="deploy-badge" style={{ marginLeft: 'auto', color: 'var(--mu)', background: 'var(--sf3)' }}>{allAgents.filter((a) => isMyAgent(a, user)).length} items</span>
+                <span className="deploy-badge" style={{ marginLeft: 'auto', color: 'var(--mu)', background: 'var(--sf3)' }}>{activeAgents.filter((a) => isMyAgent(a, user)).length} items</span>
               </div>
-              <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>ที่ฉันสร้าง · ทุกสถานะ (approved / pending / rejected)</div>
             </button>
             {showArea && (
               <button className="mac" style={{ textAlign: 'left', width: '100%', fontFamily: 'inherit', border: '1px solid var(--bd-soft)', cursor: 'pointer' }} onClick={exportMyArea}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span className="macname">My Area's AI</span>
-                  <span className="deploy-badge" style={{ marginLeft: 'auto', color: 'var(--mu)', background: 'var(--sf3)' }}>{allAgents.filter((a) => resolveAreas(a).some((ar) => (approveAreas || []).includes(ar))).length} items</span>
+                  <span className="deploy-badge" style={{ marginLeft: 'auto', color: 'var(--mu)', background: 'var(--sf3)' }}>{activeAgents.filter((a) => resolveAreas(a).some((ar) => (approveAreas || []).includes(ar))).length} items</span>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>Approver ขึ้นไป · ทุกสถานะ ในพื้นที่ที่รับผิดชอบ</div>
               </button>
             )}
             {showAll && (
-              <button className="mac" style={{ textAlign: 'left', width: '100%', fontFamily: 'inherit', border: '1px solid var(--bd-soft)', cursor: 'pointer' }} onClick={exportAll}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="macname">All Data</span>
-                  <span className="deploy-badge" style={{ marginLeft: 'auto', color: 'var(--mu)', background: 'var(--sf3)' }}>{allAgents.length} items</span>
+              // Checkboxes live INSIDE this same card (not a separate block
+              // below all three buttons) so it's visually unambiguous they
+              // only scope All Data — My AI/My Area's AI above stay
+              // active-only unconditionally (2026-08-11 explicit request).
+              <div className="mac" style={{ border: '1px solid var(--bd-soft)' }}>
+                <button
+                  type="button"
+                  onClick={exportAll}
+                  style={{ textAlign: 'left', width: '100%', fontFamily: 'inherit', border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="macname">All Data</span>
+                    <span className="deploy-badge" style={{ marginLeft: 'auto', color: 'var(--mu)', background: 'var(--sf3)' }}>{allDataAgents.length} items</span>
+                  </div>
+                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--bd-soft)' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} />
+                    Include Inactive (pending / rejected)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
+                    Include Archived
+                  </label>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>Staff / Committee / Admin · ทุกสถานะ · ทุกคอลัมน์</div>
-              </button>
+              </div>
             )}
           </div>
         )}
-
-        <div className="ai-cat-hint" style={{ marginTop: 12 }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-          CSV มี UTF-8 BOM — Excel อ่านภาษาไทยได้ถูกต้อง
-        </div>
       </div>
     </div>
   );

@@ -172,7 +172,22 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   }), [agents, owner, role, reusable, selectedStatus, search]);
 
   const agentsForProcess = (procId) => visAgents.filter((a) => agentProcessIds(a).includes(procId));
-  const agentsForUC = (uc) => visAgents.filter((a) => agentUseCaseNames(a).some((n) => n.toLowerCase() === uc.name.toLowerCase()));
+  // Matching on name alone double-counted an agent under every process that
+  // happened to share a Use Case label — 21 names in the catalog were
+  // duplicated across processes (2026-08-11 audit), so e.g. "TC Writer"
+  // (sdlcProcessMapping = 11.2) also rendered under 7.3 just because a
+  // same-named UC doc existed there too. Once the name matches, also require
+  // the agent's OWN sdlcProcessMapping to include this UC's process — unless
+  // the agent has no process mapping at all (a handful of legacy agents carry
+  // a useCase with an empty sdlcProcessMapping), in which case there's no way
+  // to disambiguate and the old name-only behavior is kept as a fallback.
+  const agentsForUC = (uc) => visAgents.filter((a) => {
+    const names = agentUseCaseNames(a);
+    if (!names.some((n) => n.toLowerCase() === uc.name.toLowerCase())) return false;
+    const pids = agentProcessIds(a);
+    if (pids.length === 0) return true;
+    return pids.includes(uc.processId);
+  });
   const procOwnerOk = (ownerStr) => {
     if (procOwner.size === 0) return true;
     if (!ownerStr) return false;

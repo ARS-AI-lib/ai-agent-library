@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill } from '../lib/tier';
-import { splitRoles, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
+import { splitRoles, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditReadyToUseFields, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
@@ -46,6 +46,9 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   const canEditTierA = canEditDetails(agent, user, userRole, isAdmin);
   const canEditSensitive = canUpdateProgress(agent, user, isAdmin);
   const canEditSDLCFlag = canEditSDLC(agent, user, userRole, isAdmin);
+  // Approve Area: admin/staff only, and only see it — see canEditApproveArea's
+  // header comment for why it's narrower than the rest of the SDLC group.
+  const canSeeApproveArea = canEditApproveArea(userRole, isAdmin);
   const lockTierA = !canEditTierA;
   const lockSensitive = lockProgress || !canEditSensitive;
   // Ready-to-Use exception (2026-07-22): only relevant when the general Tier A
@@ -90,6 +93,11 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     sdlcProcessMapping: new Set(Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping : [agent.sdlcProcessMapping].filter(Boolean)),
     useCase: new Set(agentUseCaseNames(agent)),
   }));
+  // Did the user actually move Stage / Process in THIS session? The two
+  // drop-if-stale effects below only run when they did — see their comments
+  // for the saved-data corruption that firing on mount caused.
+  const stageTouched = useRef(false);
+  const processTouched = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [processes, setProcesses] = useState([]);
@@ -128,21 +136,26 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
 
   // Use Case is scoped to the selected Process Mapping(s) — same join as
   // PreRegModal (sdlcUseCases.processId against each mapping's id prefix).
-  // Falls back to every use case when no process is selected yet.
+  // Empty (not "every use case") when no process is selected yet (2026-08-11)
+  // — matches PreRegModal's cascade fix; picking Use Case before Process
+  // Mapping defeated the whole point of the Stage > Process > Use Case chain.
   const useCaseOptions = useMemo(() => {
-    if (form.sdlcProcessMapping.size === 0) return uniq(useCases.map((u) => u.name)).sort();
+    if (form.sdlcProcessMapping.size === 0) return [];
     const selectedIds = new Set([...form.sdlcProcessMapping].map(extractProcessId));
     return uniq(useCases.filter((u) => selectedIds.has(u.processId)).map((u) => u.name)).sort();
   }, [useCases, form.sdlcProcessMapping]);
 
-  // Drop any selected process that no longer belongs to the chosen stages —
-  // but ONLY after the catalog has actually loaded. Without this guard, the
-  // effect fires on mount while `processes` is still [] (fetch is async), so
-  // processOptions is empty and it wipes the agent's pre-existing selection
-  // before the real catalog arrives (2026-07 bug: Edit form showed Process
-  // Mapping as blank even though the agent had one saved).
+  // Drop any selected process that no longer belongs to the chosen stages.
+  // Gated on stageTouched (2026-08-11) as well as catalogLoaded: this rule is
+  // only meant to clean up after the USER changes Stage. Firing it on mount
+  // also punished agents whose STORED data is internally inconsistent — e.g.
+  // `UX Writer AI Agent` has sdlcStage "Design" but its process 8.2 Copywriting
+  // actually belongs to stage "Build", so merely opening the form silently
+  // dropped 8.2, which then cascaded into dropping its Use Case as well. The
+  // catalogLoaded guard alone couldn't catch that (the catalog HAD loaded; the
+  // mismatch is real), so an untouched form must never mutate saved data.
   useEffect(() => {
-    if (!catalogLoaded) return;
+    if (!catalogLoaded || !stageTouched.current) return;
     setForm((f) => {
       if (f.sdlcProcessMapping.size === 0) return f;
       const valid = new Set(processOptions);
@@ -154,10 +167,10 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
 
   // Same drop-if-stale rule, one level down: a Use Case selection that no
   // longer belongs to the (possibly just-changed) Process Mapping. Same
-  // catalogLoaded guard for the same reason — otherwise this fires before the
-  // catalog arrives and wipes the agent's saved Use Case(s) on mount.
+  // touched-gating as above, for the same reason — a Use Case is only stale if
+  // the user actually moved Stage/Process in this session.
   useEffect(() => {
-    if (!catalogLoaded) return;
+    if (!catalogLoaded || !(stageTouched.current || processTouched.current)) return;
     setForm((f) => {
       if (f.useCase.size === 0) return f;
       const valid = new Set(useCaseOptions);
@@ -258,14 +271,32 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
 
       // Write 2 — SDLC metadata (separate write ⇒ its own affectedKeys, matching
       // the dedicated sdlc rule branch: createdBy/staff/approver/admin).
+      // 2026-08-11: these three used to be written as `isExternal ? [] : ...`,
+      // which SILENTLY DESTROYED an External agent's SDLC data on any save —
+      // even a save that only touched the description — while the form hid the
+      // fields so nobody could see it happen or put them back. Two live agents
+      // were sitting on that landmine (UX Writer AI Agent, Social Listening).
+      // Scope answers "who consumes this agent"; SDLC answers "which dev
+      // process does it perform". They're independent, so scope no longer
+      // erases the other.
       if (canEditSDLCFlag) {
         await updateDoc(doc(db, 'agents', agent.id), {
-          sdlcStage: isExternal ? [] : [...form.sdlcStage],
-          sdlcProcessMapping: isExternal ? [] : [...form.sdlcProcessMapping],
-          useCase: isExternal ? [] : [...form.useCase],
-          // NOT blanked for External — unlike the SDLC fields above, an
-          // External agent still needs a routable approver area (that is the
-          // whole point of replacing the old 'Business' catch-all).
+          sdlcStage: [...form.sdlcStage],
+          sdlcProcessMapping: [...form.sdlcProcessMapping],
+          useCase: [...form.useCase],
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Write 2b — Approve Area (2026-08-11): its OWN write, staff/admin only
+      // per canEditApproveArea/firestore.rules — bundling it into Write 2
+      // above would send 'approveArea' in affectedKeys for an approver or
+      // createdBy edit too (they share canEditSDLCFlag), which the narrower
+      // rule branch now rejects. Not blanked for External — unlike the SDLC
+      // fields above, an External agent still needs a routable approver area
+      // (that's the whole point of replacing the old 'Business' catch-all).
+      if (canSeeApproveArea && canEditSDLCFlag) {
+        await updateDoc(doc(db, 'agents', agent.id), {
           approveArea: [...form.approveArea],
           updatedAt: serverTimestamp(),
         });
@@ -297,8 +328,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
       setSaving(false);
     }
   }
-
-  const internalShown = form.scope === 'Internal';
 
   return (
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
@@ -456,50 +485,65 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
 
         </fieldset>
 
-        {/* ── SDLC metadata — own edit right (createdBy/staff/approver/admin) ── */}
-        {internalShown && (
-          <fieldset disabled={!canEditSDLCFlag} style={{ ...FS, opacity: !canEditSDLCFlag ? 0.6 : 1 }}>
+        {/* ── SDLC metadata — own edit right (createdBy/staff/approver/admin) ──
+             NOT hidden for External any more (2026-08-11). Scope (who consumes
+             the agent) and SDLC participation (which dev process it performs)
+             are orthogonal: `UX Writer AI Agent` is scoped External yet
+             genuinely performs process 8.2 Copywriting. Hiding the group for
+             External meant its owner could neither see nor repair those
+             fields, while handleSave silently blanked them on the next save —
+             see the isExternal note in Write 2. */}
+        <fieldset disabled={!canEditSDLCFlag} style={{ ...FS, opacity: !canEditSDLCFlag ? 0.6 : 1 }}>
             <div className="grid2">
               <div className="fg">
                 <label>SDLC Stage</label>
-                <MultiSelect label="เลือก SDLC Stage…" options={stageOptions} selected={form.sdlcStage} onChange={(s) => setField('sdlcStage', s)} />
+                <MultiSelect label="เลือก SDLC Stage…" options={stageOptions} selected={form.sdlcStage} onChange={(s) => { stageTouched.current = true; setField('sdlcStage', s); }} />
               </div>
               <div className="fg">
                 <label>SDLC Process Mapping</label>
                 {form.sdlcStage.size === 0 ? (
                   <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Stage ก่อน เพื่อดูรายการ Process ที่ผูกกับ Stage นั้น</div>
                 ) : (
-                  <MultiSelect label="เลือก Process…" options={processOptions} selected={form.sdlcProcessMapping} onChange={(s) => setField('sdlcProcessMapping', s)} />
+                  <MultiSelect label="เลือก Process…" options={processOptions} selected={form.sdlcProcessMapping} onChange={(s) => { processTouched.current = true; setField('sdlcProcessMapping', s); }} />
                 )}
               </div>
             </div>
             <div className="fg">
               <label>Use Case</label>
-              <MultiSelect label="เลือก Use Case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
+              {form.sdlcProcessMapping.size === 0 ? (
+                <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Process Mapping ก่อน เพื่อดูรายการ Use Case ที่ผูกกับ Process นั้น</div>
+              ) : (
+                <MultiSelect label="เลือก Use Case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
+              )}
+            </div>
+          </fieldset>
+
+        {/* ── Approver area ──
+            External agents need a routable area too (they used to get the
+            single catch-all 'Business'). Visibility is admin/staff ONLY
+            (2026-08-11,
+            canEditApproveArea) — narrower than the rest of the SDLC block,
+            which also lets approver/createdBy edit sdlcStage etc. Approve
+            Area decides who gets to approve/deploy this very agent, so an
+            approver or the submitter self-assigning it would be a routing
+            self-serve bug, not just an odd permission. Still shares the SDLC
+            group's deploy-freeze (canEditSDLCFlag, via canEditSDLC's
+            requested/approved check) for the disabled state. Leaving it empty
+            is safe and normal: the resolver falls back to process/category/
+            role, and the hint below shows exactly what that fallback produces. */}
+        {canSeeApproveArea && (
+          <fieldset disabled={!canEditSDLCFlag} style={{ ...FS, opacity: !canEditSDLCFlag ? 0.6 : 1 }}>
+            <div className="fg">
+              <label>Approve Area</label>
+              <MultiSelect label="เลือก Approve Area…" options={areaOptions} selected={form.approveArea} onChange={(s) => setField('approveArea', s)} />
+              {form.approveArea.size === 0 && (
+                <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 5, lineHeight: 1.5 }}>
+                  เว้นว่างได้ ระบบจะใช้: {derivedAreas.join(' + ') || '(คำนวณไม่ได้ — ควรเลือกเอง)'}
+                </div>
+              )}
             </div>
           </fieldset>
         )}
-
-        {/* ── Approver area ──
-            Outside the internalShown guard on purpose: External agents need a
-            routable area too (they used to get the single catch-all
-            'Business'). Same edit right as the SDLC block because it is the
-            same protected field set in firestore.rules, and because sdlcStage
-            — the field that USED to decide approver scope — has always been
-            editable here. Leaving it empty is safe and normal: the resolver
-            falls back to process/category/role, and the hint below shows
-            exactly what that fallback produces. */}
-        <fieldset disabled={!canEditSDLCFlag} style={{ ...FS, opacity: !canEditSDLCFlag ? 0.6 : 1 }}>
-          <div className="fg">
-            <label>Approve Area</label>
-            <MultiSelect label="เลือก Approve Area…" options={areaOptions} selected={form.approveArea} onChange={(s) => setField('approveArea', s)} />
-            <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 5, lineHeight: 1.5 }}>
-              {form.approveArea.size > 0
-                ? 'กำหนดเองแล้ว — จะไม่ใช้ค่าที่ระบบคำนวณให้'
-                : `เว้นว่างได้ ระบบจะใช้: ${derivedAreas.join(' + ') || '(คำนวณไม่ได้ — ควรเลือกเอง)'}`}
-            </div>
-          </div>
-        </fieldset>
 
         {/* ── Sensitive: creator list ── */}
         <div className="fg">
