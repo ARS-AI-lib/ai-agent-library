@@ -9,7 +9,7 @@
 ## 0. สรุป 60 วินาที
 
 เว็บแอปภายในองค์กรสำหรับ **ลงทะเบียน · ค้นหา · ติดตาม AI agents/skills** แทนระบบเดิมที่ใช้ Google Sheets
-ปัจจุบันมี **244 รายการ** ในฐานข้อมูล (approved + ไม่ถูก archive = 242)
+ปัจจุบัน approved + ไม่ถูก archive = **239 รายการ** (รวมทุกสถานะ 245 doc)
 
 จุดที่ทำให้ระบบนี้ไม่ใช่ CRUD ธรรมดา คือ **AI 3 ส่วน**:
 1. **ตรวจซ้ำตอนลงทะเบียน** — กันคนสร้าง agent ที่มีอยู่แล้ว
@@ -76,10 +76,10 @@ repo นี้ = SPA เดียว (Vite + React, ไม่ใช้ router li
 ### Firestore — named database `ai-agent-lib` (ไม่ใช่ `(default)`)
 | collection | เนื้อหา | เขียนโดย |
 |---|---|---|
-| `agents` | ตัวหลัก — agent/skill ทุกตัว (244) | client (ตาม rules) |
+| `agents` | ตัวหลัก — agent/skill ทุกตัว (245 doc · active 239) | client (ตาม rules) |
 | `agentVectors` | embedding 256 มิติ ต่อ 1 agent | **function เท่านั้น** (client เขียนไม่ได้) |
-| `sdlcProcesses` | 57 process | script |
-| `sdlcUseCases` | 106 use case | script |
+| `sdlcProcesses` | 58 process | script |
+| `sdlcUseCases` | 82 use case (เดิม 106 — ลบชื่อซ้ำ 2026-08-11 ดู CLAUDE.md ข้อ 21) | script |
 | `users` | role + approveAreas | self-create ตอน login แรก, admin แก้ |
 | `config` | `schema` / `timeline` / `dashboard` / `directory` | admin (ยกเว้น schema.relatedRole โตได้) |
 | `analysisRuns` | เก็บผลตรวจซ้ำไว้เป็น knowledge base | client ตอน submit |
@@ -143,6 +143,10 @@ T1 = Skill+Internal · T2 = Agent+Internal · T3 = Skill+External · T4 = Agent+
 `ROLES = ['user', 'staff', 'approver', 'committee', 'admin']`
 เก็บที่ `/users/{uid}.role` · คนใหม่ที่ login ด้วยโดเมนที่อนุญาต **auto-provision เป็น `user`**
 
+> **`approveAreas` = Approve Area 16 ค่า (ไม่ใช่ SDLC stage แล้ว ตั้งแต่ 2026-08-10)**
+> single source of truth: `src/lib/approveAreas.js` → `AREA_ORDER` + `agentApproveAreas()`
+> รายละเอียดเต็ม (fallback chain 7 ชั้น, สิทธิ์แก้ field, กฎห้าม inline) อยู่ใน **CLAUDE.md ข้อ 20**
+
 | ทำอะไรได้ | user | staff | approver | committee | admin |
 |---|:-:|:-:|:-:|:-:|:-:|
 | ดูไลบรารี / ใช้แชท | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -150,7 +154,8 @@ T1 = Skill+Internal · T2 = Agent+Internal · T3 = Skill+External · T4 = Agent+
 | อัปเดต progress ของตัวเอง | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Export All Data | — | ✅ | — | ✅ | ✅ |
 | อนุมัติ (ตาม approveAreas) | — | — | ✅ | ✅ | ✅ |
-| Archive / Unarchive | — | — | ✅ | ✅ | ✅ |
+| Archive / Unarchive | — | ✅ เฉพาะ area ตัวเอง | ✅ | ✅ | ✅ |
+| แก้ field `approveArea` | — | ✅ | — | — | ✅ |
 | แก้ทุก field | — | — | — | ✅ | ✅ |
 | จัดการ user | — | — | — | — | ✅ |
 | Rebuild Search Index | — | — | — | — | ✅ |
@@ -303,7 +308,7 @@ Firebase เก็บ release เดิมให้ rollback ได้ (Console 
 
 ## 9. สถานะล่าสุด (2026-08-05)
 
-**deploy แล้วและทดสอบผ่านทั้งหมด** · ไลบรารี 244 รายการ · ย้ายเครื่องทำงานมาเครื่องบริษัทเรียบร้อย
+**deploy แล้วและทดสอบผ่านทั้งหมด** · ไลบรารี 239 รายการ (active) · ย้ายเครื่องทำงานมาเครื่องบริษัทเรียบร้อย
 
 ### เฝ้าดู (ไม่ใช่งานสร้าง)
 1. **`/metrics/chat-YYYY-MM-DD`** — สัญญาณ 2 ตัว **คนละสาเหตุ**

@@ -8,3 +8,4 @@
 - [Feature batch 2026-07-06](project_feature_batch_20260706.md) — ALL 10 items shipped; see CLAUDE.md §17 for authoritative detail
 - [Chat retrieval re-architecture](project_chat_retrieval_rearchitecture.md) — locked 2026-08-04: hybrid embeddings (text-multilingual-embedding-002 @256), client-drawn answers, idea-check included; measured evidence for every choice — read before touching search/prompt
 - [Machine migration](feedback_machine_migration.md) — moved to the company laptop 2026-08-05; what git carries vs what never does, and the standing rule that CLAUDE.md + docs/memory ARE the handover
+- [Approve Area taxonomy](project_approve_area_taxonomy.md) — approver routing = 16 disciplines (NOT SDLC stage) since 2026-08-10; single source of truth in src/lib/approveAreas.js, admin/staff-only field, scope≠SDLC — read before touching approver scoping

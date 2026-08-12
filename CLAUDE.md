@@ -58,15 +58,21 @@
 ### Agent fields
 - `agent.devProgress` → **อาจเป็น string `"90%"` หรือ number `90`** ขึ้นอยู่กับแหล่งที่มา (import CSV = string, UI save = number)
   - **ห้าม normalize เอง** — ใช้ `normalizeProgress(raw)` จาก `src/lib/agentUtils.js` เท่านั้น (single source of truth, อยู่ใน 4 call sites: `useAgents.js`, `timeline.js`, `EditAgentModal.jsx`, `ExportDataModal.jsx`)
-- `agent.useCase` → string ชื่อ UC ใช้ match กับ `sdlcUseCases.name` (case-insensitive)
+- `agent.useCase` → **array** ของชื่อ UC (เดิมเป็น string — ยังมี doc เก่าที่เป็น string อยู่)
+  - **ห้ามอ่านตรงๆ** — ใช้ `agentUseCaseNames(agent)` จาก `src/lib/agentUtils.js` ซึ่งรองรับทั้ง 2 แบบ
+  - match กับ `sdlcUseCases.name` (case-insensitive) — ⚠️ ชื่อไม่ unique ดูข้อ 20
 - `agent.sdlcProcessMapping` → **string** (ไม่ใช่ array) เช่น `"2.2 High-Level User Story Development"`
   - ดึง process ID ด้วย regex: `^(\d+\.\d+[A-Za-z]?)\b`
+- `agent.approveArea` → **array** ของ Approve Area — ดูข้อ 20
+- `agent.internalTool` → boolean, ติดอัตโนมัติตอน submit ผ่าน `isInternalToolName()` (ดูข้อ 20)
 - `AI Agent` (boolean) และ `Skill.md` (boolean) → **required fields** ต้อง validate non-empty ตอน migrate และตอนกรอกฟอร์ม pre-registration
 
 ### SDLC collections
-- `sdlcProcesses` — 57 รายการ, มี field `owner` (อาจ sparse)
-- `sdlcUseCases` — 106 รายการ, fields: `processId`, `processName`, `name`, `owner`
+- `sdlcProcesses` — **58 รายการ**, มี field `owner` (อาจ sparse)
+- `sdlcUseCases` — **82 รายการ** (เดิม 106 — ลบชื่อซ้ำ 24 doc เมื่อ 2026-08-11 ดูข้อ 20),
+  fields: `processId`, `processName`, `name`, `owner`
   - ⚠️ **ไม่มี field `stage`** — ต้อง join ผ่าน `processId` ไปที่ `sdlcProcesses` เพื่อเอา stage
+  - ⚠️ **ไม่มี field `description`** — ตัว doc มีแค่ชื่อ+process+owner ไม่มีอะไรอธิบายเนื้องาน
 
 ### Schema config
 - ตัวเลือกของ choice fields (SDLC Stage, SDLC Process Mapping, Development Phase, Core Ability, Reusable) เก็บที่ `/config/schema` ใน Firestore — **ห้าม hardcode ใน React**
@@ -99,13 +105,15 @@ Tier:
 
 ---
 
-## 5. สถานะปัจจุบัน (Current State — อัปเดต 2026-08-05)
+## 5. สถานะปัจจุบัน (Current State — อัปเดต 2026-08-11)
 
 **ทุกอย่างที่ระบุด้านล่าง deploy ขึ้น production แล้วและทดสอบผ่านแล้ว**
-ข้อมูลจริงในระบบ ณ ตอนนี้: **agent/skill 244 รายการ** (approved + not archived = 242)
+ข้อมูลจริงในระบบ ณ ตอนนี้: **agent/skill approved + not archived = 239 รายการ**
+(รวม pending/rejected/archived ทั้งหมด 245 doc)
 
 ### เสร็จแล้ว — ของเดิม (ก่อน ส.ค.)
-- Migration agent + SDLC catalog เข้า Firestore ครบ (57 processes + 106 use cases)
+- Migration agent + SDLC catalog เข้า Firestore ครบ (ตอน migrate: 57 processes + 106 use cases —
+  ปัจจุบันเป็น 58 + 82 ดูข้อ 3 และข้อ 20)
 - `SDLCTab.jsx`, Dashboard (ข้อ 14), Timeline, Sign-in/Branding (ข้อ 16) — ครบ
 - Chat Assistant "ALPHA" v1 (ข้อ 15) + Feature Batch 2026-07-06 (ข้อ 17)
 - Deploy workflow ย้ายมา local direct แล้ว (ข้อ 11)
@@ -124,8 +132,17 @@ Tier:
 - **ปุ่ม Rebuild Search Index** ในเมนู admin (เห็นเฉพาะ `role === 'admin'`)
 - **ย้ายเครื่องทำงานสำเร็จ (2026-08-05)** — จาก Mac เดิม → เครื่องบริษัท (ดูข้อ 19)
 
+### เสร็จแล้ว — รอบ 2026-08-10/11 (Approve Area + data quality)
+- **⭐ Approve Area taxonomy 16 area** แทน SDLC stage — ดูข้อ 20 (งานใหญ่สุดของรอบนี้)
+- **Staff archive ตาม area ตัวเอง** + **Approve Area แก้ได้เฉพาะ admin/staff**
+- **แก้บั๊กข้อมูลหายเงียบ** — scope External เคยลบ SDLC field ทิ้งตอน Save (ดูข้อ 20 ท้ายหัวข้อ)
+- **Use case ชื่อซ้ำ** — ลบ 24 doc (106→82) + แก้วิธี join ใน SDLC tab (ดูข้อ 21)
+- **`internalTool` ติดอัตโนมัติตอน submit** — ดูข้อ 22
+
 ### ค้างอยู่ / ต้องเฝ้าดู
 - **ต้อง publish `firestore.rules` ทุกครั้งที่แก้** ผ่าน Console (named DB `ai-agent-lib`) — collection ใหม่รอบนี้: `/agentVectors`, `/metrics`, `/rateLimits`
+  ⚠️ **บทเรียน 2026-08-11:** deploy hosting แล้วแต่ลืม publish rules → ปุ่ม Archive ของ staff
+  โผล่ใน UI แต่เขียนจริงไม่ผ่าน (permission denied) **ถ้าแก้ rules ต้อง publish คู่กับ deploy เสมอ**
 - **เฝ้าดู `/metrics`** — ถ้า `answer_notFound` พุ่ง หรือ `tool_query_library` ชนะคำถามความสามารถ = retrieval เริ่มเพี้ยน
 - **คุณภาพข้อมูลในไลบรารี** — มีคนลงทะเบียนไฟล์ prompt ภายใน (`*.md`) เป็น agent ทำให้ค้นหาเพี้ยน
   แก้ชั่วคราวด้วย `internalTool` flag แล้ว แต่ **ถ้ามีคนลงเพิ่มอาการจะกลับมา** — ควรคุยเป็นกติกาตอนอนุมัติ
@@ -185,11 +202,16 @@ Tier:
    - `tool_query_library` ชนะคำถามความสามารถ → **ปัญหา tool routing** โมเดลเลือก tool ผิด
      ❗ ไม่ใช่ปัญหา embedding — ไปแก้ `capability_search` จะแก้ผิดจุด ต้องไปดูคำอธิบาย tool
      ใน `functions/chatPrompt.js` แล้วรัน `regression.cjs` (มีเคสดักเรื่องนี้อยู่)
-2. **รัน `node functions/flag-internal.cjs` เป็นระยะ** — ถ้ามีคนลงทะเบียนไฟล์ `*.md` ภายในเพิ่ม
+2. ~~รัน `flag-internal.cjs` เป็นระยะ~~ — **ไม่จำเป็นแล้ว** ตั้งแต่ 2026-08-11
+   ของใหม่ถูกติดธงอัตโนมัติตอน submit (ดูข้อ 22) · สคริปต์เหลือไว้ backfill/ตรวจย้อนหลังเท่านั้น
 
 ### ยังไม่ตัดสินใจ
 3. **กติกาว่าอะไรควร/ไม่ควรอยู่ในไลบรารี** — ปัญหาคุณภาพข้อมูลที่เจอรอบนี้แก้ปลายเหตุด้วย
    `internalTool` flag ไปแล้ว แต่ต้นเหตุคือไม่มีเกณฑ์ตอนอนุมัติ ควรคุยกันเป็นนโยบาย
+3b. **3 ไฟล์ `.md` ที่ยัง `customerFacing=true`** (ดูข้อ 22 ท้ายหัวข้อ) — แก้ได้ด้วยสคริปต์สั้นๆ
+   ยังไม่ทำเพราะผู้ใช้ยังไม่ตัดสินใจ
+3c. **`agent.useCase` เก็บเป็นชื่อ ไม่ใช่ UC id** (ดูข้อ 21) — ต้นตอของปัญหาชื่อซ้ำ
+   ถ้าจะแก้จริงเป็น schema change กระทบ SDLC tab / Dashboard / chat / ฟอร์ม
 4. **Rename Firebase web app registration** จาก `test-auth` → `ai-agent-library`
    (เป็นแค่ชื่อเรียก ไม่กระทบ App ID/API key ไม่ต้อง redeploy — ทำเมื่อไหร่ก็ได้)
 5. Setup backup admin account (deferred — accepted risk)
@@ -268,6 +290,15 @@ Tier:
 | `functions/calibrate.cjs` / `verify-dup.cjs` | เทียบ embeddings vs lexical บนข้อมูลจริง |
 | `src/lib/reindex.js` | `reindexAgent()` fire-and-forget หลัง save + `rebuildAllVectors()` สำหรับปุ่ม admin |
 | `docs/memory/` | **ต้นฉบับถาวรของ memory** — แก้แล้วต้อง copy กลับมา commit (ดูข้อ 19) |
+| **— Approve Area / data quality (ดูข้อ 20-22) —** | |
+| `src/lib/approveAreas.js` | ⭐ **single source of truth ของ Approve Area** — `AREA_ORDER` (16), `agentApproveAreas()` fallback chain 7 ชั้น · **ห้าม inline logic ที่อื่น** |
+| `src/lib/internalTool.js` | ⭐ **กฎ `internalTool` ที่เดียว** — `isInternalToolName()` ใช้ร่วมกันระหว่าง client กับ `flag-internal.cjs` |
+| `functions/backfill-approve-area.cjs` | backfill `approveArea` ครั้งแรก · มี `loadEsm()` เป็น pattern ต้นแบบให้สคริปต์อื่นโหลดโมดูล client จริง |
+| `functions/seed-approve-area-schema.cjs` | เขียน `/config/schema.approveArea` จาก `AREA_ORDER` (รันซ้ำได้เมื่อ area เปลี่ยน) |
+| `functions/dedupe-usecases.cjs` | ลบ use case ชื่อซ้ำ (ทำไปแล้ว 106→82 ดูข้อ 21) |
+| `functions/repair-orphan-usecases.cjs` | ซ่อม 3 agent ที่ useCase หลุด process หลัง dedupe |
+| `functions/fix-scope-misclass.cjs` | แก้ agent ที่ติด `customerFacing` ผิด (ดูข้อ 20 ท้ายหัวข้อ) |
+| `functions/split-*.cjs` / `realign-categories.cjs` / `clear-stale-approve-areas.cjs` | migration รายรอบของ taxonomy — เก็บไว้อ้างอิงประวัติ |
 
 ---
 
@@ -339,8 +370,11 @@ grilling session เคาะทุกข้อที่เคยค้าง:
 ### Staff Role
 - `ROLES = ['user', 'staff', 'approver', 'committee', 'admin']`
 - Staff export All Data ได้ (Approved + Pending + Rejected) เหมือน admin/committee
-- ไม่มีสิทธิ์ approve/edit/user-mgmt
+- ไม่มีสิทธิ์ approve/user-mgmt
 - Firestore rules: `isKnownUser()` รวม `'staff'` แล้ว
+- ⚠️ **อัปเดต 2026-08-11 — staff ได้สิทธิ์เพิ่ม 2 อย่าง** (บรรทัด "ไม่มีสิทธิ์ edit" เดิมจึงคลาดเคลื่อน):
+  - **แก้ field `approveArea` ได้** (admin + staff เท่านั้น) — `canEditApproveArea()` ดูข้อ 20
+  - **Archive/Unarchive ได้เฉพาะ agent ที่อยู่ใน Approve Area ของตัวเอง** — `staffAreaMatch`
 
 ### TagMultiSelect (Custom Related Role)
 - `src/components/TagMultiSelect.jsx` — combobox tag-input แทน MultiSelect สำหรับ Related Role
@@ -458,6 +492,102 @@ git log -1                                    # เห็น commit ล่าส
 npm run build                                 # พิสูจน์ว่า .env.local + deps ครบ
 git rev-list --left-right --count origin/main...HEAD   # ต้องได้ 0 0 ก่อน deploy ใดๆ
 node functions/regression.cjs                 # ผ่าน 12/12 (ต้องมี ADC)
-node functions/bootstrap-vectors.cjs          # dry run → agents: 244 / up to date: 244
+node functions/bootstrap-vectors.cjs          # dry run → ทุกตัวต้อง up to date (ตัวเลขเปลี่ยนตามจำนวน agent จริง)
 npx firebase-tools hosting:channel:deploy test-migration   # preview ไม่แตะ live
 ```
+
+---
+
+## 20. Approve Area — ระบบจัด routing ผู้อนุมัติ (Shipped 2026-08-10/11)
+
+> ⚠️ **นี่คือฟีเจอร์ใหญ่สุดของรอบ ส.ค. ที่เอกสารเคยไม่มีเลย** — เพิ่งเขียนเพิ่ม 2026-08-11
+
+### แนวคิด
+เดิม approver ถูก scope ด้วย **SDLC stage** (7 ค่า + `'Business'`) ซึ่งกว้างเกินไป —
+"Build approver" คนเดียวต้องอนุมัติทั้งงานเขียน copy และ penetration test **และ 79 agent (33%)
+มองไม่เห็นโดย approver คนไหนเลย** เพราะไม่มี `sdlcStage`
+
+เปลี่ยนเป็น **Approve Area = สายงาน (discipline)** 16 ค่า
+
+### Single source of truth: `src/lib/approveAreas.js`
+- `AREA_ORDER` — 16 area: Business & Product · Governance, Risk & Procurement · Delivery Management ·
+  Business Analysis · UX Research · UI & Visual Design · Content & UX Writing · Architecture ·
+  Development · SIT · QA · Security · Platform, DevOps & Operations · SRE & Reliability ·
+  Incident & Problem Management · Data & Analytics
+- `agentApproveAreas(agent, categoryAreaOverrides)` — **fallback chain 7 ชั้น ตามลำดับ:**
+  1. `agent.approveArea` ที่เก็บไว้ (**ชนะเสมอ**)
+  2. `agent.internalTool === true` → `['Platform, DevOps & Operations']`
+  3. `sdlcProcessMapping` → `PROCESS_AREA`
+  4. `relatedRole` → `ROLE_FIRST_AREA` (Security / Data & Analytics)
+  5. `category` → `categoryAreaMap` (live override) / `CATEGORY_AREA`
+  6. `relatedRole` → `ROLE_AREA`
+  7. External + ไม่เหลืออะไร → `['Business & Product']`
+
+> ⛔ **ห้าม inline logic นี้ที่ call site เด็ดขาด** — กฎเดียวกับ `normalizeProgress`/`getType`
+> สคริปต์ฝั่ง Node ต้องโหลดไฟล์นี้จริงผ่าน `loadEsm()` (ดู `backfill-approve-area.cjs`) **ห้ามก๊อปตาราง**
+
+### สิทธิ์
+- **แก้ field `approveArea` ได้เฉพาะ admin + staff** — `canEditApproveArea()` ใน `agentUtils.js`
+  (แคบกว่า `canEditSDLC` ที่ approver/createdBy ก็แก้ได้) เพราะ field นี้ตัดสินว่า
+  **ใครได้อนุมัติ agent ตัวนี้** ถ้า approver ตั้งเองได้ = self-assign เข้าคิวตัวเอง
+  → `firestore.rules` แยกเป็น branch ของตัวเอง (`hasOnly(['approveArea','updatedAt'])`)
+  และ `EditAgentModal` เขียนเป็น updateDoc แยก (Write 2b) เพื่อให้ affectedKeys ตรง branch
+- **Staff archive ได้เฉพาะ area ตัวเอง** (2026-08-11) — `staffAreaMatch` ใน `AgentDetailModal`
+  ⚠️ scoping เป็น **UI-side** เหมือน approve/reject/deploy-decision (rules เช็คแค่ role)
+
+### AI ช่วยเลือกตอน submit
+`analyzeDuplicate` คืน `suggested_approve_area` (จำกัดตาม `/config/schema.approveArea`)
+→ `PreRegModal` เขียนลง `approveArea` ตอน submit เลย
+
+### Scope (Internal/External) ≠ SDLC — แยกกันเด็ดขาด (แก้ 2026-08-11)
+เคยมีบั๊ก: `EditAgentModal`/`PreRegModal` เขียน `sdlcStage/sdlcProcessMapping/useCase` เป็น `[]`
+เมื่อ scope = External **และซ่อน field ทิ้ง** → agent External ที่มีข้อมูล SDLC จะ**โดนลบข้อมูลเงียบๆ
+แค่กด Save** (เจอของจริง 2 ตัว) แก้แล้วโดย:
+- ไม่ blank ตาม scope อีกต่อไป · ไม่ซ่อนกลุ่ม SDLC ตาม scope อีกต่อไป
+- cascade drop-stale (ตัด process ที่ไม่อยู่ใน stage) ต้องรอ **ผู้ใช้แตะ field จริง** ก่อน
+  (`stageTouched`/`processTouched` useRef) — เดิมยิงตอน mount แล้วลบข้อมูลของ agent
+  ที่ stage กับ process ไม่ตรงกันเอง
+
+**นิยาม "customer facing" ที่ใช้จริง:** ลูกค้าโต้ตอบกับ agent เองตอน runtime โดยไม่มีคนในองค์กร
+รีวิวก่อน — **ไม่ใช่** "ผลลัพธ์ไปถึงลูกค้า" (ถ้าใช้นิยามหลัง agent เขียนโค้ด/ออกแบบ/เขียนเทส
+กลายเป็น External หมด แกนนี้จะไร้ความหมาย) · agent ที่มี `sdlcProcessMapping` จริง = ทำงานใน
+กระบวนการภายในตามนิยาม
+
+---
+
+## 21. Use Case Catalog — ชื่อซ้ำและวิธี join (2026-08-11)
+
+### ปัญหาที่เจอ
+`sdlcUseCases` มีชื่อซ้ำ 21 ชื่อ กิน 52 doc — ทีมต่างๆ จองชื่อเดียวกันคนละ process
+และ `SDLCTab.agentsForUC()` เดิม join ด้วย **ชื่อล้วนๆ** → agent 1 ตัวถูกนับเข้าไปใน
+**ทุก process ที่จองชื่อนั้น** (วัดได้ 24 การนับผี)
+
+### แก้แล้ว 2 ชั้น
+1. **ข้อมูล** — `functions/dedupe-usecases.cjs` ลบ 24 doc (106 → 82) เฉพาะกลุ่มที่ชื่อบอกชัดว่า
+   ควรอยู่ process เดียว · **เหลือ 7 ชื่อที่ยังซ้ำโดยตั้งใจ** = คู่ SIT (12.x) / UAT (13.x)
+   ซึ่งเป็นคนละทีม คนละ environment จริง **ห้ามยุบ**
+2. **โค้ด** — `agentsForUC()` ต้อง match ชื่อ **และ** `sdlcProcessMapping` ของ agent เองต้องมี
+   process นั้น · fallback เป็น name-only เฉพาะ agent ที่ไม่มี process mapping เลย (มี 4 ตัว)
+
+⚠️ **ต้นตอที่ยังอยู่:** `agent.useCase` เก็บเป็น **ชื่อ** ไม่ใช่ UC id — ถ้ามีคนตั้งชื่อซ้ำอีก
+อาการจะกลับมา · การเปลี่ยนไปเก็บ id เป็นงาน schema change ที่ยังไม่ได้ทำ
+
+**ผลข้างเคียงที่ยอมรับแล้ว:** 4 process ไม่มี use case เหลือเลย (1.5, 7.2, 10.2, 14.3B)
+เพราะของที่มีเป็นชื่อซ้ำที่เป็นของ process อื่น — ถูกต้องแล้ว ไม่ใช่บั๊ก
+
+---
+
+## 22. internalTool — กันไฟล์ prompt ภายในหลุดเข้าไลบรารี
+
+- **กฎอยู่ที่เดียว: `src/lib/internalTool.js`** → `isInternalToolName(name)`
+  = ชื่อลงท้าย `.md` **หรือ** อยู่ใน `SELF_REFERENTIAL_NAMES` (tool ของ ALPHA เอง 9 ชื่อ)
+- **ติดอัตโนมัติตอน submit** ใน `PreRegModal` (ทั้ง agent หลักและ paired sub-skill) — 2026-08-11
+- `functions/flag-internal.cjs` **โหลดกฎจากไฟล์เดียวกัน**ผ่าน `loadEsm()` ไม่ประกาศเอง
+  → ใช้ backfill ของเก่า/ของที่ถูก rename เข้าเงื่อนไขทีหลัง
+- ⚠️ `owner === 'Wolfy'` ใช้เป็นกฎไม่ได้ — โดน agent จริงด้วย
+- **flag นี้ทำแค่ 3 อย่าง:** กดอันดับใน chat search (`INTERNAL_RANK_PENALTY` 0.85),
+  route ไป area `Platform, DevOps & Operations` (ชั้น 2), และ filter "Platform Tools" ใน Sidebar
+  — **ไม่ซ่อน และไม่แตะ scope/tier**
+- ⚠️ **ค้างอยู่:** มี 3 ไฟล์ (`6.answer-writer.md`, `6.commodity-price-inquiry.md`,
+  `7.no-citation-fallback.md`) ที่ `internalTool=true` แต่ `customerFacing=true` (T3) ขัดกันเอง
+  — ยังไม่แก้ (อีก 10 ไฟล์ `.md` เป็น T1 ถูกต้องแล้ว)
