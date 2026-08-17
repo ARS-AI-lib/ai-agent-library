@@ -189,6 +189,14 @@ Tier:
 - Firestore service agent ต้องมี role `roles/eventarc.publisher`
 - Compute service account ต้องมี role `roles/datastore.user`
 - Firestore Security Rules สำหรับ named database `ai-agent-lib` **ต้อง publish ผ่าน named DB dropdown ใน Firebase Console** — ถ้าไป publish ที่ `(default)` จะไม่มีผลใดๆ
+- ⛔ **ใน firestore.rules ห้ามอ่าน field ของ doc เดิมด้วย dot notation ถ้า field นั้นอาจไม่มี**
+  — `resource.data.someField` บน doc ที่**ไม่มี key นั้น** จะ **raise error** และ error = **deny**
+  ต้องใช้ `resource.data.get('someField', <default>)` เสมอ
+  **เคสจริง (2026-08-12):** 71 จาก 245 doc (import จาก CSV เก่า) ไม่มี key `deploymentStatus`
+  เลย ทุก branch ที่เขียน `!(resource.data.deploymentStatus in [...])` จึง **deny การแก้ไข
+  detail/SDLC/approveArea ของ 71 ตัวนั้นกับทุกคนยกเว้น admin** (admin หลุดที่ `isAdmin()` ก่อน)
+  อาการที่ผู้ใช้เห็นคือ **"Missing or insufficient permissions" เปล่าๆ ไม่บอกว่า field ไหน**
+  → แก้ rules ให้ใช้ `.get()` แล้ว + backfill ด้วย `functions/backfill-deployment-status.cjs`
 - Gmail SMTP AUTH ถูกบล็อกโดย Google Workspace org policy ของ `@arise.tech` → แก้โดยใช้ in-app pending approval badge อ่านตรงจาก Firestore (`status == "pending"`) แทนการส่งอีเมล
 
 ---

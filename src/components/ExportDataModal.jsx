@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { getType } from '../lib/tier';
+import { getType, getTier } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
 import { isMyAgent, normalizeProgress } from '../lib/agentUtils';
 import useEscapeKey from '../hooks/useEscapeKey';
@@ -9,13 +9,18 @@ import useEscapeKey from '../hooks/useEscapeKey';
 // 'category' and 'approveArea' added 2026-08-10 so an exported CSV carries
 // enough to analyze/pivot by discipline and domain without cross-referencing
 // the live app — the whole point of a "take it and analyze" export.
-const COLUMNS = ['agentName', 'type', 'owner', 'creator', 'creatorEmails', 'approvalStatus', 'devProgress', 'reusable', 'category', 'approveArea', 'description'];
+// 'tier' added 2026-08-12 — it is computed client-side (never stored), so
+// without it the CSV cannot be pivoted by tier at all: the raw customerFacing/
+// internalUse/aiAgent/skillMd flags are in All Data but a reader would have to
+// re-implement getTier() by hand to get from them to T1..T4. Sits next to
+// 'type' because the two are the same classification at different grain.
+const COLUMNS = ['agentName', 'type', 'tier', 'owner', 'creator', 'creatorEmails', 'approvalStatus', 'devProgress', 'reusable', 'category', 'approveArea', 'description'];
 
 // Full field set for "All Data" — mirrors export-agents-csv.cjs's column
 // list minus the two Firebase Auth UID fields (createdBy, approvedBy),
 // deliberately excluded from any exported CSV (2026-07-04, security).
 const ALL_COLUMNS = [
-  'id', 'agentName', 'description', 'aiAgent', 'skillMd', 'owner',
+  'id', 'agentName', 'description', 'aiAgent', 'skillMd', 'tier', 'owner',
   'coreAbility', 'relatedRole', 'category', 'approveArea', 'customerFacing', 'internalUse',
   'reusable', 'reuseCondition', 'hml', 'humanJob', 'tool', 'llm',
   'dataPrivacy', 'sdlcStage', 'sdlcProcessMapping', 'useCase',
@@ -41,6 +46,7 @@ function toRow(agent, resolveAreas) {
   return {
     agentName: agent.agentName || '',
     type: getType(agent) === 'skill' ? 'Skill' : 'Agent',
+    tier: getTier(agent),
     owner: agent.owner || '',
     creator: agent.creator || '',
     creatorEmails: Array.isArray(agent.creatorEmails) ? agent.creatorEmails.join('; ') : '',
@@ -65,14 +71,18 @@ function toDateStr(v) {
 
 // Every raw field, verbatim — used only by "All Data" (id included, and
 // devProgress left un-normalized so it round-trips with import-agents-csv.cjs).
-// approveArea is the one exception to "raw, verbatim": it goes through the
-// resolver (like toRow above) rather than reading agent.approveArea directly,
-// so a doc whose stored value is stale or empty still exports the area it
-// actually resolves to today.
+// Two exceptions to "raw, verbatim", both because the value is DERIVED and has
+// no stored field to read:
+//   approveArea — goes through the resolver (like toRow above) so a doc whose
+//     stored value is stale or empty still exports the area it resolves to today.
+//   tier        — computed by getTier() from aiAgent/skillMd + customerFacing/
+//     internalUse; `agent.tier` does not exist, so without this branch the
+//     column would export as empty on every row (2026-08-12).
 function toFullRow(agent, resolveAreas) {
   const row = { id: agent.id || '' };
   ALL_COLUMNS.slice(1).forEach((field) => {
     if (field === 'approveArea') { row[field] = resolveAreas(agent).join('; '); return; }
+    if (field === 'tier') { row[field] = getTier(agent); return; }
     const raw = agent[field];
     if (field === 'launchDate') row[field] = toDateStr(raw);
     else if (typeof raw === 'boolean') row[field] = raw ? 'TRUE' : 'FALSE';

@@ -6,6 +6,7 @@ import { useApprovedAgents, usePendingAgents, useDeploymentRequests } from './ho
 import { useConfigSchema } from './hooks/useConfigSchema';
 import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from './lib/agentUtils';
 import { getType } from './lib/tier';
+import { queueViewer, pendingBadgeCount } from './lib/pendingQueue';
 import { ALLOWED_DOMAINS_LABEL } from './lib/firebase';
 import { agentStatus } from './lib/status';
 
@@ -223,6 +224,20 @@ export default function App() {
     [deployRequests, agents]
   );
 
+  // The Pending badge must count EXACTLY what PendingApprovalModal will list.
+  // It used to count every pending item and deploy request regardless of area,
+  // so a scoped approver saw a number, opened the queue, and found nothing —
+  // the badge was counting other areas' work (2026-08-12). Both now derive
+  // from src/lib/pendingQueue.js rather than each filtering on their own.
+  const queueViewerCtx = useMemo(
+    () => queueViewer({ isAdmin, isCommittee, approveAreas, uid: user?.uid, categoryAreaMap: schema.categoryAreaMap }),
+    [isAdmin, isCommittee, approveAreas, user?.uid, schema.categoryAreaMap]
+  );
+  const pendingCount = useMemo(
+    () => pendingBadgeCount(pending, deployRequests, agents, queueViewerCtx),
+    [pending, deployRequests, agents, queueViewerCtx]
+  );
+
   const filtered = useMemo(() => {
     let pred = buildAgentFilter({ type, owner, role: role_, tier, reusable, hasEndpoint, category, stage, platformTools, search });
     let result = agents.filter(pred);
@@ -263,7 +278,7 @@ export default function App() {
             <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
           </svg>
           Pending
-          {(pending.length + parentDeployRequests.length) > 0 && <span className="btn-legend-badge">{pending.length + parentDeployRequests.length}</span>}
+          {pendingCount > 0 && <span className="btn-legend-badge">{pendingCount}</span>}
         </button>
       )}
       {canManageUsers && (

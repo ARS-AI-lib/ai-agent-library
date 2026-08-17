@@ -3,7 +3,8 @@ import { collection, doc, getDoc, onSnapshot, query, updateDoc, where, serverTim
 import { db } from '../lib/firebase';
 import { getTier, TIER_DEF } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
-import { matchingAgentNames, pairedSubSkills, isPairedSubSkill, fmtDate, categoryColor } from '../lib/agentUtils';
+import { matchingAgentNames, pairedSubSkills, fmtDate, categoryColor } from '../lib/agentUtils';
+import { queueViewer, visiblePending, visibleDeployRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
 import AgentDetailModal from './AgentDetailModal';
 import useEscapeKey from '../hooks/useEscapeKey';
 
@@ -143,25 +144,22 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
     }
   }
 
-  const visible = useMemo(() => {
-    if (fullAccess) return pending;
-    const areaMatches = pending.filter((a) => resolveAreas(a).some((area) => mine.has(area)));
-    if (areaMatches.length > 0) {
-      // Has approveAreas assigned → acting as an approver: area-scoped view.
-      return areaMatches;
-    }
-    // Base "user" tier (or an approver with no matching area right now):
-    // only their own submissions, so they can at least track/withdraw them.
-    return pending.filter((a) => a.createdBy === user?.uid);
-  }, [pending, fullAccess, mine, user, schema.categoryAreaMap]);
+  // Visibility now comes from src/lib/pendingQueue.js so the badge counter in
+  // App.jsx counts EXACTLY what this list renders (2026-08-12 — they had
+  // drifted: badge counted every pending item regardless of area).
+  const viewer = useMemo(
+    () => queueViewer({ isAdmin, isCommittee, approveAreas, uid: user?.uid, categoryAreaMap: schema.categoryAreaMap }),
+    [isAdmin, isCommittee, approveAreas, user?.uid, schema.categoryAreaMap],
+  );
+
+  const visible = useMemo(() => visiblePending(pending, viewer), [pending, viewer]);
 
   // D2 (2026-08-10): an approver whose areas simply have nothing pending
   // right now used to collapse into the EXACT same view as a base "user" tier
   // with no approver rights at all — own-submissions-only, no explanation.
   // That reads as "you lost your approver access" when it's really just
   // "your queue is empty today". Distinguished here so a message can say so.
-  const areaEmptyForApprover = !fullAccess && mine.size > 0
-    && !pending.some((a) => resolveAreas(a).some((area) => mine.has(area)));
+  const areaEmptyForApprover = queueAreaEmptyForApprover(pending, viewer);
 
   function canApprove(agent) {
     if (fullAccess) return true;
@@ -176,16 +174,14 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
   // Deployment requests use the same visibility/rights policy as new-entry
   // approval (user's explicit choice, 7th grill-me follow-up) — reuse
   // agentApproveAreas/canApprove as-is, just against a different query.
-  const visibleDeploy = useMemo(() => {
-    // Paired sub-skills ride along with their parent Agent's deploy request —
-    // they're cascaded to 'requested' but must NOT appear as separate line
-    // items in the approver's queue (the parent represents them). Filter them
-    // out here (2026-07-06); handleApproveDeploy/RejectDeploy cascade the
-    // decision back onto them.
-    const parentsOnly = deployRequests.filter((a) => !isPairedSubSkill(a, agents));
-    if (fullAccess) return parentsOnly;
-    return parentsOnly.filter((a) => resolveAreas(a).some((area) => mine.has(area)));
-  }, [deployRequests, fullAccess, mine, agents, schema.categoryAreaMap]);
+  // Paired sub-skills are dropped inside visibleDeployRequests() — they ride
+  // along with their parent Agent's request (cascaded to 'requested') and must
+  // never appear as separate line items; handleApproveDeploy/RejectDeploy
+  // cascade the decision back onto them (2026-07-06).
+  const visibleDeploy = useMemo(
+    () => visibleDeployRequests(deployRequests, agents, viewer),
+    [deployRequests, agents, viewer],
+  );
 
   // Deploy decision cascades onto the paired sub-skills too (2026-07-06) — the
   // approver acts once on the parent Agent and the whole package flips. The
