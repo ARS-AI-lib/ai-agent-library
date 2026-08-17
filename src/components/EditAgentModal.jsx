@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill } from '../lib/tier';
-import { splitRoles, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditReadyToUseFields, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
+import { splitRoles, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditReadyToUseFields, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
@@ -49,6 +49,8 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   // Approve Area: admin/staff only, and only see it — see canEditApproveArea's
   // header comment for why it's narrower than the rest of the SDLC group.
   const canSeeApproveArea = canEditApproveArea(userRole, isAdmin);
+  // Category: admin ONLY, and pick-from-list only — see canEditCategory.
+  const canSeeCategory = canEditCategory(userRole, isAdmin);
   const lockTierA = !canEditTierA;
   const lockSensitive = lockProgress || !canEditSensitive;
   // Ready-to-Use exception (2026-07-22): only relevant when the general Tier A
@@ -90,6 +92,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     compatibleAgents: Array.isArray(agent.compatibleAgents) ? agent.compatibleAgents : [],
     sdlcStage: new Set(Array.isArray(agent.sdlcStage) ? agent.sdlcStage : [agent.sdlcStage].filter(Boolean)),
     approveArea: new Set(Array.isArray(agent.approveArea) ? agent.approveArea.filter(Boolean) : []),
+    category: new Set(Array.isArray(agent.category) ? agent.category.filter(Boolean) : []),
     sdlcProcessMapping: new Set(Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping : [agent.sdlcProcessMapping].filter(Boolean)),
     useCase: new Set(agentUseCaseNames(agent)),
   }));
@@ -123,6 +126,10 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
 
   const stageOptions = schema.sdlcStage?.length ? schema.sdlcStage : [];
   const areaOptions = schema.approveArea?.length ? schema.approveArea : AREA_ORDER;
+  // Category options come ONLY from /config/schema.category — the curated
+  // list. No local fallback and no free-add on purpose: an admin re-files an
+  // agent under an existing category, never invents one (see canEditCategory).
+  const categoryOptions = schema.category?.length ? schema.category : [];
   // What the agent WOULD resolve to if approveArea were left blank — shown as
   // a hint so an editor can see the automatic answer before overriding it,
   // rather than having to guess what the fallback chain would pick.
@@ -298,6 +305,17 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
       if (canSeeApproveArea && canEditSDLCFlag) {
         await updateDoc(doc(db, 'agents', agent.id), {
           approveArea: [...form.approveArea],
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Write 2c — Category (2026-08-17): admin only, its own write for the
+      // same affectedKeys reason as 2b. `category` was removed from the Tier A
+      // and Tier B rule branches in the same change, so only the blanket
+      // isAdmin() branch can carry this — which is exactly the intent.
+      if (canSeeCategory) {
+        await updateDoc(doc(db, 'agents', agent.id), {
+          category: [...form.category],
           updatedAt: serverTimestamp(),
         });
       }
@@ -543,6 +561,27 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
               )}
             </div>
           </fieldset>
+        )}
+
+        {/* ── Category (2026-08-17) — admin ONLY ──
+            Normally AI-assigned at submit and never hand-typed, so this is a
+            correction tool, not a data-entry field. MultiSelect (pick from the
+            curated list) rather than TagMultiSelect (free-add) is the whole
+            point: an admin may re-file an agent under an EXISTING category but
+            cannot invent a name — new names still come only from the AI's
+            proposed_new_category -> CategoryApprovalPanel flow.
+            NOT inside the SDLC deploy-freeze: a mis-filed agent should stay
+            fixable after go-live, and category affects browse + approver
+            routing, not the deploy record. */}
+        {canSeeCategory && (
+          <div className="fg">
+            <label>Category</label>
+            <MultiSelect label="เลือก Category…" options={categoryOptions} selected={form.category} onChange={(s) => setField('category', s)} />
+            <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 5, lineHeight: 1.5 }}>
+              ปกติ AI กำหนดให้ตอน submit — แก้ที่นี่เมื่อจัดหมวดผิด · เลือกได้ทั้งสายงาน
+              และผลิตภัณฑ์ (เช่น Writing &amp; Content + NEXT) · เพิ่มหมวดใหม่เองไม่ได้
+            </div>
+          </div>
         )}
 
         {/* ── Sensitive: creator list ── */}

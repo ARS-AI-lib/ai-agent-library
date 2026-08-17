@@ -461,7 +461,16 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         llm: form.llm.trim(),
         dataPrivacy: form.dataPrivacy.trim(),
         businessValue: form.businessValue.trim(),
-        category: aiResult?.suggested_category ? [aiResult.suggested_category] : [],
+        // Array since 2026-08-17: 1 discipline + optionally 1 product. It used
+        // to be hard-wrapped into a single element, which is half of why no
+        // agent ever carried a product category — the other half being that
+        // the prompt never told the model products were in the list at all.
+        // Still accepts a bare string so a response from the previous
+        // Functions deploy keeps working during rollout. Server already
+        // validated every value against /config/schema.category.
+        category: Array.isArray(aiResult?.suggested_category)
+          ? aiResult.suggested_category
+          : (aiResult?.suggested_category ? [aiResult.suggested_category] : []),
         // Server-side validated against /config/schema.approveArea, so this is
         // safe to store directly. Empty is fine — agentApproveAreas() then
         // falls back to process/category/role rather than leaving the entry
@@ -552,7 +561,15 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             reason: aiResult.proposed_new_category.reason || '',
             agentId: agentRef.id,
             agentName,
-            fallbackCategory: aiResult.suggested_category || null,
+            // MUST stay a single string — CategoryApprovalPanel feeds it to
+            // arrayRemove() to swap the placeholder off the agent once the
+            // proposed category is approved. suggested_category became an
+            // array on 2026-08-17, so take the DISCIPLINE (always element 0
+            // after server-side normalisation): a proposed new category
+            // replaces the discipline it stood in for, never the product tag.
+            fallbackCategory: (Array.isArray(aiResult.suggested_category)
+              ? aiResult.suggested_category[0]
+              : aiResult.suggested_category) || null,
             status: 'pending',
             createdBy,
             createdAt: serverTimestamp(),

@@ -63,16 +63,35 @@ const FALLBACK_CATEGORY = [
   'SRE & Reliability', 'Incident Management', 'Data & Analytics',
   'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLIX', 'Core bank',
 ];
+// Which of the above are PRODUCTS rather than disciplines. Mirrors
+// VERTICAL_CATEGORIES in src/lib/approveAreas.js; the live value comes from
+// /config/schema.productCategory, seeded from that same constant.
+const FALLBACK_PRODUCT_CATEGORY = [
+  'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLIX', 'Core bank',
+];
 let categoryCache = null;
+// Returns { all, disciplines, products }. Splitting these matters: until
+// 2026-08-17 the model was handed one flat 21-item list and told to pick the
+// single closest "โดเมนงาน", so it could not tell a product from a discipline
+// and the discipline answer always won — all four product categories sat at 0
+// agents for a week. The two lists are now presented separately in the prompt.
 async function getCategoryOptions() {
   if (categoryCache) return categoryCache;
+  let all = FALLBACK_CATEGORY;
+  let products = FALLBACK_PRODUCT_CATEGORY;
   try {
     const snap = await db.collection('config').doc('schema').get();
     const opts = snap.data()?.category;
-    categoryCache = Array.isArray(opts) && opts.length ? opts : FALLBACK_CATEGORY;
+    const prod = snap.data()?.productCategory;
+    if (Array.isArray(opts) && opts.length) all = opts;
+    if (Array.isArray(prod) && prod.length) products = prod;
   } catch {
-    categoryCache = FALLBACK_CATEGORY;
+    /* keep fallbacks */
   }
+  // Only treat a product as such if it is actually in the live category list,
+  // so a stale productCategory entry can never widen what the model may pick.
+  products = products.filter((p) => all.includes(p));
+  categoryCache = { all, products, disciplines: all.filter((c) => !products.includes(c)) };
   return categoryCache;
 }
 
@@ -218,12 +237,22 @@ verdict ที่แปลว่าไม่ซ้ำ เช่น 70 คู่�
    ⚠️ ต้องเลือกจากรายการ Core Ability ที่กำหนดไว้เท่านั้น (ห้ามคิดคำใหม่เอง):
    [${coreAbilityOptions.map((a) => `"${a}"`).join(', ')}]
    ถ้าไม่มีตัวไหนในลิสต์นี้เหมาะสมจริงๆ ให้ตอบ null แทนการสร้างคำใหม่
-5b. suggested_category: จัดหมวด Draft นี้เข้า "โดเมนงาน" (Category) — คนละมิติกับ Core Ability
-   (Core Ability = ชนิดความสามารถ เช่น Analytical/Documentation, Category = สายงาน/โดเมน
-   เช่น Lending & Credit, Design & UI) ต้องเลือกจากรายการนี้เท่านั้น เพราะค่านี้ต้องมี
-   เสมอทันทีที่ submit (ใช้เป็นหมวดที่หาเจอ แม้ระหว่างรอ admin อนุมัติหมวดใหม่):
-   [${categoryOptions.map((c) => `"${c}"`).join(', ')}]
-   เลือกหมวดที่ "ใกล้เคียงที่สุด" เสมอ แม้ Draft จะดูใหม่/ไม่เข้าพวกขนาดไหนก็ตาม ห้ามตอบ null
+5b. suggested_category: ตอบเป็น **array 1-2 ค่า** ประกอบด้วย
+   (ก) DISCIPLINE — 1 ตัว **บังคับ** = "งานนี้เกี่ยวกับเรื่องอะไร" (คนละมิติกับ Core Ability:
+       Core Ability = ชนิดความสามารถ เช่น Analytical/Documentation)
+       เลือกจากรายการนี้เท่านั้น:
+       [${categoryOptions.disciplines.map((c) => `"${c}"`).join(', ')}]
+       เลือกตัวที่ "ใกล้เคียงที่สุด" เสมอ แม้ Draft จะดูใหม่/ไม่เข้าพวกขนาดไหนก็ตาม
+       ห้ามเว้นว่าง — ค่านี้ต้องมีเสมอทันทีที่ submit
+   (ข) PRODUCT — 0 หรือ 1 ตัว **ไม่บังคับ** = "ทำให้ผลิตภัณฑ์ตัวไหนโดยเฉพาะ"
+       เลือกจากรายการนี้เท่านั้น:
+       [${categoryOptions.products.map((c) => `"${c}"`).join(', ')}]
+       ⚠️ ใส่ก็ต่อเมื่อ Draft **ผูกกับผลิตภัณฑ์นั้นจริงๆ** — เช่น ชื่อหรือคำอธิบายระบุแอปนั้น
+       ตรงๆ หรือใช้ได้เฉพาะกับแอปนั้น
+       ถ้าเป็นเครื่องมือทั่วไปที่ใช้ข้ามผลิตภัณฑ์ได้ (ซึ่งเป็นกรณีส่วนใหญ่) **อย่าใส่**
+       อย่าเดาจากชื่อทีมหรือ owner — ต้องมีหลักฐานในตัวเนื้อหา Draft เอง
+   ตัวอย่าง: ["Writing & Content", "NEXT"] (skill เขียน copy ของแอป NEXT)
+            ["Software Development"] (เครื่องมือ dev ทั่วไป ไม่ผูก product)
 6. proposed_new_category: ปกติหมวดเดิมด้านบนควรพอสำหรับ Draft ส่วนใหญ่ (>90%) — ให้ค่านี้เป็น
    null เกือบทุกครั้ง มีค่าเฉพาะเมื่อ Draft เป็นสายงาน/โดเมนที่ "ใหม่จริงๆ" จนหมวดเดิมทุกหมวด
    ไม่เหมาะสมเลย (ไม่ใช่แค่ "ใกล้เคียงแต่ไม่เป๊ะ" — กรณีนั้นให้ใช้ suggested_category แทน)
@@ -260,7 +289,7 @@ verdict 4 ระดับ:
   "tech_stack_hint": "..." (string ว่างได้),
   "suggested_matching_agent": "..." หรือ null,
   "suggested_ability": "..." หรือ null,
-  "suggested_category": "...",
+  "suggested_category": ["<discipline>"] หรือ ["<discipline>", "<product>"],
   "proposed_new_category": {"name": "...", "reason": "..."} หรือ null,
   "suggested_approve_area": ["..."],
   "overall_risk": "high" | "medium" | "low",
@@ -299,7 +328,7 @@ exports.analyzeDuplicate = onCall(
     const { draft, candidates, connectionCandidates } = request.data || {};
     if (!draft || !Array.isArray(candidates) || candidates.length === 0) {
       // No candidates → nothing to analyze; return empty result without burning quota.
-      return { candidates: [], integration_suggestions: [], suggested_matching_agent: null, suggested_ability: null, suggested_category: null, proposed_new_category: null, suggested_approve_area: [], overall_risk: 'low', summary: '' };
+      return { candidates: [], integration_suggestions: [], suggested_matching_agent: null, suggested_ability: null, suggested_category: [], proposed_new_category: null, suggested_approve_area: [], overall_risk: 'low', summary: '' };
     }
 
     const [coreAbilityOptions, categoryOptions, approveAreaOptions] = await Promise.all([
@@ -349,14 +378,22 @@ exports.analyzeDuplicate = onCall(
     parsed.suggested_ability = coreAbilityOptions.includes(parsed.suggested_ability)
       ? parsed.suggested_ability : null;
     // Same defense-in-depth as suggested_ability above: never trust the model
-    // to have obeyed the category allowlist. Unlike suggested_ability, a null
-    // here would leave a new agent with no fallback category to fall back on —
-    // but writing an unvalidated string is worse (poisons the sidebar with a
-    // name /config/schema.category never approved), so null is still correct;
-    // PreRegModal treats a null suggested_category as "no category yet" rather
-    // than fabricating one client-side.
-    parsed.suggested_category = categoryOptions.includes(parsed.suggested_category)
-      ? parsed.suggested_category : null;
+    // to have obeyed the category allowlist — an unvalidated string would
+    // poison the sidebar with a name /config/schema.category never approved.
+    // Now an ARRAY (2026-08-17): 1 discipline + optionally 1 product. A bare
+    // string is still accepted so an in-flight response from the previous
+    // deploy keeps working during rollout.
+    // At most one product survives: the prompt asks for one, and letting the
+    // model tag an agent with three apps would defeat the point of the filter.
+    {
+      const raw = Array.isArray(parsed.suggested_category)
+        ? parsed.suggested_category
+        : [parsed.suggested_category];
+      const valid = raw.filter((c) => categoryOptions.all.includes(c));
+      const disciplines = valid.filter((c) => !categoryOptions.products.includes(c));
+      const products = valid.filter((c) => categoryOptions.products.includes(c));
+      parsed.suggested_category = [...disciplines.slice(0, 1), ...products.slice(0, 1)];
+    }
     // Same allowlist treatment for the approver area. An empty array is a fine
     // outcome — approveArea is optional on an agent doc and the client-side
     // resolver falls back to process/category/role — so unlike

@@ -599,3 +599,53 @@ npx firebase-tools hosting:channel:deploy test-migration   # preview ไม่�
 - ⚠️ **ค้างอยู่:** มี 3 ไฟล์ (`6.answer-writer.md`, `6.commodity-price-inquiry.md`,
   `7.no-citation-fallback.md`) ที่ `internalTool=true` แต่ `customerFacing=true` (T3) ขัดกันเอง
   — ยังไม่แก้ (อีก 10 ไฟล์ `.md` เป็น T1 ถูกต้องแล้ว)
+
+---
+
+## 23. Category — สายงาน + ผลิตภัณฑ์ (แก้ 2026-08-17)
+
+### `category` มี 2 ชนิดปนกันในลิสต์เดียว (ตั้งใจ)
+`/config/schema.category` มี 21 ค่า แบ่งเป็น
+- **discipline** (15) — "งานนี้เกี่ยวกับเรื่องอะไร" เช่น `Writing & Content`, `Software Development`
+- **product / business vertical** (6) — "ทำให้ผลิตภัณฑ์ตัวไหน" = `Investment`, `Lending & Credit`,
+  `NEXT`, `เป๋าตัง, เป๋าตุง, ถุงเงิน`, `CLIX`, `Core bank`
+
+**single source of truth ของฝั่ง product = `VERTICAL_CATEGORIES` ใน `src/lib/approveAreas.js`**
+→ `CATEGORY_AREA` spread จากลิสต์นี้ (ทุกตัว route ไป `Business & Product`)
+→ `seed-approve-area-schema.cjs` เขียนลง `/config/schema.productCategory` ให้ Cloud Function อ่าน
+**ห้าม hardcode ลิสต์ product ที่อื่น** — `realign-categories.cjs` มีสำเนาเก่าที่ freeze ไว้แล้ว
+
+`agent.category` เป็น **array** ถือได้ทั้ง discipline + product พร้อมกัน
+เช่น `["Writing & Content", "NEXT"]`
+
+### ทำไม product category ว่างเปล่าอยู่ 1 สัปดาห์ (บทเรียน)
+เพิ่ม 4 product เข้าลิสต์ตั้งแต่ 2026-08-10 แต่ **0 agent** จนถึง 2026-08-17 เพราะ
+**ไม่มี code path ไหนเขียนได้เลย** ซ้อนกัน 3 ชั้น:
+1. `suggested_category` เป็น **string ตัวเดียว** + `PreRegModal` ห่อเป็น array 1 ช่อง
+   → agent มี category ได้ตัวเดียว
+2. prompt นิยาม category ว่า *"โดเมนงาน/สายงาน"* พร้อมตัวอย่าง discipline ล้วน
+   **ไม่เคยบอกโมเดลว่าในลิสต์มี product ปนอยู่** → คำตอบ discipline ชนะทุกครั้ง
+3. **ไม่มีช่องแก้ category ที่ไหนเลย** — AI เขียนครั้งเดียวตอนสร้าง แก้ทีหลังไม่ได้
+
+→ แก้ครบทั้ง 3 ชั้นแล้ว: prompt แยกลิสต์ discipline/product ชัดเจน · `suggested_category`
+เป็น **array (1 discipline + product ไม่บังคับ)** validate ฝั่ง server ตัดเหลือ discipline 1 +
+product 1 · เพิ่มช่องแก้ใน Edit form
+
+### สิทธิ์แก้ category = **admin เท่านั้น**
+- `canEditCategory(userRole, isAdmin)` ใน `agentUtils.js` — **แคบกว่า `canEditApproveArea`
+  (admin+staff)** เพราะ category ป้อนเข้า layer 5 ของ `agentApproveAreas()` ด้วย
+  ถ้าใครก็แก้ได้ = re-route คิว approve ตัวเองได้
+- ใช้ **`MultiSelect` (เลือกจากลิสต์)** ไม่ใช่ `TagMultiSelect` (พิมพ์เพิ่มเอง) โดยตั้งใจ —
+  **admin ย้ายหมวดได้ แต่สร้างหมวดใหม่เองไม่ได้**
+  หมวดใหม่มาทางเดียวคือ AI เสนอ → `categoryProposals` → `CategoryApprovalPanel`
+- `firestore.rules`: **ถอด `category` ออกจาก Tier A และ Tier B แล้ว** (2026-08-17)
+  เหลือเขียนผ่าน `isAdmin()` branch เท่านั้น · `EditAgentModal` เขียนเป็น Write 2c แยก updateDoc
+
+### ⚠️ ห้ามรัน `backfill-categories.cjs` ซ้ำ
+มันเขียน `category: [ตัวเดียว]` = **replace** → product tag หายหมด (ใส่คำเตือนไว้ในไฟล์แล้ว)
+
+### ค้างอยู่
+- `UX Writer AI Agent` ระบุว่ารองรับ **VB** ด้วย แต่ **VB ยังไม่มีใน taxonomy** — ยังไม่ตัดสินใจ
+  ว่าจะเพิ่มหรือไม่ (ถ้าเพิ่ม: ใส่ใน `VERTICAL_CATEGORIES` แล้วรัน seed ใหม่)
+- `CLIX` / `Core bank` ยังเป็น 0 — **ถูกต้อง** ไม่มี agent ตัวไหนทำให้ 2 ตัวนี้โดยเฉพาะ
+  (ทั้งไลบรารี 239 ตัว มีแค่ 5 ตัวที่ผูกกับ product จริงๆ ที่เหลือเป็นเครื่องมือข้าม product)

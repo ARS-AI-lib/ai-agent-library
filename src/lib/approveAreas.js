@@ -222,6 +222,41 @@ export const ROLE_FIRST_AREA = {
 // Consequence worth knowing: because there are no nulls, the category layer
 // is now fully decisive and the MERGE_ROLE_CATEGORIES workaround that layer 5
 // needed while they existed has been removed (see the resolver below).
+
+/**
+ * The business verticals — the bank's actual products. CANONICAL LIST: this is
+ * what "is this category a product?" means everywhere in the system.
+ *
+ * A category answers "what is this agent about"; a vertical answers "which
+ * product is it for". An agent may legitimately carry BOTH — one discipline
+ * plus one or more products — which is why `agent.category` is an array.
+ *
+ * Consumers:
+ *   • CATEGORY_AREA below — every vertical routes to 'Business & Product'
+ *   • functions/seed-approve-area-schema.cjs — writes these to
+ *     /config/schema.productCategory, which is how the Cloud Function tells
+ *     products from disciplines without keeping its own copy
+ *   • src/components/EditAgentModal.jsx — admin category picker
+ *
+ * 2026-08-17: these existed since 2026-08-10 but nothing could ever WRITE one
+ * — `suggested_category` was a single string whose prompt only described
+ * disciplines, so the discipline answer always won, and no UI could add one
+ * afterwards. All four product verticals sat at 0 agents. See CLAUDE.md §23.
+ */
+export const VERTICAL_CATEGORIES = [
+  'Investment',
+  'Lending & Credit',
+  'NEXT',                          // added 2026-08-10
+  'เป๋าตัง, เป๋าตุง, ถุงเงิน',        // added 2026-08-10, renamed same day
+  'CLIX',                          // added 2026-08-10
+  'Core bank',                     // added 2026-08-10
+];
+
+/** True when a category name is a product vertical rather than a discipline. */
+export function isVerticalCategory(name) {
+  return VERTICAL_CATEGORIES.includes(name);
+}
+
 export const CATEGORY_AREA = {
   // ── Discipline: 1:1 with an area ──
   'Compliance & Governance': 'Governance, Risk & Procurement',
@@ -239,13 +274,9 @@ export const CATEGORY_AREA = {
   'SRE & Reliability': 'SRE & Reliability',                    // added 2026-08-10
   'Incident Management': 'Incident & Problem Management',      // added 2026-08-10
   'Data & Analytics': 'Data & Analytics',
-  // ── Business verticals: the bank's products, all approved by Business ──
-  'Investment': 'Business & Product',
-  'Lending & Credit': 'Business & Product',
-  'NEXT': 'Business & Product',                                // added 2026-08-10
-  'เป๋าตัง, เป๋าตุง, ถุงเงิน': 'Business & Product',                // added 2026-08-10, renamed same day
-  'CLIX': 'Business & Product',                                // added 2026-08-10
-  'Core bank': 'Business & Product',                           // added 2026-08-10
+  // ── Business verticals — see VERTICAL_CATEGORIES below; spread in so the
+  //    two can never disagree about which categories are products ──
+  ...Object.fromEntries(VERTICAL_CATEGORIES.map((c) => [c, 'Business & Product'])),
 };
 
 // ── Layer 4: role → area (tiebreak + last resort) ────────────────────

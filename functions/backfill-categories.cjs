@@ -1,3 +1,12 @@
+// ⚠️ COMPLETED ONE-SHOT — DO NOT RE-RUN (note added 2026-08-17).
+// It writes `category: [r.suggested_category]`, a single-element REPLACE, and
+// its prompt only ever asks for one discipline. Since 2026-08-17 an agent's
+// category may also carry a product vertical (see VERTICAL_CATEGORIES in
+// src/lib/approveAreas.js) — re-running this would silently strip every
+// product tag in the library. The live submit-time path in functions/index.js
+// is the maintained one; if a re-backfill is ever genuinely needed, port that
+// discipline+product prompt over first.
+//
 // One-time backfill for the 2026-08 left-sidebar Category shortcuts, run
 // locally with ADC. Uses the SAME model + the SAME "closest existing category,
 // almost never propose a new one" instruction as functions/index.js's

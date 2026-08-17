@@ -69,6 +69,21 @@ export function canEditApproveArea(userRole, isAdmin) {
   return !!(isAdmin || userRole === 'staff');
 }
 
+// Who may see/edit Category on the Edit form (2026-08-17): **admin only** —
+// narrower even than canEditApproveArea (admin + staff). Category is normally
+// AI-assigned at submit and is deliberately not hand-typed: it drives the
+// sidebar browse shortcuts AND feeds layer 5 of agentApproveAreas(), so a
+// free-for-all would let anyone re-route their own approval.
+//
+// The edit control this gates is a pick-from-list MultiSelect, never a
+// free-add TagMultiSelect: an admin may re-file an agent under an EXISTING
+// category but may not invent a name. New names still arrive only via the
+// AI's proposed_new_category -> categoryProposals -> CategoryApprovalPanel
+// flow, which is what keeps the taxonomy curated.
+export function canEditCategory(userRole, isAdmin) {
+  return !!isAdmin;
+}
+
 // Ready-to-Use post-freeze exception (2026-07-22): canEditDetails() above
 // freezes EVERY Tier A field once deploymentStatus is 'approved' — correct
 // for the sensitive/structural fields, but it also blocks Description and

@@ -138,10 +138,18 @@ service cloud.firestore {
         // devProgress/developmentPhase — those are Tier B (below). Committee
         // lost its former blanket write in this same change; approve/reject and
         // deploy-decision stay available via the isApproverOrAbove branches.
+        // `category` was ALSO removed from both Tier A and Tier B (2026-08-17):
+        // it drives the sidebar browse shortcuts AND layer 5 of
+        // agentApproveAreas(), so letting a creator re-file their own agent
+        // would let them re-route their own approval. Admin-only now, written
+        // through the blanket isAdmin() branch above (EditAgentModal Write 2c,
+        // gated by canEditCategory). Safe to remove: no client path other than
+        // the admin editor, the create rule, and CategoryApprovalPanel (admin)
+        // has ever sent it.
         || (userRole() in ['staff', 'committee']
             && affectedKeys().hasOnly([
                  'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing',
-                 'internalUse', 'coreAbility', 'relatedRole', 'category', 'reusable', 'reuseCondition', 'hml',
+                 'internalUse', 'coreAbility', 'relatedRole', 'reusable', 'reuseCondition', 'hml',
                  'humanJob', 'endpoint', 'updatedAt',
                ])
             && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved']))
@@ -153,7 +161,7 @@ service cloud.firestore {
         // approved. admin has unconditional access via the isAdmin() branch.
         || (affectedKeys().hasOnly([
               'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing', 'internalUse',
-              'coreAbility', 'relatedRole', 'category', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
+              'coreAbility', 'relatedRole', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
               'humanJob', 'endpoint', 'launchDate', 'devProgress', 'developmentPhase', 'updatedAt',
             ])
             && isOwnerCreatorOrApprover(resource.data)

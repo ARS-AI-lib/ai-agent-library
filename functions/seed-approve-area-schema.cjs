@@ -29,13 +29,20 @@ const src = fs
   .readFileSync(path.join(__dirname, '..', 'src', 'lib', 'approveAreas.js'), 'utf8')
   .replace(/^\s*import\s[^;]*;\s*$/gm, '')
   .replace(/^export\s+/gm, '');
-const { AREA_ORDER, CATEGORY_AREA } = new Function(`${src}\n;return { AREA_ORDER, CATEGORY_AREA };`)();
+const { AREA_ORDER, CATEGORY_AREA, VERTICAL_CATEGORIES } = new Function(`${src}\n;return { AREA_ORDER, CATEGORY_AREA, VERTICAL_CATEGORIES };`)();
 
 // The category list is now DERIVED from CATEGORY_AREA's keys rather than a
 // hand-kept constant (2026-08-10). That table is the thing that guarantees
 // every category maps to exactly one approver area, so making it the single
 // source for the option list too means the two cannot drift.
 const CATEGORIES = Object.keys(CATEGORY_AREA);
+
+// Which of those categories are PRODUCTS rather than disciplines (2026-08-17).
+// Seeded as its own field so functions/index.js can present the model two
+// separate lists — a flat 21-item list is exactly why it could never tell a
+// product from a discipline, and why all 4 product categories sat at 0 agents.
+// Derived from approveAreas.js, never hand-typed here.
+const PRODUCT_CATEGORIES = VERTICAL_CATEGORIES;
 
 if (!Array.isArray(AREA_ORDER) || AREA_ORDER.length < 1 || !CATEGORIES.length) {
   console.error('✗ could not read AREA_ORDER / CATEGORY_AREA from src/lib/approveAreas.js');
@@ -76,8 +83,10 @@ const db = getFirestore(app, 'ai-agent-lib');
   console.log('\n  note: sdlcStage is left untouched — it is still a real agent');
   console.log('  field and drives the SDLC board; it just no longer defines approver scope.');
 
+  console.log(`\n  productCategory (${PRODUCT_CATEGORIES.length}): ${PRODUCT_CATEGORIES.join(' · ')}`);
+
   if (!APPLY) { console.log('\nDRY RUN — re-run with --apply to write.'); return; }
 
-  await ref.set({ approveArea: AREA_ORDER, category: CATEGORIES }, { merge: true });
+  await ref.set({ approveArea: AREA_ORDER, category: CATEGORIES, productCategory: PRODUCT_CATEGORIES }, { merge: true });
   console.log('\n✓ written');
 })();

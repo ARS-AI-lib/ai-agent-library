@@ -60,6 +60,10 @@ const AREA_CATEGORY = {
 };
 
 // Business verticals — never derived, always preserved as-is.
+// ⚠️ FROZEN HISTORICAL COPY. This script is a completed one-shot migration and
+// is kept only for the audit trail; do not re-run it and do not treat this
+// array as authoritative. The canonical list is VERTICAL_CATEGORIES in
+// src/lib/approveAreas.js (2026-08-17) — add products there, not here.
 const VERTICALS = ['Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLIX', 'Core bank'];
 
 // Categories that no longer exist in the corrected list.
