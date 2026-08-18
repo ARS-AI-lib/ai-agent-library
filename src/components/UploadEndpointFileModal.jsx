@@ -46,7 +46,19 @@ export default function UploadEndpointFileModal({
       // eligible agents carry one, and an agent without a stored area is
       // admin-only rather than silently open to everyone.
       .filter((a) => isAdmin || (Array.isArray(a.approveArea) && a.approveArea.some((x) => mine.has(x))))
-      .sort((a, b) => (a.agentName || '').localeCompare(b.agentName || ''));
+      .sort((a, b) => {
+        // Most-recently deploy-approved first. There is no dedicated
+        // "deployApprovedAt" field on the agent doc — decideDeploy() in
+        // PendingApprovalModal only bumps `updatedAt` on the same write that
+        // sets deploymentStatus to 'approved' — so updatedAt is the closest
+        // proxy available without a schema change. Ties (same second) fall
+        // back to createdAt, then agent name, so the order never bounces
+        // around when both timestamps are identical.
+        const ts = (v) => v?.seconds || 0;
+        return ts(b.updatedAt) - ts(a.updatedAt)
+          || ts(b.createdAt) - ts(a.createdAt)
+          || (a.agentName || '').localeCompare(b.agentName || '');
+      });
   }, [agents, isAdmin, approveAreas]);
 
   // Client-side substring filter only — the eligible list is already small
@@ -130,7 +142,7 @@ export default function UploadEndpointFileModal({
 
             <div className="fg" style={{ marginBottom: 12 }}>
               <label>
-                2. เลือกไฟล์
+                2. เลือกไฟล์{' '}
                 <span className="hint">{ALLOWED_EXT.map((e) => `.${e}`).join(' ')} · ไม่เกิน {formatBytes(MAX_UPLOAD_BYTES)}</span>
               </label>
               <div
