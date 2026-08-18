@@ -162,7 +162,7 @@ function AgentCardStats({ stats }) {
           ))}
         </span>
       ) : (
-        <span className="ac-stats-none">No reviews yet</span>
+        <span className="ac-stats-none">No reviews</span>
       )}
       {rd.kind === 'histogram' && <span className="ac-stats-n">{rd.total}</span>}
       {hasUsage && (

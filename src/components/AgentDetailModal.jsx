@@ -515,7 +515,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   <span style={{ fontSize: 11, color: 'var(--mu)' }}>{ratingView.total} reviews</span>
                 </span>
               ) : (
-                <span style={{ fontSize: 11, color: 'var(--mu2)' }}>No reviews yet</span>
+                <span style={{ fontSize: 11, color: 'var(--mu2)' }}>No reviews</span>
               )}
             </span>
           </div>
