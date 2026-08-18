@@ -47,15 +47,21 @@ export default function UploadEndpointFileModal({
       // admin-only rather than silently open to everyone.
       .filter((a) => isAdmin || (Array.isArray(a.approveArea) && a.approveArea.some((x) => mine.has(x))))
       .sort((a, b) => {
-        // Most-recently deploy-approved first. There is no dedicated
-        // "deployApprovedAt" field on the agent doc — decideDeploy() in
-        // PendingApprovalModal only bumps `updatedAt` on the same write that
-        // sets deploymentStatus to 'approved' — so updatedAt is the closest
-        // proxy available without a schema change. Ties (same second) fall
-        // back to createdAt, then agent name, so the order never bounces
-        // around when both timestamps are identical.
+        // Most-recently deploy-approved first. `deployDecidedAt` (set by
+        // decideDeploy() in PendingApprovalModal on every approve/reject) is
+        // the real value — unlike `updatedAt`, it does NOT move when an
+        // unrelated later edit touches the agent (e.g. this very modal
+        // attaching a file), so the order stays stable once set.
+        //
+        // 15 of 29 currently-approved agents predate this field (one legacy
+        // bulk-approval batch from 2026-08-07, backfilled via
+        // functions/backfill-deploy-decided-at.cjs) — the fallback chain
+        // below keeps those usable in the meantime and after any future
+        // legacy bypass. Ties fall back to createdAt, then agent name, so
+        // the order never bounces around when timestamps are identical.
         const ts = (v) => v?.seconds || 0;
-        return ts(b.updatedAt) - ts(a.updatedAt)
+        return ts(b.deployDecidedAt) - ts(a.deployDecidedAt)
+          || ts(b.updatedAt) - ts(a.updatedAt)
           || ts(b.createdAt) - ts(a.createdAt)
           || (a.agentName || '').localeCompare(b.agentName || '');
       });

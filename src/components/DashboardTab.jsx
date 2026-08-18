@@ -5,7 +5,7 @@ import { agentStatus, statusCounts, ST_DEF, ST_ORDER, progressBucket } from '../
 import { getType, getTier, TIER_DEF, TIER_ORDER, isInternalOrExternal } from '../lib/tier';
 import { toTimelineItem, timelineStatus, autoFitRange, TL_ST } from '../lib/timeline';
 import { agentProcessIds, uniq, fmtDate, normalizeProgress } from '../lib/agentUtils';
-import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
+import { AREA_ORDER, VERTICAL_CATEGORIES, agentApproveAreas } from '../lib/approveAreas';
 import { readStats, demandScore, isUntouched } from '../lib/agentStats';
 import { useAgentStats } from '../hooks/useAgentStats';
 import '../styles/SDLCTab.css';
@@ -36,6 +36,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
   const [procModal, setProcModal] = useState(null); // { proc, agents:[agent] } | null
   const [approverUsers, setApproverUsers] = useState([]); // role==='approver' only — see areaApproverCounts below
   const [areaModal, setAreaModal] = useState(null); // { area, agents:[agent] } | null — B widget's click-through
+  const [approverModal, setApproverModal] = useState(null); // { email, agents:[agent] } | null
 
   useEffect(() => {
     let active = true;
@@ -132,6 +133,62 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
     return c;
   }, [approverUsers]);
   const areaCoveredN = AREA_ORDER.filter((ar) => (areaApproverCounts[ar] || 0) > 0).length;
+
+  // ── Per-Approver workload (2026-08-18) ── sequel to Area Coverage above:
+  // that widget shows which AREAS lack a dedicated approver, this shows how
+  // unevenly the ones who exist are loaded — real spread on live data ranges
+  // from 3 agents (a QA-only approver) to 81 (someone holding 4 areas).
+  // Same computation as the area-gap check just above, just grouped by
+  // person instead of by area — reuses agentApproveAreas(), never re-derives
+  // the resolver (CLAUDE.md §20).
+  const approverWorkload = useMemo(() => {
+    return approverUsers
+      .map((u) => {
+        const mine = new Set(u.approveAreas || []);
+        const list = mine.size ? agents.filter((a) => agentApproveAreas(a).some((ar) => mine.has(ar))) : [];
+        return { email: u.email || u.id || '—', areas: u.approveAreas || [], count: list.length, agentsList: list };
+      })
+      .sort((a, b) => b.count - a.count);
+  }, [approverUsers, agents]);
+  const maxApproverCount = approverWorkload[0]?.count || 1;
+
+  // ── Category / Product distribution (2026-08-18) ── `agent.category` is
+  // multi-valued (§23: an agent can carry a discipline AND a product at
+  // once, e.g. ["Writing & Content", "NEXT"]), so bars are counted per tag,
+  // not per agent — the total across all bars can exceed agents.length, and
+  // that is correct, not a bug. Split mirrors §23's own framing of the
+  // taxonomy: VERTICAL_CATEGORIES (the single source of truth for "which
+  // categories are products," also from approveAreas.js) vs everything else.
+  const categoryCounts = useMemo(() => {
+    const c = {};
+    agents.forEach((a) => (Array.isArray(a.category) ? a.category : []).forEach((k) => { c[k] = (c[k] || 0) + 1; }));
+    return c;
+  }, [agents]);
+  const disciplineRows = useMemo(
+    () => Object.entries(categoryCounts).filter(([k]) => !VERTICAL_CATEGORIES.includes(k)).sort((a, b) => b[1] - a[1]),
+    [categoryCounts],
+  );
+  const productRows = useMemo(
+    () => Object.entries(categoryCounts).filter(([k]) => VERTICAL_CATEGORIES.includes(k)).sort((a, b) => b[1] - a[1]),
+    [categoryCounts],
+  );
+  const maxCategoryCount = Math.max(1, ...Object.values(categoryCounts));
+
+  // ── Data quality watchlist (2026-08-18) ── three concrete, counted issues
+  // with no visibility anywhere else in the app. Kept as a live check (not a
+  // one-off script) so it catches the NEXT instance of each pattern, not just
+  // today's — same reasoning as CLAUDE.md §9's deploymentStatus lesson: a
+  // field/value silently missing on a subset of docs stays invisible until
+  // something goes looking for it.
+  const watchlist = useMemo(() => {
+    const tbc = agents.filter((a) => String(a.description || '').trim() === 'TBC');
+    // The exact contradiction CLAUDE.md §22 already flags as unresolved:
+    // internalTool implies "internal plumbing," customerFacing implies the
+    // opposite. Both true on the same doc means one of them is wrong.
+    const scopeContradiction = agents.filter((a) => a.internalTool === true && a.customerFacing === true);
+    const noDeployDecidedAt = agents.filter((a) => a.deploymentStatus === 'approved' && !a.deployDecidedAt);
+    return { tbc, scopeContradiction, noDeployDecidedAt };
+  }, [agents]);
 
   // ── Owner workload ──
 
@@ -289,6 +346,92 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
         </div>
       </div>
 
+      {/* ── Per-Approver workload (2026-08-18) ── sequel to Area Coverage:
+          that widget shows which areas lack an approver, this shows how
+          unevenly the ones who exist are loaded. Zero-reach approvers still
+          render as a row — 0 is informative (an approver assigned to an
+          area with no agents yet), not something to hide. */}
+      <div className="dash-card">
+        <div className="dash-card-hdr">
+          <span className="dash-card-title">Per-Approver Workload</span>
+          <span className="dash-card-sub">จำนวน Agent/Skill ที่แต่ละ approver ดูแล ตาม Approve Area ของตัวเอง</span>
+        </div>
+        {approverWorkload.length === 0 ? (
+          <div className="dash-empty">ยังไม่มี approver ในระบบ</div>
+        ) : (
+          <div className="dash-owner-list">
+            {approverWorkload.map((r) => (
+              <div
+                key={r.email}
+                className="dash-owner-row"
+                style={{ cursor: r.count > 0 ? 'pointer' : 'default' }}
+                onClick={r.count > 0 ? () => setApproverModal({ email: r.email, agents: r.agentsList }) : undefined}
+                title={r.areas.join(', ') || 'ยังไม่ได้กำหนด area'}
+              >
+                <span className="dash-owner-name">{r.email}</span>
+                <div className="dash-owner-bar">
+                  <div className="dash-owner-fill" style={{ width: `${(r.count / maxApproverCount) * 100}%` }} />
+                </div>
+                <span className="dash-owner-n">{r.count}</span>
+                <span className="dash-owner-avg">{r.areas.length} area{r.areas.length === 1 ? '' : 's'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Category / Product distribution (2026-08-18) ── */}
+      <div className="dash-grid3">
+        <div className="dash-card">
+          <div className="dash-card-hdr">
+            <span className="dash-card-title">Category — Discipline</span>
+            <span className="dash-card-sub">รวมนับซ้ำได้ (1 agent มีได้หลาย category)</span>
+          </div>
+          {disciplineRows.map(([k, n]) => (
+            <BarRow key={k} label={k} n={n} total={agents.length} color="var(--accent)" />
+          ))}
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-hdr">
+            <span className="dash-card-title">Category — Product</span>
+            <span className="dash-card-sub">Business vertical ที่ agent ผูกด้วย (§23)</span>
+          </div>
+          {productRows.length === 0 ? (
+            <div className="dash-empty">ยังไม่มี agent ที่ผูก product category</div>
+          ) : (
+            productRows.map(([k, n]) => (
+              <BarRow key={k} label={k} n={n} total={agents.length} color="#0ea5e9" />
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* ── Data quality watchlist (2026-08-18) ── */}
+      <div className="dash-card">
+        <div className="dash-card-hdr">
+          <span className="dash-card-title">Data Quality Watchlist</span>
+          <span className="dash-card-sub">รายการที่ข้อมูลยังไม่สมบูรณ์ — เช็คสดทุกครั้งที่เปิดหน้านี้</span>
+        </div>
+        <WatchlistSection
+          title={`Description ยังเป็น "TBC"`}
+          rows={watchlist.tbc}
+          empty="ไม่มี"
+          onAgentClick={onAgentClick}
+        />
+        <WatchlistSection
+          title="internalTool + Customer Facing ขัดกันเอง"
+          rows={watchlist.scopeContradiction}
+          empty="ไม่มี"
+          onAgentClick={onAgentClick}
+        />
+        <WatchlistSection
+          title="Deploy approved แต่ไม่มี deployDecidedAt"
+          rows={watchlist.noDeployDecidedAt}
+          empty="ไม่มี"
+          onAgentClick={onAgentClick}
+        />
+      </div>
+
       {/* ── Delay/At-risk (60%) + Owner Workload (40%) ── */}
       <div className="dash-grid-flag">
         <div className="dash-card">
@@ -414,6 +557,47 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
               <AgentQuickCard key={a.id} agent={a} onClick={() => { setAreaModal(null); onAgentClick?.(a); }} />
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Per-Approver workload click-through — same modal shell again. */}
+      {approverModal && (
+        <div className="sdlc-ovl" onClick={() => setApproverModal(null)}>
+          <div className="sdlc-mbox" onClick={(e) => e.stopPropagation()}>
+            <button className="sdlc-mclose" onClick={() => setApproverModal(null)}>✕</button>
+            <div className="sdlc-msub">Approver</div>
+            <div className="sdlc-mtitle">{approverModal.email}</div>
+            <div className="sdlc-msec">Agents &amp; Skills ({approverModal.agents.length})</div>
+            {approverModal.agents.map((a) => (
+              <AgentQuickCard key={a.id} agent={a} onClick={() => { setApproverModal(null); onAgentClick?.(a); }} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Shared row shape for the 3 Data Quality Watchlist sub-lists — a header with
+// a live count, then either an empty state or a list of clickable rows using
+// the same .dash-flag-row family the rest of the page already renders with.
+function WatchlistSection({ title, rows, empty, onAgentClick }) {
+  return (
+    <div className="dash-watch-section">
+      <div className="dash-watch-hdr">
+        <span>{title}</span>
+        <span className={`dash-watch-n${rows.length === 0 ? ' ok' : ''}`}>{rows.length}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="dash-empty" style={{ padding: '4px 0 10px' }}>{empty}</div>
+      ) : (
+        <div className="dash-flag-list">
+          {rows.map((a) => (
+            <div key={a.id} className="dash-flag-row" style={{ gridTemplateColumns: '1fr auto' }} onClick={() => onAgentClick?.(a)}>
+              <span className="dash-flag-name">{a.agentName}</span>
+              <span className="dash-flag-meta">{a.owner || '—'}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
