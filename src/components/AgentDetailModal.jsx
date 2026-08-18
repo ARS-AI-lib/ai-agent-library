@@ -359,101 +359,6 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           )}
         </div>
 
-        {/* ── Rating & usage (2026-08-18) ──
-            A histogram plus raw counts, never a mean: with the library's
-            current traffic most entries sit at 0-2 ratings, and `★5.0 (1)` is
-            exactly the estimated-looking number SYSTEM-OVERVIEW:353 forbids.
-            n=0 says so in words rather than drawing five empty stars.
-            Comments are peer-ANONYMOUS by data shape — the /reviews docs
-            carry no uid at all (the identified copy lives in /agentRatings,
-            readable only by its author and admin). */}
-        <div className="msec">Feedback</div>
-        <div className="mrow" style={{ alignItems: 'flex-start' }}>
-          <span className="mk">คะแนน</span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            {ratingView.kind === 'histogram' ? (
-              <span style={{ display: 'block' }}>
-                {ratingView.bars.slice().reverse().map((b) => (
-                  <span key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
-                    <span style={{ fontSize: 11, color: 'var(--mu)', width: 22, flexShrink: 0 }}>{b.star}★</span>
-                    <span style={{ flex: 1, height: 6, background: 'var(--sf3)', borderRadius: 3, overflow: 'hidden', minWidth: 0 }}>
-                      <span style={{ display: 'block', width: `${b.pct}%`, height: '100%', background: 'var(--accent)' }} />
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--mu)', width: 18, textAlign: 'right', flexShrink: 0, fontFamily: "'IBM Plex Mono',monospace" }}>{b.count}</span>
-                  </span>
-                ))}
-                <span style={{ fontSize: 11, color: 'var(--mu)' }}>รวม {ratingView.total} รีวิว</span>
-              </span>
-            ) : (
-              <span style={{ fontSize: 12, color: 'var(--mu2)' }}>ยังไม่มีรีวิว</span>
-            )}
-          </span>
-        </div>
-        <div className="mrow">
-          <span className="mk">การใช้งาน</span>
-          <span style={{ fontSize: 12, fontFamily: "'IBM Plex Mono',monospace" }}>
-            เปิดดู {liveStats.detailOpens} · กดไปใช้ {liveStats.endpointClicks} · เจอจากค้นหา {liveStats.searchHits}
-            <span style={{ fontFamily: 'inherit', color: 'var(--mu)', fontSize: 10.5, display: 'block', marginTop: 2 }}>
-              นับเป็นจำนวน "คน" ต่อวัน ไม่ใช่จำนวนคลิก
-            </span>
-          </span>
-        </div>
-
-        {mayRate && (
-          <div className="mrow" style={{ alignItems: 'flex-start' }}>
-            <span className="mk">{myRating ? 'คะแนนของคุณ' : 'ให้คะแนน'}</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                {STAR_LEVELS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => { setMyRating(n); setRateOpen(true); }}
-                    title={`${n} ดาว`}
-                    style={{
-                      border: 'none', background: 'none', cursor: 'pointer', padding: 0,
-                      fontSize: 19, lineHeight: 1,
-                      color: n <= myRating ? 'var(--accent)' : 'var(--bd2)',
-                    }}
-                  >★</button>
-                ))}
-              </span>
-              {rateOpen && (
-                <>
-                  <textarea
-                    rows={2}
-                    value={myComment}
-                    onChange={(e) => setMyComment(e.target.value)}
-                    maxLength={1000}
-                    placeholder="ความเห็นเพิ่มเติม (ไม่บังคับ) — จะแสดงแบบไม่ระบุชื่อ"
-                    style={{ width: '100%', fontSize: 12 }}
-                  />
-                  <span className="btn-row" style={{ marginTop: 6 }}>
-                    <button className="btn-sm rej" disabled={rating} onClick={() => setRateOpen(false)}>ยกเลิก</button>
-                    <button className="btn-sm appr" disabled={rating || !myRating} onClick={handleSubmitRating}>
-                      {rating ? 'กำลังส่ง…' : (myRating && reviews.length ? 'อัปเดตคะแนน' : 'ส่งคะแนน')}
-                    </button>
-                  </span>
-                </>
-              )}
-            </span>
-          </div>
-        )}
-
-        {visibleReviews.length > 0 && (
-          <div className="mrow" style={{ alignItems: 'flex-start' }}>
-            <span className="mk">ความเห็น</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              {visibleReviews.map((r) => (
-                <span key={r.id} style={{ display: 'block', marginBottom: 7, paddingBottom: 7, borderBottom: '1px solid var(--bd-soft)' }}>
-                  <span style={{ color: 'var(--accent)', fontSize: 11 }}>{'★'.repeat(r.rating || 0)}</span>
-                  <span style={{ display: 'block', fontSize: 12, color: 'var(--tx2)', marginTop: 2, lineHeight: 1.55 }}>{r.comment}</span>
-                </span>
-              ))}
-            </span>
-          </div>
-        )}
-
         <div className="msec">Details</div>
         <div>
           {agent.description && (
@@ -581,6 +486,98 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── Rating & usage (2026-08-18) ──
+              A histogram plus raw counts, never a mean: with the library's
+              current traffic most entries sit at 0-2 ratings, and `★5.0 (1)` is
+              exactly the estimated-looking number SYSTEM-OVERVIEW:353 forbids.
+              n=0 says so in words rather than drawing five empty stars.
+              Comments are peer-ANONYMOUS by data shape — the /reviews docs
+              carry no uid at all (the identified copy lives in /agentRatings,
+              readable only by its author and admin). */}
+          <div className="msec">Feedback</div>
+          <div className="mrow" style={{ alignItems: 'flex-start' }}>
+            <span className="mk">Rating</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {ratingView.kind === 'histogram' ? (
+                <span style={{ display: 'block' }}>
+                  {ratingView.bars.slice().reverse().map((b) => (
+                    <span key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                      <span style={{ fontSize: 11, color: 'var(--mu)', width: 22, flexShrink: 0 }}>{b.star}★</span>
+                      <span style={{ flex: 1, height: 6, background: 'var(--sf3)', borderRadius: 3, overflow: 'hidden', minWidth: 0 }}>
+                        <span style={{ display: 'block', width: `${b.pct}%`, height: '100%', background: 'var(--accent)' }} />
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--mu)', width: 18, textAlign: 'right', flexShrink: 0, fontFamily: "'IBM Plex Mono',monospace" }}>{b.count}</span>
+                    </span>
+                  ))}
+                  <span style={{ fontSize: 11, color: 'var(--mu)' }}>{ratingView.total} reviews</span>
+                </span>
+              ) : (
+                <span style={{ fontSize: 12, color: 'var(--mu2)' }}>No reviews yet</span>
+              )}
+            </span>
+          </div>
+          <div className="mrow">
+            <span className="mk">Usage</span>
+            <span style={{ fontSize: 12, fontFamily: "'IBM Plex Mono',monospace" }}>
+              Opened {liveStats.detailOpens} · Used {liveStats.endpointClicks} · Found in search {liveStats.searchHits}
+            </span>
+          </div>
+
+          {mayRate && (
+            <div className="mrow" style={{ alignItems: 'flex-start' }}>
+              <span className="mk">{myRating ? 'Your Rating' : 'Rate'}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                  {STAR_LEVELS.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => { setMyRating(n); setRateOpen(true); }}
+                      title={`${n} stars`}
+                      style={{
+                        border: 'none', background: 'none', cursor: 'pointer', padding: 0,
+                        fontSize: 19, lineHeight: 1,
+                        color: n <= myRating ? 'var(--accent)' : 'var(--bd2)',
+                      }}
+                    >★</button>
+                  ))}
+                </span>
+                {rateOpen && (
+                  <>
+                    <textarea
+                      rows={2}
+                      value={myComment}
+                      onChange={(e) => setMyComment(e.target.value)}
+                      maxLength={1000}
+                      placeholder="Add a comment (optional) — shown anonymously"
+                      style={{ width: '100%', fontSize: 12 }}
+                    />
+                    <span className="btn-row" style={{ marginTop: 6 }}>
+                      <button className="btn-sm rej" disabled={rating} onClick={() => setRateOpen(false)}>Cancel</button>
+                      <button className="btn-sm appr" disabled={rating || !myRating} onClick={handleSubmitRating}>
+                        {rating ? 'Submitting…' : (myRating && reviews.length ? 'Update Rating' : 'Submit Rating')}
+                      </button>
+                    </span>
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+
+          {visibleReviews.length > 0 && (
+            <div className="mrow" style={{ alignItems: 'flex-start' }}>
+              <span className="mk">Comments</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                {visibleReviews.map((r) => (
+                  <span key={r.id} style={{ display: 'block', marginBottom: 7, paddingBottom: 7, borderBottom: '1px solid var(--bd-soft)' }}>
+                    <span style={{ color: 'var(--accent)', fontSize: 11 }}>{'★'.repeat(r.rating || 0)}</span>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--tx2)', marginTop: 2, lineHeight: 1.55 }}>{r.comment}</span>
+                  </span>
+                ))}
+              </span>
             </div>
           )}
         </div>

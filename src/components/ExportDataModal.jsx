@@ -4,7 +4,22 @@ import { db } from '../lib/firebase';
 import { getType, getTier } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
 import { isMyAgent, normalizeProgress } from '../lib/agentUtils';
+import { readStats, STAR_LEVELS } from '../lib/agentStats';
+import { useAgentStats } from '../hooks/useAgentStats';
 import useEscapeKey from '../hooks/useEscapeKey';
+
+// ratingScore is a CSV-only exception to agentStats.js's "never render a
+// computed average" rule. That rule protects a casual card/modal viewer from
+// a misleading `★5.0 (1)`. A CSV opened in a spreadsheet for analysis is a
+// different audience with a different need — a single sortable number — so
+// this average lives here, not in agentStats.js, to keep it from being
+// reachable from any display surface. Blank (not 0) when nobody has rated.
+function ratingScore(stats) {
+  const s = readStats(stats);
+  if (s.ratingCount === 0) return '';
+  const sum = STAR_LEVELS.reduce((t, i) => t + i * s[`r${i}`], 0);
+  return Math.round((sum / s.ratingCount) * 10) / 10;
+}
 
 // 'category' and 'approveArea' added 2026-08-10 so an exported CSV carries
 // enough to analyze/pivot by discipline and domain without cross-referencing
@@ -14,7 +29,10 @@ import useEscapeKey from '../hooks/useEscapeKey';
 // internalUse/aiAgent/skillMd flags are in All Data but a reader would have to
 // re-implement getTier() by hand to get from them to T1..T4. Sits next to
 // 'type' because the two are the same classification at different grain.
-const COLUMNS = ['agentName', 'type', 'tier', 'owner', 'creator', 'creatorEmails', 'approvalStatus', 'devProgress', 'reusable', 'category', 'approveArea', 'description'];
+// 'ratingScore' added 2026-08-18 — see the ratingScore() helper above for why
+// it's an average here specifically (CSV/analysis) despite the no-average
+// rule everywhere else in the app.
+const COLUMNS = ['agentName', 'type', 'tier', 'owner', 'creator', 'creatorEmails', 'approvalStatus', 'devProgress', 'reusable', 'category', 'approveArea', 'ratingScore', 'description'];
 
 // Full field set for "All Data" — mirrors export-agents-csv.cjs's column
 // list minus the two Firebase Auth UID fields (createdBy, approvedBy),
@@ -30,6 +48,7 @@ const ALL_COLUMNS = [
   // 2026-07-22: archived entries are still exported (this file IS the audit
   // trail), so the export must say which ones they are and why.
   'endpoint', 'archived', 'archiveReason',
+  'ratingScore',
 ];
 
 function csvCell(v) {
@@ -42,7 +61,7 @@ function csvCell(v) {
 // needs the live /config/schema.categoryAreaMap override (see the component
 // below) — a plain agentApproveAreas(agent) call here would silently ignore
 // any category an admin has approved since the last code deploy.
-function toRow(agent, resolveAreas) {
+function toRow(agent, resolveAreas, statsById) {
   return {
     agentName: agent.agentName || '',
     type: getType(agent) === 'skill' ? 'Skill' : 'Agent',
@@ -55,6 +74,7 @@ function toRow(agent, resolveAreas) {
     reusable: agent.reusable || '',
     category: (Array.isArray(agent.category) ? agent.category : []).join('; '),
     approveArea: resolveAreas(agent).join('; '),
+    ratingScore: ratingScore(statsById?.get(agent.id)),
     description: agent.description || '',
   };
 }
@@ -78,11 +98,12 @@ function toDateStr(v) {
 //   tier        — computed by getTier() from aiAgent/skillMd + customerFacing/
 //     internalUse; `agent.tier` does not exist, so without this branch the
 //     column would export as empty on every row (2026-08-12).
-function toFullRow(agent, resolveAreas) {
+function toFullRow(agent, resolveAreas, statsById) {
   const row = { id: agent.id || '' };
   ALL_COLUMNS.slice(1).forEach((field) => {
     if (field === 'approveArea') { row[field] = resolveAreas(agent).join('; '); return; }
     if (field === 'tier') { row[field] = getTier(agent); return; }
+    if (field === 'ratingScore') { row[field] = ratingScore(statsById?.get(agent.id)); return; }
     const raw = agent[field];
     if (field === 'launchDate') row[field] = toDateStr(raw);
     else if (typeof raw === 'boolean') row[field] = raw ? 'TRUE' : 'FALSE';
@@ -152,6 +173,7 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
   // category->area overrides from CategoryApprovalPanel must apply here too,
   // since Export's "My Area's AI" button uses the same area intersection.
   const resolveAreas = (a) => agentApproveAreas(a, schema.categoryAreaMap);
+  const statsById = useAgentStats(true);
 
   useEffect(() => {
     let alive = true;
@@ -191,16 +213,16 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
   );
 
   function exportMyAI() {
-    const rows = activeAgents.filter((a) => isMyAgent(a, user)).map((a) => toRow(a, resolveAreas));
+    const rows = activeAgents.filter((a) => isMyAgent(a, user)).map((a) => toRow(a, resolveAreas, statsById));
     downloadCsv(rows, 'my-ai.csv');
   }
   function exportMyArea() {
     const areaSet = new Set(approveAreas || []);
-    const rows = activeAgents.filter((a) => resolveAreas(a).some((ar) => areaSet.has(ar))).map((a) => toRow(a, resolveAreas));
+    const rows = activeAgents.filter((a) => resolveAreas(a).some((ar) => areaSet.has(ar))).map((a) => toRow(a, resolveAreas, statsById));
     downloadCsv(rows, 'my-area-ai.csv');
   }
   function exportAll() {
-    downloadCsv(allDataAgents.map((a) => toFullRow(a, resolveAreas)), 'all-ai.csv', ALL_COLUMNS);
+    downloadCsv(allDataAgents.map((a) => toFullRow(a, resolveAreas, statsById)), 'all-ai.csv', ALL_COLUMNS);
   }
 
   // "My Area's AI" is for admin/committee/approver tiers ONLY (base "user"
