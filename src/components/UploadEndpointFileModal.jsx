@@ -28,6 +28,7 @@ export default function UploadEndpointFileModal({
   onClose, agents = [], role, isAdmin, approveAreas = [],
 }) {
   const [selected, setSelected] = useState(null);
+  const [query, setQuery] = useState('');
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -47,6 +48,15 @@ export default function UploadEndpointFileModal({
       .filter((a) => isAdmin || (Array.isArray(a.approveArea) && a.approveArea.some((x) => mine.has(x))))
       .sort((a, b) => (a.agentName || '').localeCompare(b.agentName || ''));
   }, [agents, isAdmin, approveAreas]);
+
+  // Client-side substring filter only — the eligible list is already small
+  // (26 agents total today) and this is a picker, not a search feature, so
+  // there is no need for the semantic/debounced machinery ControlBar uses.
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return eligible;
+    return eligible.filter((a) => (a.agentName || '').toLowerCase().includes(q));
+  }, [eligible, query]);
 
   function pickFile(f) {
     setResult(null);
@@ -79,8 +89,7 @@ export default function UploadEndpointFileModal({
         <button className="mclose" onClick={onClose}>✕</button>
         <h2 className="mtitle" style={{ marginBottom: 4 }}>Attach Endpoint File</h2>
         <p style={{ fontSize: 11.5, color: 'var(--mu)', lineHeight: 1.6, marginBottom: 14 }}>
-          แนบไฟล์ให้ Agent/Skill ที่ผ่านการอนุมัติ Deployment แล้ว —
-          ผู้ดาวน์โหลด<strong style={{ color: 'var(--tx2)' }}>ต้องลงชื่อเข้าใช้ด้วยบัญชีองค์กร</strong>เสมอ
+          แนบไฟล์ให้ Agent/Skill ที่ผ่านการอนุมัติ Deployment แล้ว
         </p>
 
         {eligible.length === 0 ? (
@@ -94,8 +103,17 @@ export default function UploadEndpointFileModal({
           <>
             <div className="fg" style={{ marginBottom: 12 }}>
               <label>1. เลือก Agent / Skill <span className="hint">{eligible.length} items</span></label>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="ค้นหาชื่อ Agent / Skill…"
+                style={{ marginBottom: 6 }}
+              />
               <div className="uef-pick">
-                {eligible.map((a) => (
+                {visible.length === 0 ? (
+                  <div style={{ padding: '10px 12px', fontSize: 11.5, color: 'var(--mu2)' }}>ไม่พบรายการที่ตรงกับ "{query}"</div>
+                ) : visible.map((a) => (
                   <button
                     key={a.id}
                     type="button"
@@ -168,9 +186,9 @@ export default function UploadEndpointFileModal({
             )}
 
             <div className="btn-group">
-              <button className="btn btn-secondary" onClick={onClose} disabled={busy}>ปิด</button>
+              <button className="btn btn-secondary" onClick={onClose} disabled={busy}>Close</button>
               <button className="btn btn-primary" onClick={handleUpload} disabled={busy || !selected || !file}>
-                {busy ? 'กำลังอัปโหลด…' : 'อัปโหลด'}
+                {busy ? 'Uploading…' : 'Upload'}
               </button>
             </div>
           </>
