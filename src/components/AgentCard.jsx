@@ -162,12 +162,20 @@ function AgentCardStats({ stats }) {
           ))}
         </span>
       ) : (
-        <span className="ac-stats-none">ยังไม่มีรีวิว</span>
+        <span className="ac-stats-none">No reviews yet</span>
       )}
-      {rd.kind === 'histogram' && <span className="ac-stats-n">{rd.total} รีวิว</span>}
+      {rd.kind === 'histogram' && <span className="ac-stats-n">{rd.total}</span>}
       {hasUsage && (
-        <span className="ac-stats-use" title={`เปิดดู ${s.detailOpens} · กดไปใช้ ${s.endpointClicks}`}>
-          {s.detailOpens > 0 && <>👁 {s.detailOpens}</>}
+        <span className="ac-stats-use" title={`Viewed ${s.detailOpens} · Used ${s.endpointClicks}`}>
+          {s.detailOpens > 0 && (
+            <>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: -1 }}>
+                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              {' '}{s.detailOpens}
+            </>
+          )}
           {s.endpointClicks > 0 && <> ↗ {s.endpointClicks}</>}
         </span>
       )}

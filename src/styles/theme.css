@@ -342,8 +342,8 @@ button.lg-item.on { border-color: currentColor; background: var(--sf); }
    see src/lib/agentStats.js. Segment widths are flex-grow so the bar is
    proportional without any width maths in JS; a zero bucket keeps a sliver
    (0.06) so the 5-segment shape stays legible instead of collapsing. */
-.ac-stats { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--bd-soft); font-size: 10.5px; color: var(--mu); }
-.ac-stats-bar { display: flex; flex: 1 1 auto; min-width: 0; height: 5px; border-radius: 3px; overflow: hidden; background: var(--sf3); }
+.ac-stats { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--bd-soft); font-size: 10px; color: var(--mu); line-height: 1; }
+.ac-stats-bar { display: flex; flex: 1 1 auto; min-width: 0; height: 4px; border-radius: 2px; overflow: hidden; background: var(--sf3); }
 .ac-stats-seg { display: block; min-width: 1px; }
 /* Low → high reuses the status ramp's intent (grey→green) rather than a new
    red/green scale, so a 1★ bucket never screams on an otherwise calm card. */
