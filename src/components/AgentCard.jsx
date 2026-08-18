@@ -2,6 +2,7 @@ import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { fmtDate, safeEndpointUrl } from '../lib/agentUtils';
 import { recordAgentEvent } from '../lib/agentEvents';
+import { handleEndpointClick } from '../lib/endpointFiles';
 import { readStats, ratingDisplay } from '../lib/agentStats';
 
 // Card anatomy (2026-08-08 redesign): eyebrow (type + tier + scope) → title
@@ -88,7 +89,13 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
             rel="noopener noreferrer"
             title={endpointHref}
             aria-label={`เปิดลิงก์ใช้งาน ${agent.agentName}`}
-            onClick={(e) => { e.stopPropagation(); recordAgentEvent(agent.id, 'endpoint'); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              recordAgentEvent(agent.id, 'endpoint');
+              // Our own files download through the authed callable; external
+              // links (GitLab, Cloud Run) fall through to the plain anchor.
+              handleEndpointClick(e, agent.endpoint);
+            }}
             onKeyDown={(e) => e.stopPropagation()}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

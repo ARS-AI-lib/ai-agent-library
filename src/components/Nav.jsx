@@ -7,7 +7,7 @@ export default function Nav({
   agentCount, skillCount,
   user, onSignOut,
   activeTab, setActiveTab,
-  onOpenExport, canSeeTimeline, canSeeDashboard, isAdmin,
+  onOpenExport, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeDashboard, isAdmin,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -121,6 +121,17 @@ export default function Nav({
               >
                 Export Data
               </button>
+              {/* Attach a file to a deploy-approved agent's endpoint. Visible
+                  to admin/staff/approver; the callable re-checks the role and
+                  the Approve Area, so this is presentation only. */}
+              {canUploadFiles && (
+                <button
+                  type="button"
+                  onClick={() => { onOpenUpload?.(); setMenuOpen(false); }}
+                >
+                  Attach Endpoint File
+                </button>
+              )}
               {isAdmin && (
                 // Admin escape hatch for the semantic search index. Individual
                 // saves reindex themselves fire-and-forget, so this is only

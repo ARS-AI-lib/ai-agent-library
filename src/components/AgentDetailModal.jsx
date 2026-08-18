@@ -7,6 +7,7 @@ import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetail
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { recordAgentEvent, submitRating } from '../lib/agentEvents';
+import { handleEndpointClick } from '../lib/endpointFiles';
 import { readStats, ratingDisplay, canRateAgent, STAR_LEVELS } from '../lib/agentStats';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
@@ -381,7 +382,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 rel="noopener noreferrer"
                 style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
                 title={endpointHref}
-                onClick={() => recordAgentEvent(agent.id, 'endpoint')}
+                onClick={(e) => {
+                  recordAgentEvent(agent.id, 'endpoint');
+                  handleEndpointClick(e, agent.endpoint);
+                }}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />

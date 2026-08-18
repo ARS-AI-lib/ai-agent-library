@@ -4,6 +4,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
 import { runSkill, resolveAgentByName, readinessOf } from '../lib/skills';
 import { recordAgentEvent, recordSearchHits } from '../lib/agentEvents';
+import { handleEndpointClick } from '../lib/endpointFiles';
 import { isBlockedInput, BLOCKED_REPLY } from '../lib/chatGuardrails';
 import { getType, getTier } from '../lib/tier';
 import { ST_DEF } from '../lib/status';
@@ -421,7 +422,10 @@ function RecommendationList({ recs, library, onOpen }) {
                   {href && (
                     <a className="chat-endpoint-link" href={href} target="_blank" rel="noopener noreferrer"
                       title={`เปิดใช้งาน / ดาวน์โหลด: ${href}`} aria-label="เปิด endpoint ในแท็บใหม่"
-                      onClick={() => recordAgentEvent(r.agent.id, 'endpoint')}>
+                      onClick={(e) => {
+                        recordAgentEvent(r.agent.id, 'endpoint');
+                        handleEndpointClick(e, endpoint);
+                      }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                         <polyline points="15 3 21 3 21 9" />

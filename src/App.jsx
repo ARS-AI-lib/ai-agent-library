@@ -24,6 +24,7 @@ import PendingApprovalModal from './components/PendingApprovalModal';
 import ChatAssistant from './components/ChatAssistant';
 import UserManagementModal from './components/UserManagementModal';
 import ExportDataModal from './components/ExportDataModal';
+import UploadEndpointFileModal from './components/UploadEndpointFileModal';
 import EditAgentModal from './components/EditAgentModal';
 import SDLCTab from './components/SDLCTab';
 import DashboardTab from './components/DashboardTab';
@@ -132,6 +133,14 @@ export default function App() {
     || dashboardViewers.map((e) => (e || '').toLowerCase()).includes((user.email || '').toLowerCase())
   );
 
+  // Endpoint file upload (2026-08-18). Role gate only — the AGENT gate (deploy
+  // approved, plus Approve Area for non-admins) lives in the modal and, for
+  // real, in the attachEndpointFile callable. Note this menu entry can be
+  // visible while the list inside is empty: staff currently hold no
+  // approveAreas at all, so the modal tells them that rather than the menu
+  // pretending the feature doesn't exist.
+  const canUploadFiles = !!user && ['admin', 'staff', 'approver'].includes(role);
+
   // Pending Category proposals (2026-08) — admin-only badge/panel; the query
   // itself is fine for isKnownUser() per rules, but there's no reason for a
   // non-admin client to subscribe to something it can't act on.
@@ -181,6 +190,7 @@ export default function App() {
   const [showPending, setShowPending] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const [myAI, setMyAI] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
   const [activeTab, setActiveTab] = useState('lib');
@@ -394,6 +404,8 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenExport={() => setShowExport(true)}
+        onOpenUpload={() => setShowUpload(true)}
+        canUploadFiles={canUploadFiles}
         canSeeTimeline={canSeeTimeline}
         isAdmin={isAdmin}
         canSeeDashboard={canSeeDashboard}
@@ -541,6 +553,19 @@ export default function App() {
           isCommittee={isCommittee}
           approveAreas={approveAreas}
           schema={schema}
+        />
+      )}
+
+      {showUpload && (
+        <UploadEndpointFileModal
+          onClose={() => setShowUpload(false)}
+          // allAgents, not the filtered view: the modal applies its own
+          // eligibility rule (deploy-approved + area) and must not inherit
+          // whatever the user happens to have typed in the search box.
+          agents={allAgents}
+          role={role}
+          isAdmin={isAdmin}
+          approveAreas={approveAreas}
         />
       )}
     </div>

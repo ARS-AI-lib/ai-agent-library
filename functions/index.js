@@ -17,6 +17,7 @@ const { setGlobalOptions } = require('firebase-functions/v2');
 const { GoogleGenAI } = require('@google/genai');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getStorage } = require('firebase-admin/storage');
 
 setGlobalOptions({ region: 'asia-southeast1', maxInstances: 5 });
 
@@ -746,7 +747,14 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 // guard, not a usage budget. submitRating is tight: a human rates a handful of
 // things in a sitting, and the per-user-per-agent doc already caps the useful
 // rate at 1 per agent.
-const RATE_LIMITS = { embedQuery: 20, recordAgentEvent: 120, submitRating: 20 };
+// attachEndpointFile is deliberately mean: it is admin/staff/approver only,
+// each call carries up to 5 MB, and nobody legitimately attaches files in bulk.
+// getEndpointFile is the download path — a user may reasonably grab several
+// skills in a row, but not hundreds.
+const RATE_LIMITS = {
+  embedQuery: 20, recordAgentEvent: 120, submitRating: 20,
+  attachEndpointFile: 10, getEndpointFile: 60,
+};
 
 async function enforceRateLimit(uid, fnName) {
   const max = RATE_LIMITS[fnName];
@@ -952,4 +960,193 @@ exports.submitRating = onCall(
 
     return { ok: true, updated };
   }
+);
+
+// ── Endpoint file attachments + SSO-gated download (2026-08-18) ──────────
+//
+// WHY THESE EXIST AT ALL. Skill files used to be static objects on Firebase
+// Hosting under /skills/*. Measured before writing a line of this:
+//
+//     curl https://wolfy-ai-library.web.app/skills/duplicate-check.zip
+//     → HTTP 200 · 4,879 bytes · no cookie, no token, no VPN
+//
+// Hosting is a CDN with no auth layer, so "files from our site require login"
+// cannot be built there — it has to move behind something that can read a
+// Firebase Auth token. That is these two callables.
+//
+// WHY THE CLIENT NEVER TOUCHES CLOUD STORAGE. Same posture as /metrics and
+// /agentStats: remove the client write path entirely rather than try to
+// constrain it. It also buys a lot of setup we simply never have to do —
+// no Firebase Storage product enablement, no storage.rules to publish (and
+// therefore none to accidentally overwrite for the Portfolio app sharing this
+// GCP project), no CORS configuration, and no signed-URL IAM grant. The bucket
+// stays private with no public object, no download token, and no ACL.
+//
+// Bytes travel as base64 through the callable. That is affordable here because
+// the files are small — the largest thing in the library is a 728 KB folder and
+// the existing skill zips are ~5 KB — and it keeps the whole feature inside one
+// already-working transport. If files ever get big, swap in a V4 signed URL
+// minted by these same functions; no client change is needed for that.
+
+// The authorisation and file-shape rules live in their own module so
+// verify-endpoint-files.cjs can test the real thing rather than a copy — the
+// same split, for the same reason, as embedText.js and chatPrompt.js.
+const {
+  safeName, isOrgEmail, checkUploadPermission, checkUploadFile,
+} = require('./endpointFileRules');
+
+const BUCKET = 'wolfy-481609.appspot.com';
+const ENDPOINT_FILE_PREFIX = 'endpointFiles';
+
+// Origins that serve this SPA. The client sends its own origin so a preview
+// channel builds a working link, but it is NEVER trusted verbatim — an
+// unrecognised origin falls back to canonical. Storing a client-supplied
+// origin would let a caller point an agent's endpoint at any site they like.
+const LIBRARY_ORIGINS = new Set([
+  'https://wolfy-ai-library.web.app',
+  'https://wolfy-481609.web.app',
+  'https://wolfy-ai-library.firebaseapp.com',
+  'https://wolfy-481609.firebaseapp.com',
+]);
+const CANONICAL_ORIGIN = 'https://wolfy-ai-library.web.app';
+
+// Auth already restricts sign-in to the org's Workspace domains, but the
+// download callable IS the SSO gate, so it re-checks rather than inheriting an
+// assumption made elsewhere.
+function assertOrgEmail(request) {
+  if (!isOrgEmail(request.auth?.token?.email)) {
+    throw new HttpsError('permission-denied', 'Organisation account required.');
+  }
+}
+
+/** Turn a rule-module refusal into the callable's error. */
+function raise(refusal) {
+  if (refusal) throw new HttpsError(refusal.code, refusal.message);
+}
+
+/**
+ * Attach a file to an agent's endpoint.
+ *
+ * Eligibility is `deploymentStatus === 'approved'`. Worth recording why the
+ * other two conditions originally asked for were dropped: all 26 agents in
+ * that state are ALREADY at devProgress 100 (checked against live data), and
+ * "deploy approved" implies "deploy requested" — so the extra clauses filtered
+ * exactly nothing and would only have been a second place to drift.
+ *
+ * Area scoping uses the agent's STORED `approveArea`. It deliberately does not
+ * call agentApproveAreas(): that resolver lives in src/lib/approveAreas.js,
+ * which is not part of the deployed function bundle, and copying its tables
+ * here is explicitly forbidden (CLAUDE.md §20 — the same anti-drift rule as
+ * normalizeProgress). The stored field is layer 1 of that resolver and wins
+ * over every other layer anyway, and all 26 eligible agents carry one, so the
+ * two agree today. If an agent somehow has no stored area, this degrades to
+ * admin-only rather than guessing — a safe direction to fail in.
+ */
+exports.attachEndpointFile = onCall(
+  { cors: true, timeoutSeconds: 60, memory: '512MiB' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    assertOrgEmail(request);
+    const uid = request.auth.uid;
+    await enforceRateLimit(uid, 'attachEndpointFile');
+
+    const { agentId, filename, contentType, dataBase64, origin } = request.data || {};
+    if (!agentId || typeof agentId !== 'string') {
+      throw new HttpsError('invalid-argument', 'agentId is required.');
+    }
+    if (!dataBase64 || typeof dataBase64 !== 'string') {
+      throw new HttpsError('invalid-argument', 'File payload is required.');
+    }
+
+    // The UI hides this behind a role check; a callable is reachable by any
+    // signed-in user who knows its name, so the role is verified HERE too —
+    // same reasoning as the full-reindex guard above.
+    const userDoc = (await db.collection('users').doc(uid).get()).data() || {};
+    const agentRef = db.collection('agents').doc(agentId);
+    const agentSnap = await agentRef.get();
+    if (!agentSnap.exists) throw new HttpsError('not-found', 'Agent not found.');
+    const agent = agentSnap.data() || {};
+
+    raise(checkUploadPermission({
+      agent,
+      role: userDoc.role,
+      userApproveAreas: userDoc.approveAreas,
+    }));
+
+    const buf = Buffer.from(dataBase64, 'base64');
+    raise(checkUploadFile({ filename, buf }));
+
+    const name = safeName(filename);
+    const storagePath = `${ENDPOINT_FILE_PREFIX}/${agentId}/${name}`;
+    const bucket = getStorage(adminApp).bucket(BUCKET);
+    await bucket.file(storagePath).save(buf, {
+      contentType: contentType || 'application/octet-stream',
+      resumable: false,
+      // No public ACL and no download token: the ONLY way to these bytes is
+      // getEndpointFile, which checks the caller's auth token.
+      metadata: { cacheControl: 'private, max-age=0', metadata: { agentId, uploadedBy: uid } },
+    });
+
+    // A re-upload under a different filename would otherwise orphan the old
+    // object in the bucket forever.
+    const prevPath = agent.endpointFile?.storagePath;
+    if (prevPath && prevPath !== storagePath) {
+      await bucket.file(prevPath).delete().catch(() => {});
+    }
+
+    const base = LIBRARY_ORIGINS.has(String(origin || '')) ? origin : CANONICAL_ORIGIN;
+    const endpoint = `${base}/f/${encodeURIComponent(agentId)}`;
+    const replacedEndpoint = String(agent.endpoint || '').trim();
+
+    await agentRef.update({
+      endpoint,
+      endpointFile: {
+        name,
+        size: buf.length,
+        contentType: contentType || 'application/octet-stream',
+        storagePath,
+        uploadedAt: FieldValue.serverTimestamp(),
+        uploadedBy: uid,
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true, endpoint, replacedEndpoint, name, size: buf.length };
+  },
+);
+
+/**
+ * Serve an attached file to a signed-in org user.
+ *
+ * THIS FUNCTION IS THE SSO GATE. The /f/{agentId} URL stored in `endpoint`
+ * resolves to the SPA (Hosting rewrites ** to index.html), the SPA forces
+ * Google sign-in before it renders, and only then does it get here. So the
+ * link can be pasted into a chat and still cannot leak the bytes — which is
+ * exactly what the old static /skills/*.zip URLs could not promise.
+ */
+exports.getEndpointFile = onCall(
+  { cors: true, timeoutSeconds: 60, memory: '512MiB' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    assertOrgEmail(request);
+    await enforceRateLimit(request.auth.uid, 'getEndpointFile');
+
+    const { agentId } = request.data || {};
+    if (!agentId || typeof agentId !== 'string') {
+      throw new HttpsError('invalid-argument', 'agentId is required.');
+    }
+
+    const snap = await db.collection('agents').doc(agentId).get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Agent not found.');
+    const file = snap.data()?.endpointFile;
+    if (!file?.storagePath) throw new HttpsError('not-found', 'No file is attached to this agent.');
+
+    const [buf] = await getStorage(adminApp).bucket(BUCKET).file(file.storagePath).download();
+    return {
+      name: file.name || 'download',
+      contentType: file.contentType || 'application/octet-stream',
+      size: buf.length,
+      dataBase64: buf.toString('base64'),
+    };
+  },
 );

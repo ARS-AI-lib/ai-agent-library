@@ -662,3 +662,87 @@ product 1 · เพิ่มช่องแก้ใน Edit form
   category ใหม่ **แต่ตั้งใจปล่อยว่างไว้ก่อน** ผู้ใช้จะเพิ่ม skill/แท็กเองทีหลัง — ห้าม backfill เอง
 - `CLIX` / `Core bank` ยังเป็น 0 — **ถูกต้อง ณ ตอนนี้** ไม่มี agent ตัวไหนทำให้ 2 ตัวนี้โดยเฉพาะ
   (ทั้งไลบรารี 239 ตัว มีแค่ 5 ตัวที่ผูกกับ product จริงๆ ที่เหลือเป็นเครื่องมือข้าม product)
+
+---
+
+## 24. Endpoint File Upload + SSO-gated download (2026-08-18)
+
+### ปัญหาที่แก้ — ไฟล์ skill เคยเปิด public 100%
+```
+curl https://wolfy-ai-library.web.app/skills/duplicate-check.zip
+→ HTTP 200 · 4,879 bytes · ไม่มี cookie ไม่มี token ไม่ต่อ VPN
+```
+**Firebase Hosting เป็น static CDN ไม่มีชั้น auth เลย** — จะบังคับ login บน path ของ Hosting
+ไม่ได้เด็ดขาด ทั้ง 25 endpoint ที่ชี้มาที่ตัวเองจึงเปิดให้ทั้งอินเทอร์เน็ตโหลดมาตลอด
+
+### สถาปัตยกรรม — client ไม่แตะ Cloud Storage เลย
+ทุกอย่างผ่าน 2 callable (posture เดียวกับ `/metrics` + `/agentStats` = ตัด write path ฝั่ง client ทิ้ง)
+**ผลพลอยได้ที่สำคัญ: ไม่ต้องทำ setup พวกนี้เลย**
+- ❌ ไม่ต้องเปิด Firebase Storage เป็น product (ใช้ GCS bucket `wolfy-481609.appspot.com` ที่มีอยู่แล้ว)
+- ❌ **ไม่มี `storage.rules` และไม่มี `storage` block ใน `firebase.json`** → ไม่มีอะไรให้ publish
+  และไม่มีทางเผลอ overwrite ของ Portfolio ที่แชร์ GCP project เดียวกัน
+- ❌ ไม่ต้องตั้ง CORS · ❌ ไม่ต้องขอสิทธิ์ IAM สำหรับ signed URL
+- bucket ปิดสนิท: ไม่มี public ACL ไม่มี download token
+
+ไฟล์เดินทางเป็น base64 ผ่าน callable ได้เพราะของจริงเล็กมาก (โฟลเดอร์ใหญ่สุด 728 KB, zip เดิม ~5 KB)
+**เพดาน 5 MB** (callable จำกัด request 10 MB, base64 บวม 33%) · ถ้าอนาคตไฟล์ใหญ่ขึ้นให้เปลี่ยนเป็น
+V4 signed URL จาก function เดิม **ไม่ต้องแก้ client**
+
+### 🔑 `/f/{agentId}` คือกลไก SSO ทั้งหมด
+`endpoint` ของไฟล์ที่อัปโหลด = `https://wolfy-ai-library.web.app/f/{agentId}`
+Hosting rewrite `**` → `index.html` → **URL นี้โหลด SPA ไม่ใช่ไฟล์** → SPA บังคับ Google SSO ก่อน
+render → แล้วค่อยเรียก `getEndpointFile`
+
+**นี่คือเหตุผลที่ต้องทำแบบนี้:** ลิงก์นี้**ทนต่อการถูกก๊อปไปแปะในแชท** ใครเปิดก็ต้อง login
+ต่างจาก Storage download token ที่เป็น bearer credential — ส่งต่อ URL = ส่งต่อสิทธิ์ ซึ่งคือรูเดิมเป๊ะๆ
+
+### Key files
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `src/lib/endpointFiles.js` | ⭐ **`isLibraryFileUrl()` = single source of truth ว่า endpoint ไหน "เป็นของเรา"** · **ห้ามเช็ค host เองที่ call site** |
+| `functions/endpointFileRules.js` | ⭐ **กฎ authz + validate ไฟล์** — แยกออกมาเพื่อให้เทสของจริง (pattern เดียวกับ `embedText.js`/`chatPrompt.js`) |
+| `functions/verify-endpoint-files.cjs` | **รันก่อน deploy ทุกครั้ง** — 34 เคส ยิงกับ user/agent จริง (read-only) |
+| `functions/migrate-skill-files.cjs` | ย้าย `public/skills/*` เข้า Storage (dry-run default) |
+| `src/components/FileDownloadPage.jsx` | หน้า `/f/{agentId}` — มีปุ่ม sign-in จริง (ต่างจาก TimelinePage ที่แค่บอกให้ไป login) |
+| `src/components/UploadEndpointFileModal.jsx` | popup แนบไฟล์ (เมนู ☰ → Attach Endpoint File) |
+
+### สิทธิ์
+- **อัปโหลด:** `admin` (ทุกตัว) · `staff`/`approver` (เฉพาะที่ area ตัวเองตรงกับ agent)
+  — `committee` **ไม่มีสิทธิ์** (ไม่อยู่ใน `UPLOAD_ROLES`)
+- **agent ต้อง `deploymentStatus === 'approved'`** เท่านั้น
+  ⚠️ โจทย์เดิมขอ 3 เงื่อนไข (ขอ request + approve + 100%) แต่**ข้อมูลจริงบอกว่ายุบเหลือข้อเดียว**:
+  ทั้ง 26 ตัวที่ deploy approved อยู่ที่ 100% อยู่แล้วทุกตัว และ approve ก็แปลว่าเคย request
+  → เงื่อนไขที่ไม่กรองอะไรเลย = ที่ให้ drift เปล่าๆ
+- **area เช็คจาก `agent.approveArea` ที่เก็บไว้ ไม่ได้เรียก `agentApproveAreas()`**
+  เพราะ `src/lib/approveAreas.js` **ไม่ได้ถูก deploy ไปกับ functions** และการก๊อปตารางไปไว้ที่นั่น
+  ผิดกฎข้อ 20 · stored คือ layer 1 ที่ชนะทุก layer อยู่แล้ว และทั้ง 26 ตัวมีครบ → ผลตรงกัน
+  ถ้า agent ไหนไม่มี stored area จะ**เหลือ admin เท่านั้น** (fail ไปทางปลอดภัย)
+- ⚠️ **staff ทั้ง 7 คนยัง `approveAreas` ว่าง → upload ไม่ได้สักตัว** (วัดแล้ว) เป็นเรื่องข้อมูล
+  ไม่ใช่บั๊ก · ผู้ใช้เลือกเขียนกฎไว้ก่อนแล้วค่อย assign · modal บอกเหตุผลตรงๆ ไม่ใช่ซ่อนเมนู
+- ปัจจุบัน approver ที่ upload ได้จริงมี **3 คน**: navanit_akra.s (23 ตัว), wimolrat.c + napaporn.k (2 ตัว)
+
+### Validate ไฟล์
+- นามสกุล: `zip` `md` `txt` `pdf` `csv` เท่านั้น
+- **เช็ค magic bytes ด้วย** (`PK` / `%PDF`) → เปลี่ยนชื่อ `.exe` เป็น `.zip` ไม่ผ่าน ·
+  ไฟล์ text ต้องไม่มี NUL byte
+- `safeName()` ตัดเหลือ basename → `../../etc/passwd` → `passwd` (กันหลุดออกนอกโฟลเดอร์ของ agent)
+- download callable เช็คโดเมนองค์กรซ้ำอีกชั้น (`isOrgEmail`) เพราะตัวมันเองคือด่าน SSO
+
+### สิ่งที่ **ไม่** แตะ
+- 38 endpoint ที่ `gitdev.devops.krungthai.com` + 2 ตัวที่ Cloud Run → เป็นระบบคนอื่น VPN คือด่านของเขา
+- 2 agent ที่ endpoint ชี้ที่ `/` (Chat Assistant, Copilot) → เป็นลิงก์ "ไปใช้แอป" ไม่มีไฟล์ และแอป login อยู่แล้ว
+- `firestore.rules` — **ไม่ต้องแก้** เพราะ `endpointFile`/`endpoint` เขียนโดย Function (admin SDK ข้าม rules)
+
+### Migration
+`migrate-skill-files.cjs` → **23 agent · 19 ไฟล์** (7 ตัวชี้ zip ร่วมกัน 3 ไฟล์ + 16 Figma)
+- **Figma 16 ตัวถูก zip ทั้งโฟลเดอร์** เพราะ endpoint เดิมชี้ที่ `SKILL.md` ไฟล์เดียวทั้งที่ข้างใน
+  มี `references/` + `scripts/` (figma-generate-library 16 ไฟล์, figma-use 21 ไฟล์)
+  → **ของเดิมพังอยู่แล้วเงียบๆ** คนโหลดไปได้ SKILL.md ที่อ้างถึงไฟล์ที่ไม่มี · zip แก้ให้ด้วยในตัว
+- ⚠️ **ต้อง deploy hosting ก่อนแล้วค่อยรัน migrate** — `/f/` ใช้ได้ต่อเมื่อ SPA ที่ deploy แล้วรู้จัก route นี้
+- ⚠️ **ยังไม่ลบ `public/skills/*`** — ตรวจของจริงให้ผ่านก่อน แล้วลบใน commit แยก (ครึ่งนี้ย้อนไม่ได้)
+
+### ⚠️ ข้อควรรู้ที่ยังค้าง
+ข้อ 10 ระบุว่าทีม security ขอให้ `wolfy-481609` เป็น **sandbox เท่านั้น** (เหตุผลที่ GitLab integration
+โดนพัก) · งานนี้เริ่มเก็บ artifact ของงานจริงไว้ในโปรเจกต์นั้นตอน runtime และ**ต่างจากไฟล์เดิมที่อยู่ใน
+git** (มี version, diff, คนรีวิวตอน deploy) — ไฟล์ที่อัปโหลด**ไม่มีสามอย่างนั้นเลย**
+ผู้ใช้ตัดสินใจเดินหน้าแล้ว แต่ควรแจ้งทีม security ให้รู้
