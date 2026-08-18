@@ -3,6 +3,7 @@ import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
 import { runSkill, resolveAgentByName, readinessOf } from '../lib/skills';
+import { recordAgentEvent, recordSearchHits } from '../lib/agentEvents';
 import { isBlockedInput, BLOCKED_REPLY } from '../lib/chatGuardrails';
 import { getType, getTier } from '../lib/tier';
 import { ST_DEF } from '../lib/status';
@@ -62,12 +63,34 @@ async function runTool(name, args, ctx) {
     try {
       const embed = httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'embedQuery');
       const { data } = await embed({ text: needsVector });
-      return runSkill(name, args, { ...ctx, queryVector: data?.v || null });
+      return noteSearchHits(name, runSkill(name, args, { ...ctx, queryVector: data?.v || null }), ctx);
     } catch (e) {
       console.warn('embedQuery failed, falling back to keyword-only search:', e?.message || e);
     }
   }
-  return runSkill(name, args, ctx);
+  return noteSearchHits(name, runSkill(name, args, ctx), ctx);
+}
+
+// Usage telemetry for "the catalogue offered this up" (2026-08-18). Only
+// capability_search counts: it is the recommender, its result set is already
+// capped, and the model asking for it means a human asked a capability
+// question. query_library is a structured filter ("how many T2 are there") —
+// counting its rows would inflate every agent that matches a broad filter.
+//
+// The payload sent to the model deliberately carries agentName but no id, and
+// this resolves names locally rather than adding an id the LLM has no use for
+// (extra tokens, zero value to it). Pass-through return so call sites are
+// unchanged; never allowed to throw.
+function noteSearchHits(name, result, ctx) {
+  if (name !== 'capability_search') return result;
+  try {
+    const rows = Array.isArray(result) ? result : (result?.agents || []);
+    const byName = new Map((ctx.library || []).map((a) => [a.agentName, a.id]));
+    recordSearchHits(rows.map((r) => byName.get(r.agentName)).filter(Boolean));
+  } catch (e) {
+    console.warn('recordSearchHits skipped:', e?.message || e);
+  }
+  return result;
 }
 
 // Renders every row of a previous query_library answer's full CSV set as
@@ -397,7 +420,8 @@ function RecommendationList({ recs, library, onOpen }) {
                   </span>
                   {href && (
                     <a className="chat-endpoint-link" href={href} target="_blank" rel="noopener noreferrer"
-                      title={`เปิดใช้งาน / ดาวน์โหลด: ${href}`} aria-label="เปิด endpoint ในแท็บใหม่">
+                      title={`เปิดใช้งาน / ดาวน์โหลด: ${href}`} aria-label="เปิด endpoint ในแท็บใหม่"
+                      onClick={() => recordAgentEvent(r.agent.id, 'endpoint')}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                         <polyline points="15 3 21 3 21 9" />

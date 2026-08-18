@@ -6,6 +6,8 @@ const VIEWS = [
   ['by-owner', 'By Owner'],
   ['by-role', 'By Role'],
   ['by-ability', 'By Ability'],
+  // Flat ranked list rather than a grouping — see CardGrid.
+  ['by-popularity', 'ยอดนิยม'],
 ];
 
 const TYPES = [

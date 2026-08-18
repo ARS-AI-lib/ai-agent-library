@@ -6,6 +6,8 @@ import { getType, getTier, TIER_DEF, TIER_ORDER, isInternalOrExternal } from '..
 import { toTimelineItem, timelineStatus, autoFitRange, TL_ST } from '../lib/timeline';
 import { agentProcessIds, uniq, fmtDate, normalizeProgress } from '../lib/agentUtils';
 import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
+import { readStats, demandScore, isUntouched } from '../lib/agentStats';
+import { useAgentStats } from '../hooks/useAgentStats';
 import '../styles/SDLCTab.css';
 import '../styles/DashboardTab.css';
 
@@ -25,6 +27,9 @@ const STAGE_ORDER = ['Initiation', 'Discovery', 'Design', 'Build', 'Test', 'Depl
  * the /config/timeline milestones).
  */
 export default function DashboardTab({ agents = [], onAgentClick }) {
+  // Self-fetched, same as the users/processes subscriptions below — Dashboard
+  // already owns its supplementary data rather than threading props from App.
+  const statsById = useAgentStats(true);
   const [processes, setProcesses] = useState([]);
   const [procLoading, setProcLoading] = useState(true);
   const [milestones, setMilestones] = useState([]);
@@ -129,6 +134,29 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
   const areaCoveredN = AREA_ORDER.filter((ar) => (areaApproverCounts[ar] || 0) > 0).length;
 
   // ── Owner workload ──
+
+  // ── Usage & rating (2026-08-18) ──
+  // The retire signal is the point of this block: "nobody has touched it" is
+  // the only evidence that can justify archiving, and it is exactly what the
+  // library could not answer before. Untouched is deliberately strict (no
+  // opens, no clicks, no search hits) so a listed entry is genuinely unused
+  // rather than merely unpopular.
+  const usageRows = useMemo(() => {
+    const rows = agents.map((a) => ({ a, s: readStats(statsById.get(a.id)), d: demandScore(statsById.get(a.id)) }));
+    return {
+      top: rows.filter((r) => r.d > 0).sort((x, y) => y.d - x.d).slice(0, 12),
+      // Ready-to-Use first: an unused entry that is still 40% built is not a
+      // retire candidate, it is just unfinished. An untouched FINISHED one is
+      // the thing worth a conversation.
+      untouched: rows
+        .filter((r) => isUntouched(statsById.get(r.a.id)))
+        .sort((x, y) => (y.a.deploymentStatus === 'approved' ? 1 : 0) - (x.a.deploymentStatus === 'approved' ? 1 : 0))
+        .slice(0, 12),
+      totalUntouched: rows.filter((r) => isUntouched(statsById.get(r.a.id))).length,
+      rated: rows.filter((r) => r.s.ratingCount > 0).length,
+    };
+  }, [agents, statsById]);
+
   const ownerRows = useMemo(() => {
     const map = {};
     agents.forEach((a) => {
@@ -308,6 +336,53 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="dash-grid-flag">
+        <div className="dash-card">
+          <div className="dash-card-hdr">
+            <span className="dash-card-title">ยังไม่มีใครแตะเลย</span>
+            <span className="dash-card-sub">
+              {usageRows.totalUntouched} รายการ · ไม่มีคนเปิดดู/กดไปใช้/เจอจากค้นหา — ตัวเลือกสำหรับ retire
+            </span>
+          </div>
+          {usageRows.untouched.length === 0 ? (
+            <div className="dash-empty">ทุกรายการมีคนแตะแล้ว</div>
+          ) : (
+            <div className="dash-flag-list">
+              {usageRows.untouched.map(({ a }) => (
+                <div key={a.id} className="dash-flag-row" onClick={() => onAgentClick?.(a)}>
+                  <span className="dash-flag-pill" style={pillStyle(TIER_DEF[getTier(a)])}>{getTier(a)}</span>
+                  <span className="dash-flag-name">{a.agentName}</span>
+                  <span className="dash-flag-meta">{a.owner || '—'}</span>
+                  <span className="dash-flag-meta">
+                    {a.deploymentStatus === 'approved' ? 'Ready to Use' : 'อยู่ระหว่างพัฒนา'}
+                  </span>
+                  <span className="dash-flag-prog">{normalizeProgress(a.devProgress)}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="dash-card">
+          <div className="dash-card-hdr">
+            <span className="dash-card-title">ถูกใช้มากที่สุด</span>
+            <span className="dash-card-sub">เปิดดู 👁 · กดไปใช้ ↗ · นับเป็นคนต่อวัน</span>
+          </div>
+          {usageRows.top.length === 0 ? (
+            <div className="dash-empty">ยังไม่มีข้อมูลการใช้งาน — เพิ่งเริ่มเก็บ</div>
+          ) : (
+            <div className="dash-flag-list">
+              {usageRows.top.map(({ a, s }) => (
+                <div key={a.id} className="dash-flag-row" style={{ gridTemplateColumns: '1fr 74px' }} onClick={() => onAgentClick?.(a)}>
+                  <span className="dash-flag-name">{a.agentName}</span>
+                  <span className="dash-flag-prog">👁{s.detailOpens} ↗{s.endpointClicks}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

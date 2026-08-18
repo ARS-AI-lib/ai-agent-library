@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, pairedSubSkills, isPairedSubSkill, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
+import { recordAgentEvent, submitRating } from '../lib/agentEvents';
+import { readStats, ratingDisplay, canRateAgent, STAR_LEVELS } from '../lib/agentStats';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
 function toDateInputValue(d) {
@@ -36,7 +38,66 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // Sub-skill ids the user ticked to KEEP live. Default empty = archive the
   // whole package, per the agreed "if nothing is picked, archive them all".
   const [keepIds, setKeepIds] = useState(() => new Set());
+  // Rating (2026-08-18)
+  const [stats, setStats] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [myRating, setMyRating] = useState(0);
+  const [myComment, setMyComment] = useState('');
+  const [rateOpen, setRateOpen] = useState(false);
+  const [rating, setRating] = useState(false);
   useEscapeKey(onClose);
+
+  // Usage telemetry (2026-08-18). Placed HERE rather than at the three call
+  // sites (App.jsx, PendingApprovalModal, TimelinePage) so opening a detail is
+  // counted once, from one place, no matter who opened it. Fire-and-forget and
+  // de-duplicated server-side per user/day, so a re-render costs nothing.
+  const viewedId = agent?.id;
+  useEffect(() => {
+    if (viewedId) recordAgentEvent(viewedId, 'detail');
+  }, [viewedId]);
+
+  // Live stats + the peer-visible (uid-free) reviews for THIS agent. Scoped to
+  // the open modal rather than subscribed globally: reviews are a subcollection
+  // nobody needs until they open the entry.
+  useEffect(() => {
+    if (!viewedId) return undefined;
+    const unsubStats = onSnapshot(doc(db, 'agentStats', viewedId),
+      (snap) => setStats(snap.exists() ? snap.data() : null),
+      () => setStats(null));
+    const unsubRev = onSnapshot(collection(db, 'agentStats', viewedId, 'reviews'),
+      (snap) => setReviews(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      () => setReviews([]));
+    return () => { unsubStats(); unsubRev(); };
+  }, [viewedId]);
+
+  // The caller's OWN rating, so the control opens pre-filled and reads as
+  // "change your rating" rather than silently creating a second one. Readable
+  // only by its author and admin — see the /agentRatings rules block.
+  useEffect(() => {
+    if (!viewedId || !user?.uid) return undefined;
+    const unsub = onSnapshot(doc(db, 'agentRatings', `${viewedId}__${user.uid}`),
+      (snap) => {
+        const d = snap.exists() ? snap.data() : null;
+        setMyRating(d?.rating || 0);
+        setMyComment(d?.comment || '');
+      },
+      () => { setMyRating(0); setMyComment(''); });
+    return unsub;
+  }, [viewedId, user?.uid]);
+
+  async function handleSubmitRating() {
+    if (!myRating) return;
+    setRating(true);
+    setSaveError('');
+    try {
+      await submitRating({ agentId: agent.id, rating: myRating, comment: myComment });
+      setRateOpen(false);
+    } catch (e) {
+      setSaveError(e?.message || 'ส่งคะแนนไม่สำเร็จ');
+    } finally {
+      setRating(false);
+    }
+  }
 
   if (!agent) return null;
   const type = getType(agent);
@@ -91,6 +152,16 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // Paired sub-skills that would be dragged along by archiving this Agent —
   // the user gets to tick any worth keeping (e.g. a genuinely reusable skill).
   const subSkills = pairedSubSkills(agent, allAgents || []);
+
+  // Rating/usage derived values. canRateAgent mirrors the server check in
+  // submitRating so the control is never shown to someone it would reject —
+  // the server stays authoritative, this only decides what to render.
+  const liveStats = readStats(stats);
+  const ratingView = ratingDisplay(stats);
+  const mayRate = canRateAgent(agent, user);
+  const visibleReviews = reviews
+    .filter((r) => String(r.comment || '').trim())
+    .sort((a2, b2) => (b2.createdAt?.seconds || 0) - (a2.createdAt?.seconds || 0));
 
   function startEdit() {
     setEditProgress(progress);
@@ -288,6 +359,101 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           )}
         </div>
 
+        {/* ── Rating & usage (2026-08-18) ──
+            A histogram plus raw counts, never a mean: with the library's
+            current traffic most entries sit at 0-2 ratings, and `★5.0 (1)` is
+            exactly the estimated-looking number SYSTEM-OVERVIEW:353 forbids.
+            n=0 says so in words rather than drawing five empty stars.
+            Comments are peer-ANONYMOUS by data shape — the /reviews docs
+            carry no uid at all (the identified copy lives in /agentRatings,
+            readable only by its author and admin). */}
+        <div className="msec">Feedback</div>
+        <div className="mrow" style={{ alignItems: 'flex-start' }}>
+          <span className="mk">คะแนน</span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            {ratingView.kind === 'histogram' ? (
+              <span style={{ display: 'block' }}>
+                {ratingView.bars.slice().reverse().map((b) => (
+                  <span key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                    <span style={{ fontSize: 11, color: 'var(--mu)', width: 22, flexShrink: 0 }}>{b.star}★</span>
+                    <span style={{ flex: 1, height: 6, background: 'var(--sf3)', borderRadius: 3, overflow: 'hidden', minWidth: 0 }}>
+                      <span style={{ display: 'block', width: `${b.pct}%`, height: '100%', background: 'var(--accent)' }} />
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--mu)', width: 18, textAlign: 'right', flexShrink: 0, fontFamily: "'IBM Plex Mono',monospace" }}>{b.count}</span>
+                  </span>
+                ))}
+                <span style={{ fontSize: 11, color: 'var(--mu)' }}>รวม {ratingView.total} รีวิว</span>
+              </span>
+            ) : (
+              <span style={{ fontSize: 12, color: 'var(--mu2)' }}>ยังไม่มีรีวิว</span>
+            )}
+          </span>
+        </div>
+        <div className="mrow">
+          <span className="mk">การใช้งาน</span>
+          <span style={{ fontSize: 12, fontFamily: "'IBM Plex Mono',monospace" }}>
+            เปิดดู {liveStats.detailOpens} · กดไปใช้ {liveStats.endpointClicks} · เจอจากค้นหา {liveStats.searchHits}
+            <span style={{ fontFamily: 'inherit', color: 'var(--mu)', fontSize: 10.5, display: 'block', marginTop: 2 }}>
+              นับเป็นจำนวน "คน" ต่อวัน ไม่ใช่จำนวนคลิก
+            </span>
+          </span>
+        </div>
+
+        {mayRate && (
+          <div className="mrow" style={{ alignItems: 'flex-start' }}>
+            <span className="mk">{myRating ? 'คะแนนของคุณ' : 'ให้คะแนน'}</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+                {STAR_LEVELS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => { setMyRating(n); setRateOpen(true); }}
+                    title={`${n} ดาว`}
+                    style={{
+                      border: 'none', background: 'none', cursor: 'pointer', padding: 0,
+                      fontSize: 19, lineHeight: 1,
+                      color: n <= myRating ? 'var(--accent)' : 'var(--bd2)',
+                    }}
+                  >★</button>
+                ))}
+              </span>
+              {rateOpen && (
+                <>
+                  <textarea
+                    rows={2}
+                    value={myComment}
+                    onChange={(e) => setMyComment(e.target.value)}
+                    maxLength={1000}
+                    placeholder="ความเห็นเพิ่มเติม (ไม่บังคับ) — จะแสดงแบบไม่ระบุชื่อ"
+                    style={{ width: '100%', fontSize: 12 }}
+                  />
+                  <span className="btn-row" style={{ marginTop: 6 }}>
+                    <button className="btn-sm rej" disabled={rating} onClick={() => setRateOpen(false)}>ยกเลิก</button>
+                    <button className="btn-sm appr" disabled={rating || !myRating} onClick={handleSubmitRating}>
+                      {rating ? 'กำลังส่ง…' : (myRating && reviews.length ? 'อัปเดตคะแนน' : 'ส่งคะแนน')}
+                    </button>
+                  </span>
+                </>
+              )}
+            </span>
+          </div>
+        )}
+
+        {visibleReviews.length > 0 && (
+          <div className="mrow" style={{ alignItems: 'flex-start' }}>
+            <span className="mk">ความเห็น</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {visibleReviews.map((r) => (
+                <span key={r.id} style={{ display: 'block', marginBottom: 7, paddingBottom: 7, borderBottom: '1px solid var(--bd-soft)' }}>
+                  <span style={{ color: 'var(--accent)', fontSize: 11 }}>{'★'.repeat(r.rating || 0)}</span>
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--tx2)', marginTop: 2, lineHeight: 1.55 }}>{r.comment}</span>
+                </span>
+              ))}
+            </span>
+          </div>
+        )}
+
         <div className="msec">Details</div>
         <div>
           {agent.description && (
@@ -310,6 +476,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 rel="noopener noreferrer"
                 style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
                 title={endpointHref}
+                onClick={() => recordAgentEvent(agent.id, 'endpoint')}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />

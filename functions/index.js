@@ -741,7 +741,12 @@ exports.reindexAgentVectors = onCall(
 // another. Fails OPEN on any Firestore error — a rate-limit outage must never
 // be the reason a legitimate search breaks.
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMITS = { embedQuery: 20 };
+// recordAgentEvent is generous — it fires on ordinary browsing (opening a
+// detail modal, clicking through search results), so the cap is a runaway
+// guard, not a usage budget. submitRating is tight: a human rates a handful of
+// things in a sitting, and the per-user-per-agent doc already caps the useful
+// rate at 1 per agent.
+const RATE_LIMITS = { embedQuery: 20, recordAgentEvent: 120, submitRating: 20 };
 
 async function enforceRateLimit(uid, fnName) {
   const max = RATE_LIMITS[fnName];
@@ -786,5 +791,165 @@ exports.embedQuery = onCall(
       throw new HttpsError('internal', 'Embedding failed.');
     }
     return { v, dim: EMBED_DIM, model: EMBED_MODEL };
+  }
+);
+
+// ── Feedback & Rating + usage statistics (2026-08-18) ────────────────
+// Both callables below write via the admin SDK, which is the entire point:
+// /agentStats, /agentRatings and /agentEvents are `write: if false` in
+// firestore.rules, so a client cannot forge a counter or a score. Rules can
+// force an increment to be exactly +1 but cannot stop a loop calling it, so
+// the codebase's existing answer (/metrics, bumpChatMetrics) is to remove the
+// client write path entirely — these follow that.
+
+const EVENT_KINDS = new Set(['detail', 'endpoint', 'search']);
+// Counter field on /agentStats/{agentId} per event kind.
+const EVENT_FIELD = { detail: 'detailOpens', endpoint: 'endpointClicks', search: 'searchHits' };
+const COMMENT_MAX = 1000;
+// Keep the public review list bounded — it is read on every detail-modal open.
+const REVIEWS_PAGE = 50;
+
+/**
+ * Record one usage event for an agent.
+ *
+ * De-duplicated per user, per agent, per kind, PER DAY. That is deliberate and
+ * is what makes the number meaningful as well as un-inflatable: "12 people
+ * opened this today" survives being put in front of an executive, "12 clicks"
+ * does not (one bored person with a mouse produces the same 12). The marker
+ * doc mirrors the /rateLimits doc-id-encoding convention.
+ *
+ * Callers treat this as fire-and-forget — see the client hooks. Telemetry must
+ * never delay or break a UI action, same posture as bumpChatMetrics.
+ */
+exports.recordAgentEvent = onCall(
+  { cors: true, timeoutSeconds: 15 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    const uid = request.auth.uid;
+    await enforceRateLimit(uid, 'recordAgentEvent');
+
+    const agentId = String(request.data?.agentId || '').trim();
+    const kind = String(request.data?.kind || '').trim();
+    if (!agentId) throw new HttpsError('invalid-argument', 'agentId is required.');
+    if (!EVENT_KINDS.has(kind)) throw new HttpsError('invalid-argument', `kind must be one of ${[...EVENT_KINDS].join('|')}.`);
+
+    const day = new Date().toISOString().slice(0, 10);
+    const markerRef = db.collection('agentEvents').doc(`${agentId}__${uid}__${day}__${kind}`);
+    const statsRef = db.collection('agentStats').doc(agentId);
+
+    // create() throws ALREADY_EXISTS if this user already triggered this kind
+    // for this agent today — that rejection IS the dedup, no read needed.
+    try {
+      await markerRef.create({
+        agentId, uid, kind, day,
+        createdAt: FieldValue.serverTimestamp(),
+        // For a future TTL policy, same as /rateLimits. Nothing reads it today.
+        expireAt: new Date(Date.now() + 90 * 864e5),
+      });
+    } catch (e) {
+      if (e?.code === 6 || /already exists/i.test(e?.message || '')) return { counted: false, reason: 'duplicate' };
+      throw e;
+    }
+
+    await statsRef.set({
+      [EVENT_FIELD[kind]]: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return { counted: true };
+  }
+);
+
+/**
+ * Create or update the caller's rating (1-5) + optional comment for an agent.
+ *
+ * Three things are enforced here rather than in rules:
+ *   1. The owner/creator of an agent may not rate it. Rules could do a get()
+ *      on the agent doc, but the ownership test is an EMAIL match against
+ *      creatorEmails (plus the owner team string) — the same rule
+ *      isMyAgent/canUpdateProgress already use client-side — and expressing
+ *      that in rules would duplicate logic that must not drift.
+ *   2. One rating per user per agent, by construction: the doc id is
+ *      {agentId}__{uid}, so a second submit updates rather than stacks.
+ *   3. The histogram on /agentStats moves by a DELTA (remove old bucket, add
+ *      new) so changing a rating cannot inflate ratingCount.
+ *
+ * The identified row lives in /agentRatings (author + admin readable) while a
+ * uid-free copy goes to /agentStats/{id}/reviews for peers. The split is what
+ * makes "anonymous" true at the data layer instead of a UI convention.
+ */
+exports.submitRating = onCall(
+  { cors: true, timeoutSeconds: 20 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    const uid = request.auth.uid;
+    const email = String(request.auth.token?.email || '').toLowerCase();
+    await enforceRateLimit(uid, 'submitRating');
+
+    const agentId = String(request.data?.agentId || '').trim();
+    const rating = Number(request.data?.rating);
+    const comment = String(request.data?.comment || '').trim().slice(0, COMMENT_MAX);
+    if (!agentId) throw new HttpsError('invalid-argument', 'agentId is required.');
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new HttpsError('invalid-argument', 'rating must be an integer 1-5.');
+    }
+
+    const agentSnap = await db.collection('agents').doc(agentId).get();
+    if (!agentSnap.exists) throw new HttpsError('not-found', 'Agent not found.');
+    const agent = agentSnap.data();
+    if (agent.approvalStatus !== 'approved' || agent.archived === true) {
+      throw new HttpsError('failed-precondition', 'Only an active agent can be rated.');
+    }
+
+    // Self-rating guard. Digital Experience Team alone owns ~35% of the
+    // library, so without this a public score would mostly measure how
+    // enthusiastically each team rates itself.
+    const creatorEmails = Array.isArray(agent.creatorEmails) ? agent.creatorEmails : [];
+    const isCreator = !!email && creatorEmails.some((e) => String(e || '').toLowerCase() === email);
+    if (isCreator || agent.createdBy === uid) {
+      throw new HttpsError('permission-denied', 'ให้คะแนน Agent/Skill ของตัวเองไม่ได้');
+    }
+
+    const ratingRef = db.collection('agentRatings').doc(`${agentId}__${uid}`);
+    const statsRef = db.collection('agentStats').doc(agentId);
+
+    // Transaction, not a batch: the histogram delta depends on the PREVIOUS
+    // rating, so read and write must be atomic or two concurrent submits from
+    // the same user could both see "no previous rating" and each add +1 to
+    // ratingCount. Same runTransaction idiom as enforceRateLimit above.
+    const freshReviewId = statsRef.collection('reviews').doc().id;
+    const updated = await db.runTransaction(async (tx) => {
+      const prev = await tx.get(ratingRef);
+      const prevRating = prev.exists ? Number(prev.data()?.rating) : null;
+      const reviewId = (prev.exists && prev.data()?.reviewId) || freshReviewId;
+
+      const patch = { updatedAt: FieldValue.serverTimestamp() };
+      if (prevRating !== rating) {
+        patch[`r${rating}`] = FieldValue.increment(1);
+        if (prevRating >= 1 && prevRating <= 5) {
+          // Moving between buckets — the total is unchanged, so ratingCount
+          // must NOT move or changing your mind would inflate it.
+          patch[`r${prevRating}`] = FieldValue.increment(-1);
+        } else {
+          patch.ratingCount = FieldValue.increment(1);   // brand-new rater only
+        }
+      }
+
+      tx.set(ratingRef, {
+        agentId, uid, rating, comment, reviewId,
+        ...(prev.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      // The peer-visible copy — note there is no uid in this payload.
+      tx.set(statsRef.collection('reviews').doc(reviewId), {
+        rating, comment,
+        ...(prev.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      tx.set(statsRef, patch, { merge: true });
+      return prev.exists;
+    });
+
+    return { ok: true, updated };
   }
 );

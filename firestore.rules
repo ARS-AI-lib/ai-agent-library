@@ -291,6 +291,53 @@ service cloud.firestore {
     match /rateLimits/{id} {
       allow read, write: if false;
     }
+
+    // ── Feedback & Rating + usage statistics (2026-08-18) ──────────
+    // Design rule this whole block exists to enforce: the client NEVER writes
+    // a counter or a score. Rules can force `count == resource.data.count + 1`
+    // but cannot stop a loop calling it 1000 times, and the established answer
+    // in this codebase (/metrics above) is to remove the client write path
+    // entirely. Both recordAgentEvent and submitRating are callables that
+    // write via the admin SDK, so every collection here is `write: if false`.
+
+    // Public per-agent aggregate: usage counters + the 1..5 star histogram.
+    // Read by every signed-in user because the cards and Dashboard render it.
+    // Deliberately holds a HISTOGRAM (r1..r5) and never a computed average —
+    // an average over 1 rating is exactly the "ตัวเลขปลอมหรือประมาณ" that
+    // docs/SYSTEM-OVERVIEW.md:353 forbids. Raw counts are facts; means are not.
+    match /agentStats/{agentId} {
+      allow read: if isKnownUser();
+      allow write: if false;
+
+      // What peers actually see. Carries NO uid BY DESIGN — the anonymity
+      // promise is enforced by the shape of the data, not by the client
+      // choosing not to render a field. If uid lived here, anyone could read
+      // it straight out of Firestore regardless of what the UI shows.
+      match /reviews/{reviewId} {
+        allow read: if isKnownUser();
+        allow write: if false;
+      }
+    }
+
+    // The identified rating — one doc per user per agent, which is also what
+    // makes "one vote each" structural rather than enforced by a check.
+    // Readable ONLY by its author (so they can see/change their own rating)
+    // and by admin (so abuse is traceable). This is the counterpart that lets
+    // /agentStats/{id}/reviews stay anonymous.
+    match /agentRatings/{ratingId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.get('uid', '') == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Dedup markers: {agentId}__{uid}__{YYYY-MM-DD}__{kind}. Their existence
+    // turns the counters above into "unique users per day" instead of raw
+    // hits — which is both un-inflatable and the more honest number to put in
+    // front of an executive. Same doc-id-encoding trick as /rateLimits, and
+    // like it, of no use to any client.
+    match /agentEvents/{eventId} {
+      allow read, write: if false;
+    }
     // SDLC Timeline config (2026-07): viewers allowlist + editable milestones.
     // Read is cosmetic (any known user can read; menu-hiding only, accepted
     // risk). Admin bootstraps the doc + viewers list; thereafter anyone whose

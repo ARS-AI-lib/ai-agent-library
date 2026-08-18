@@ -1,6 +1,8 @@
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { fmtDate, safeEndpointUrl } from '../lib/agentUtils';
+import { recordAgentEvent } from '../lib/agentEvents';
+import { readStats, ratingDisplay } from '../lib/agentStats';
 
 // Card anatomy (2026-08-08 redesign): eyebrow (type + tier + scope) → title
 // → progress bar → 2×2 meta grid (Owner / Ability / Status / Launch).
@@ -19,7 +21,7 @@ import { fmtDate, safeEndpointUrl } from '../lib/agentUtils';
 // The fixed 2×2 grid keeps the old alignment guarantee — every card in a row
 // has the same four cells in the same order with an em-dash fallback, so
 // "Launch" lands in the same position on every card regardless of data.
-export default function AgentCard({ agent, allAgents, onClick }) {
+export default function AgentCard({ agent, allAgents, onClick, stats }) {
   const type = getType(agent);
   const tier = getTier(agent);
   const tierDef = TIER_DEF[tier];
@@ -86,7 +88,7 @@ export default function AgentCard({ agent, allAgents, onClick }) {
             rel="noopener noreferrer"
             title={endpointHref}
             aria-label={`เปิดลิงก์ใช้งาน ${agent.agentName}`}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); recordAgentEvent(agent.id, 'endpoint'); }}
             onKeyDown={(e) => e.stopPropagation()}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -129,6 +131,46 @@ export default function AgentCard({ agent, allAgents, onClick }) {
           <div className="ac-meta-value" style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{fmtDate(agent.launchDate) || '—'}</div>
         </div>
       </div>
+
+      {/* Rating + demand (2026-08-18). The card redesign went deliberately
+          lean, so this is ONE row, only when there is something true to say.
+          No average is rendered anywhere — see src/lib/agentStats.js for why a
+          mean over 1-2 ratings is the "ตัวเลขประมาณ" the project forbids. When
+          nobody has rated, the row shows the usage counts instead of five empty
+          stars: 239 cards of empty stars would read as an abandoned library. */}
+      <AgentCardStats stats={stats} />
+    </div>
+  );
+}
+
+function AgentCardStats({ stats }) {
+  const s = readStats(stats);
+  const rd = ratingDisplay(stats);
+  const hasUsage = s.detailOpens > 0 || s.endpointClicks > 0;
+  if (rd.kind === 'none' && !hasUsage) return null;
+
+  return (
+    <div className="ac-stats">
+      {rd.kind === 'histogram' ? (
+        <span className="ac-stats-bar" title={rd.bars.map((b) => `${b.star}★ ${b.count}`).join(' · ')}>
+          {rd.bars.map((b) => (
+            <span
+              key={b.star}
+              className={`ac-stats-seg s${b.star}`}
+              style={{ flexGrow: b.count || 0.06 }}
+            />
+          ))}
+        </span>
+      ) : (
+        <span className="ac-stats-none">ยังไม่มีรีวิว</span>
+      )}
+      {rd.kind === 'histogram' && <span className="ac-stats-n">{rd.total} รีวิว</span>}
+      {hasUsage && (
+        <span className="ac-stats-use" title={`เปิดดู ${s.detailOpens} · กดไปใช้ ${s.endpointClicks}`}>
+          {s.detailOpens > 0 && <>👁 {s.detailOpens}</>}
+          {s.endpointClicks > 0 && <> ↗ {s.endpointClicks}</>}
+        </span>
+      )}
     </div>
   );
 }

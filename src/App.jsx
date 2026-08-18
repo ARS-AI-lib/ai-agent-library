@@ -7,6 +7,8 @@ import { useConfigSchema } from './hooks/useConfigSchema';
 import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from './lib/agentUtils';
 import { getType } from './lib/tier';
 import { queueViewer, pendingBadgeCount } from './lib/pendingQueue';
+import { recordSearchHits } from './lib/agentEvents';
+import { useAgentStats } from './hooks/useAgentStats';
 import { ALLOWED_DOMAINS_LABEL } from './lib/firebase';
 import { agentStatus } from './lib/status';
 
@@ -91,6 +93,8 @@ export default function App() {
   const { pending } = usePendingAgents(!!role);
   const { deployRequests } = useDeploymentRequests(!!role);
   const { schema, addRelatedRoles, addTeams } = useConfigSchema(!!role);
+  // Usage counters + rating histogram, one subscription for the whole grid.
+  const statsById = useAgentStats(!!role);
 
   // Directory sync is no longer auto-run at login: the People API scope is now
   // requested on-demand only when an admin clicks "Sync directory now" in User
@@ -249,6 +253,23 @@ export default function App() {
     }
     return result;
   }, [agents, type, owner, role_, tier, reusable, hasEndpoint, category, stage, platformTools, search, selectedStatus, myAI, user]);
+
+  // Count "the catalogue surfaced this for a search someone actually made"
+  // (2026-08-18). Three guards, because a naive version of this is worse than
+  // no metric at all:
+  //   · >= 3 chars — a search for "a" matches nearly the whole library and
+  //     would inflate every agent equally, which is noise dressed as data.
+  //   · debounced 800ms — the list re-filters on every keystroke; without this
+  //     typing "figma" would count 5 different result sets.
+  //   · top 10 only (inside recordSearchHits) — nobody considered result #47.
+  // Server-side per-user-per-day dedup then turns it into "this many people
+  // met this agent through search today".
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 3 || activeTab !== 'lib') return undefined;
+    const t = setTimeout(() => recordSearchHits(filtered.map((a) => a.id)), 800);
+    return () => clearTimeout(t);
+  }, [search, activeTab, filtered]);
 
   const agentCount = filtered.filter((a) => getType(a) === 'agent').length;
   const skillCount = filtered.filter((a) => getType(a) === 'skill').length;
@@ -412,7 +433,7 @@ export default function App() {
               {agentsLoading ? (
                 <div className="empty-state">Loading…</div>
               ) : (
-                <CardGrid agents={filtered} allAgents={agents} view={view} onCardClick={setSelectedAgent} />
+                <CardGrid agents={filtered} allAgents={agents} view={view} onCardClick={setSelectedAgent} statsById={statsById} />
               )}
             </div>
           </div>

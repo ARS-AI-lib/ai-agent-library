@@ -249,7 +249,19 @@ Tier:
 - เปลี่ยนแค่รูป/asset ใน `public/` โดยชื่อไฟล์เดิม ก็ต้อง rebuild + deploy hosting ใหม่เสมอ (CDN cache ตามชื่อไฟล์)
 
 **⚠️ กฎเหล็ก — โปรเจกต์ `wolfy-481609` แชร์กับแอป Portfolio:** ทั้ง 2 แอปอยู่ GCP project เดียวกัน
-- **ห้ามรัน `firebase deploy` เปล่าๆ หรือ `--only functions` เปล่าๆ เด็ดขาด** — functions ที่ deploy จริงมี 6 ตัว (ของ AI Lib: `analyzeDuplicate`, `chatLibrary`, `send-approval-email` · ของ Portfolio: `files`, `logProjectActivity`, `logTaskActivity`) แต่ `functions/index.js` ใน local มีแค่ 2 ตัว → unscoped deploy จะเสนอ **ลบ** functions ที่เหลือ (รวมของ Portfolio). เวลาต้องแก้ functions ให้ scope เสมอ: `--only functions:analyzeDuplicate,chatLibrary`
+- **ห้ามรัน `firebase deploy` เปล่าๆ หรือ `--only functions` เปล่าๆ เด็ดขาด**
+  **ตัวเลขจริง (ยืนยันด้วย `npx firebase-tools functions:list` เมื่อ 2026-08-18):**
+  deploy อยู่จริง **8 ตัว** · `functions/index.js` ใน local มี **4 ตัว**
+  | | ชื่อ |
+  |---|---|
+  | AI Lib — มีใน local | `analyzeDuplicate`, `chatLibrary`, `embedQuery`, `reindexAgentVectors` |
+  | AI Lib — **ไม่มีใน local** | `send-approval-email` (legacy) |
+  | **Portfolio (คนละ repo!)** | `files`, `logProjectActivity`, `logTaskActivity` |
+  → unscoped deploy จะเสนอ **ลบ 4 ตัวที่ไม่มีใน local รวมของ Portfolio ทั้งหมด**
+  **เวลาแก้ functions ให้ scope เฉพาะตัวที่แก้จริงเสมอ** เช่น
+  `--only functions:analyzeDuplicate` · เพิ่ม function ใหม่ก็ scope เฉพาะตัวใหม่
+  ⚠️ เอกสารเดิมเขียนว่า "6 ตัว / local 2 ตัว" ซึ่ง**ผิดทั้งคู่** — แก้แล้ว 2026-08-18
+  ทุกครั้งที่จะแตะ functions **ให้รัน `functions:list` เช็คก่อน** อย่าเชื่อตัวเลขในเอกสาร
 - Hosting ปลอดภัยโดยธรรมชาติ (target-isolated ต่อ repo `.firebaserc` — ไม่แตะ site `wolfy-portfolio`)
 - **Firestore rules ยัง publish ผ่าน Console** (named DB dropdown `ai-agent-lib`) เหมือนเดิม — `firebase.json` ไม่มี firestore block (ตั้งใจ)
 - Deploy เป็น production เสมอ → ขอ confirm ก่อนทุกครั้ง; Firebase เก็บ release เดิมให้ rollback ได้ (Console → Hosting → release history)

@@ -336,6 +336,25 @@ button.lg-item.on { border-color: currentColor; background: var(--sf); }
 .ac-progress-pct { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 600; color: var(--tx2); min-width: 36px; text-align: right; }
 
 .ac-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; }
+/* Rating + demand row (2026-08-18). One line, pushed to the card's bottom
+   edge with its own hairline so it reads as metadata about the entry rather
+   than another field of it. Deliberately shows a DISTRIBUTION, never a mean —
+   see src/lib/agentStats.js. Segment widths are flex-grow so the bar is
+   proportional without any width maths in JS; a zero bucket keeps a sliver
+   (0.06) so the 5-segment shape stays legible instead of collapsing. */
+.ac-stats { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--bd-soft); font-size: 10.5px; color: var(--mu); }
+.ac-stats-bar { display: flex; flex: 1 1 auto; min-width: 0; height: 5px; border-radius: 3px; overflow: hidden; background: var(--sf3); }
+.ac-stats-seg { display: block; min-width: 1px; }
+/* Low → high reuses the status ramp's intent (grey→green) rather than a new
+   red/green scale, so a 1★ bucket never screams on an otherwise calm card. */
+.ac-stats-seg.s1 { background: var(--mu2); }
+.ac-stats-seg.s2 { background: #9aa4b2; }
+.ac-stats-seg.s3 { background: #8ea82a; }
+.ac-stats-seg.s4 { background: #5f9e4a; }
+.ac-stats-seg.s5 { background: #2f8f4e; }
+.ac-stats-none { flex: 1 1 auto; color: var(--mu2); }
+.ac-stats-n, .ac-stats-use { flex-shrink: 0; white-space: nowrap; }
+.ac-stats-use { font-family: 'IBM Plex Mono', monospace; }
 .ac-meta-item { min-width: 0; }
 .ac-meta-label { font-size: 9.5px; color: var(--mu2); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-bottom: 2px; }
 .ac-meta-value { font-size: 11.5px; color: var(--tx2); font-weight: 500; line-height: 1.35; word-break: break-word; }
