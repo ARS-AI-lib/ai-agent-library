@@ -515,13 +515,13 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   <span style={{ fontSize: 11, color: 'var(--mu)' }}>{ratingView.total} reviews</span>
                 </span>
               ) : (
-                <span style={{ fontSize: 12, color: 'var(--mu2)' }}>No reviews yet</span>
+                <span style={{ fontSize: 11, color: 'var(--mu2)' }}>No reviews yet</span>
               )}
             </span>
           </div>
           <div className="mrow">
             <span className="mk">Usage</span>
-            <span style={{ fontSize: 12, fontFamily: "'IBM Plex Mono',monospace" }}>
+            <span style={{ fontSize: 11, fontFamily: "'IBM Plex Mono',monospace" }}>
               Opened {liveStats.detailOpens} · Used {liveStats.endpointClicks} · Found in search {liveStats.searchHits}
             </span>
           </div>
@@ -553,7 +553,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                       onChange={(e) => setMyComment(e.target.value)}
                       maxLength={1000}
                       placeholder="Add a comment (optional) — shown anonymously"
-                      style={{ width: '100%', fontSize: 12 }}
+                      style={{ width: '100%', fontSize: 11 }}
                     />
                     <span className="btn-row" style={{ marginTop: 6 }}>
                       <button className="btn-sm rej" disabled={rating} onClick={() => setRateOpen(false)}>Cancel</button>
@@ -574,7 +574,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 {visibleReviews.map((r) => (
                   <span key={r.id} style={{ display: 'block', marginBottom: 7, paddingBottom: 7, borderBottom: '1px solid var(--bd-soft)' }}>
                     <span style={{ color: 'var(--accent)', fontSize: 11 }}>{'★'.repeat(r.rating || 0)}</span>
-                    <span style={{ display: 'block', fontSize: 12, color: 'var(--tx2)', marginTop: 2, lineHeight: 1.55 }}>{r.comment}</span>
+                    <span style={{ display: 'block', fontSize: 11, color: 'var(--tx2)', marginTop: 2, lineHeight: 1.55 }}>{r.comment}</span>
                   </span>
                 ))}
               </span>
