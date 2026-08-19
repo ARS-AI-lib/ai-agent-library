@@ -26,6 +26,7 @@
 .dash-grid-flag { display: grid; grid-template-columns: 60% 1fr; gap: 14px; align-items: stretch; }
 .dash-grid-flag .dash-card { display: flex; flex-direction: column; }
 .dash-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: start; }
+.dash-grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; align-items: start; }
 
 /* ── Delay/Risk board ── */
 .dash-flag-counts { margin-left: auto; display: flex; gap: 6px; }
@@ -54,6 +55,14 @@
 .dash-proc { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; color: var(--tx2); background: var(--sf2); border: 1px solid var(--bd-soft); border-radius: 6px; padding: 2px 7px; cursor: default; }
 .dash-proc b { font-size: 9.5px; color: #fff; background: var(--accent); border-radius: 999px; min-width: 15px; height: 15px; display: inline-flex; align-items: center; justify-content: center; padding: 0 3px; }
 .dash-proc.gap { color: var(--gap-fg); background: var(--gap-bg); border-color: var(--gap-bd); }
+/* Amber, not red — deliberately a different colour from .gap (2026-08-19).
+   SDLC Coverage's red means "zero agents cover this process" (a real
+   capability hole). Approve Area Coverage's amber means "no DEDICATED
+   approver assigned" — the agents exist and admin/committee can still act on
+   them, it's a governance/ownership gap, not a coverage hole. Same visual
+   severity tier (both warn the eye) but a reader who has learned "red = SDLC
+   gap" should not read this chip as the identical problem. */
+.dash-proc.gap-warn { color: var(--msg-warn-fg); background: var(--msg-warn-bg); border-color: var(--msg-warn-bd); }
 .dash-proc.clickable { cursor: pointer; }
 .dash-proc.clickable:hover { border-color: var(--accent); background: var(--sf); }
 
@@ -67,6 +76,32 @@
 .dash-owner-n { font-size: 11.5px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--tx); text-align: right; }
 .dash-owner-avg { font-size: 10px; color: var(--mu); text-align: right; }
 
+/* ── Most Used ranked list (2026-08-19 redesign — was two emoji glyphs on a
+   plain .dash-flag-row). Rank badge + name + a small demand bar (relative to
+   the top item) + two icon'd stat chips, all reusing tokens already defined
+   above rather than inventing a parallel palette. */
+.dash-usage-list { display: flex; flex-direction: column; }
+.dash-usage-row { display: grid; grid-template-columns: 22px 1fr 70px 100px; gap: 10px; align-items: center; padding: 7px 2px; border-bottom: 1px solid var(--bd-soft); cursor: pointer; }
+.dash-usage-row:last-child { border-bottom: none; }
+.dash-usage-row:hover { background: var(--sf2); }
+.dash-usage-rank { font-size: 10.5px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--mu); text-align: center; }
+.dash-usage-name { font-size: 12px; font-weight: 600; color: var(--tx); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-usage-bar { height: 6px; background: var(--sf2); border-radius: 3px; overflow: hidden; }
+.dash-usage-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+.dash-usage-stats { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--mu); font-family: 'IBM Plex Mono', monospace; }
+.dash-usage-stat { display: inline-flex; align-items: center; gap: 3px; }
+
+/* ── Category / Product distribution (2026-08-19 redesign) — colour swatch
+   per category (categoryColor(), the same deterministic hash used for
+   sidebar dots — reused rather than a new one-off palette), rounded pill
+   count instead of a percentage column, tighter row rhythm. */
+.dash-cat-row { display: grid; grid-template-columns: 15px minmax(90px, 150px) 1fr 30px; gap: 8px; align-items: center; padding: 5px 0; }
+.dash-cat-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.dash-cat-label { font-size: 11.5px; color: var(--tx2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-cat-track { height: 7px; background: var(--sf2); border-radius: 4px; overflow: hidden; }
+.dash-cat-fill { height: 100%; border-radius: 4px; }
+.dash-cat-n { font-size: 11px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--tx); text-align: right; }
+
 /* ── Data Quality Watchlist (2026-08-18) — 3 stacked sub-lists inside one .dash-card ── */
 .dash-watch-section { margin-bottom: 14px; }
 .dash-watch-section:last-child { margin-bottom: 0; }
@@ -78,5 +113,6 @@
   .dash-kpis { grid-template-columns: repeat(2, 1fr); }
   .dash-grid-flag { grid-template-columns: 1fr; }
   .dash-grid3 { grid-template-columns: 1fr; }
+  .dash-grid2 { grid-template-columns: 1fr; }
   .dash-page { padding: 14px 14px 40px; }
 }

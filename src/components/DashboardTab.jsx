@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { agentStatus, statusCounts, ST_DEF, ST_ORDER, progressBucket } from '../lib/status';
 import { getType, getTier, TIER_DEF, TIER_ORDER, isInternalOrExternal } from '../lib/tier';
 import { toTimelineItem, timelineStatus, autoFitRange, TL_ST } from '../lib/timeline';
-import { agentProcessIds, uniq, fmtDate, normalizeProgress } from '../lib/agentUtils';
+import { agentProcessIds, uniq, fmtDate, normalizeProgress, categoryColor } from '../lib/agentUtils';
 import { AREA_ORDER, VERTICAL_CATEGORIES, agentApproveAreas } from '../lib/approveAreas';
 import { readStats, demandScore, isUntouched } from '../lib/agentStats';
 import { useAgentStats } from '../hooks/useAgentStats';
@@ -250,6 +250,92 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
         <Kpi n={launch90} label="Launch ใน 90 วัน" color="var(--accent)" icon={KPI_ICON.launch} />
       </div>
 
+      {/* ── Usage Overview (2026-08-19 redesign) — moved up: engagement data
+          is the newest and most actionable signal on this page, so it now
+          leads instead of sitting below distributions/coverage. Emoji glyphs
+          replaced with the same inline-SVG icon language the rest of the app
+          uses (e.g. AgentDetailModal's endpoint/edit icons), headers in
+          English. */}
+      <div className="dash-grid-flag">
+        <div className="dash-card">
+          <div className="dash-card-hdr">
+            <span className="dash-card-title">Most Used</span>
+            <span className="dash-card-sub">Views + endpoint clicks, counted as unique people per day</span>
+          </div>
+          {usageRows.top.length === 0 ? (
+            <div className="dash-empty">No usage data yet — just started collecting</div>
+          ) : (
+            <div className="dash-usage-list">
+              {usageRows.top.map(({ a, s, d }, i) => (
+                <div key={a.id} className="dash-usage-row" onClick={() => onAgentClick?.(a)}>
+                  <span className="dash-usage-rank">{i + 1}</span>
+                  <span className="dash-usage-name">{a.agentName}</span>
+                  <div className="dash-usage-bar"><div className="dash-usage-fill" style={{ width: `${(d / (usageRows.top[0]?.d || 1)) * 100}%` }} /></div>
+                  <span className="dash-usage-stats">
+                    <span className="dash-usage-stat" title="Detail views"><EyeIcon />{s.detailOpens}</span>
+                    <span className="dash-usage-stat" title="Endpoint clicks"><ArrowUpRightIcon />{s.endpointClicks}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="dash-card">
+          <div className="dash-card-hdr">
+            <span className="dash-card-title">Untouched — Retire Candidates</span>
+            <span className="dash-card-sub">{usageRows.totalUntouched} items with no views, clicks, or search hits</span>
+          </div>
+          {usageRows.untouched.length === 0 ? (
+            <div className="dash-empty">Everything has been touched at least once</div>
+          ) : (
+            <div className="dash-flag-list">
+              {usageRows.untouched.map(({ a }) => (
+                <div key={a.id} className="dash-flag-row" onClick={() => onAgentClick?.(a)}>
+                  <span className="dash-flag-pill" style={pillStyle(TIER_DEF[getTier(a)])}>{getTier(a)}</span>
+                  <span className="dash-flag-name">{a.agentName}</span>
+                  <span className="dash-flag-meta">{a.owner || '—'}</span>
+                  <span className="dash-flag-meta">
+                    {a.deploymentStatus === 'approved' ? 'Ready to Use' : 'In development'}
+                  </span>
+                  <span className="dash-flag-prog">{normalizeProgress(a.devProgress)}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Category / Product distribution (2026-08-19 redesign) — moved up
+          next to Usage, and each bar now takes its colour from
+          categoryColor() (the same deterministic hash already used for
+          sidebar category dots) instead of one flat accent colour, so 17
+          distinct categories are visually distinguishable at a glance. */}
+      <div className="dash-grid2">
+        <div className="dash-card">
+          <div className="dash-card-hdr">
+            <span className="dash-card-title">Category — Discipline</span>
+            <span className="dash-card-sub">รวมนับซ้ำได้ (1 agent มีได้หลาย category)</span>
+          </div>
+          {disciplineRows.map(([k, n]) => (
+            <CategoryBarRow key={k} label={k} n={n} max={maxCategoryCount} />
+          ))}
+        </div>
+        <div className="dash-card">
+          <div className="dash-card-hdr">
+            <span className="dash-card-title">Category — Product</span>
+            <span className="dash-card-sub">Business vertical ที่ agent ผูกด้วย (§23)</span>
+          </div>
+          {productRows.length === 0 ? (
+            <div className="dash-empty">ยังไม่มี agent ที่ผูก product category</div>
+          ) : (
+            productRows.map(([k, n]) => (
+              <CategoryBarRow key={k} label={k} n={n} max={maxCategoryCount} />
+            ))
+          )}
+        </div>
+      </div>
+
       {/* ── Status + Tier + Reusable ── */}
       <div className="dash-grid3">
         <div className="dash-card">
@@ -276,7 +362,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
       <div className="dash-card">
         <div className="dash-card-hdr">
           <span className="dash-card-title">SDLC Coverage</span>
-          <span className="dash-card-sub">{coveredN}/{processes.length} processes มี agent ครอบคลุม · ช่องแดง = gap</span>
+          <span className="dash-card-sub">{coveredN}/{processes.length} processes มี agent ครอบคลุม · ช่องแดง = ไม่มี agent เลยสักตัว</span>
         </div>
         {procLoading ? (
           <div className="dash-empty">Loading…</div>
@@ -321,7 +407,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
       <div className="dash-card">
         <div className="dash-card-hdr">
           <span className="dash-card-title">Approve Area Coverage</span>
-          <span className="dash-card-sub">{areaCoveredN}/{AREA_ORDER.length} area มี approver ครอบคลุม · ช่องแดง = ยังไม่มี approver</span>
+          <span className="dash-card-sub">{areaCoveredN}/{AREA_ORDER.length} area มี approver ครอบคลุม · ช่องส้ม = ยังไม่มี approver (ไม่ใช่ปัญหาเดียวกับช่องแดงของ SDLC Coverage)</span>
         </div>
         <div className="dash-stages">
           <div className="dash-stage">
@@ -333,7 +419,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
                 return (
                   <span
                     key={area}
-                    className={`dash-proc ${approverN === 0 ? 'gap' : ''} ${clickable ? 'clickable' : ''}`}
+                    className={`dash-proc ${approverN === 0 ? 'gap-warn' : ''} ${clickable ? 'clickable' : ''}`}
                     title={`${area} — ${agentN2} agent${agentN2 === 1 ? '' : 's'}, ${approverN} approver${approverN === 1 ? '' : 's'}${approverN === 0 ? ' (ยังไม่มี approver)' : ''}`}
                     onClick={clickable ? () => setAreaModal({ area, agents: areaAgents[area] || [] }) : undefined}
                   >
@@ -378,32 +464,6 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
             ))}
           </div>
         )}
-      </div>
-
-      {/* ── Category / Product distribution (2026-08-18) ── */}
-      <div className="dash-grid3">
-        <div className="dash-card">
-          <div className="dash-card-hdr">
-            <span className="dash-card-title">Category — Discipline</span>
-            <span className="dash-card-sub">รวมนับซ้ำได้ (1 agent มีได้หลาย category)</span>
-          </div>
-          {disciplineRows.map(([k, n]) => (
-            <BarRow key={k} label={k} n={n} total={agents.length} color="var(--accent)" />
-          ))}
-        </div>
-        <div className="dash-card">
-          <div className="dash-card-hdr">
-            <span className="dash-card-title">Category — Product</span>
-            <span className="dash-card-sub">Business vertical ที่ agent ผูกด้วย (§23)</span>
-          </div>
-          {productRows.length === 0 ? (
-            <div className="dash-empty">ยังไม่มี agent ที่ผูก product category</div>
-          ) : (
-            productRows.map(([k, n]) => (
-              <BarRow key={k} label={k} n={n} total={agents.length} color="#0ea5e9" />
-            ))
-          )}
-        </div>
       </div>
 
       {/* ── Data quality watchlist (2026-08-18) ── */}
@@ -479,53 +539,6 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
               </div>
             ))}
           </div>
-        </div>
-      </div>
-
-      <div className="dash-grid-flag">
-        <div className="dash-card">
-          <div className="dash-card-hdr">
-            <span className="dash-card-title">ยังไม่มีใครแตะเลย</span>
-            <span className="dash-card-sub">
-              {usageRows.totalUntouched} รายการ · ไม่มีคนเปิดดู/กดไปใช้/เจอจากค้นหา — ตัวเลือกสำหรับ retire
-            </span>
-          </div>
-          {usageRows.untouched.length === 0 ? (
-            <div className="dash-empty">ทุกรายการมีคนแตะแล้ว</div>
-          ) : (
-            <div className="dash-flag-list">
-              {usageRows.untouched.map(({ a }) => (
-                <div key={a.id} className="dash-flag-row" onClick={() => onAgentClick?.(a)}>
-                  <span className="dash-flag-pill" style={pillStyle(TIER_DEF[getTier(a)])}>{getTier(a)}</span>
-                  <span className="dash-flag-name">{a.agentName}</span>
-                  <span className="dash-flag-meta">{a.owner || '—'}</span>
-                  <span className="dash-flag-meta">
-                    {a.deploymentStatus === 'approved' ? 'Ready to Use' : 'อยู่ระหว่างพัฒนา'}
-                  </span>
-                  <span className="dash-flag-prog">{normalizeProgress(a.devProgress)}%</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="dash-card">
-          <div className="dash-card-hdr">
-            <span className="dash-card-title">ถูกใช้มากที่สุด</span>
-            <span className="dash-card-sub">เปิดดู 👁 · กดไปใช้ ↗ · นับเป็นคนต่อวัน</span>
-          </div>
-          {usageRows.top.length === 0 ? (
-            <div className="dash-empty">ยังไม่มีข้อมูลการใช้งาน — เพิ่งเริ่มเก็บ</div>
-          ) : (
-            <div className="dash-flag-list">
-              {usageRows.top.map(({ a, s }) => (
-                <div key={a.id} className="dash-flag-row" style={{ gridTemplateColumns: '1fr 74px' }} onClick={() => onAgentClick?.(a)}>
-                  <span className="dash-flag-name">{a.agentName}</span>
-                  <span className="dash-flag-prog">👁{s.detailOpens} ↗{s.endpointClicks}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
@@ -723,5 +736,42 @@ function BarRow({ label, n, total, color }) {
       <span className="dash-bar-n">{n}</span>
       <span className="dash-bar-pct">{pct}%</span>
     </div>
+  );
+}
+
+// Category distribution row (2026-08-19) — bar length relative to the
+// LARGEST bucket (max), not to agents.length like BarRow: category is
+// multi-valued, so a percent-of-total would be meaningless (bars can't sum
+// to 100% and 29% next to a bar that's visually 100%-wide would look broken).
+// Colour comes from categoryColor(), the same deterministic hash already
+// used for sidebar category dots, so a category keeps the same colour
+// everywhere it appears in the app rather than getting a one-off hue here.
+function CategoryBarRow({ label, n, max }) {
+  const color = categoryColor(label);
+  const pct = max > 0 ? Math.round((n / max) * 100) : 0;
+  return (
+    <div className="dash-cat-row">
+      <span className="dash-cat-dot" style={{ background: color }} />
+      <span className="dash-cat-label" title={label}>{label}</span>
+      <div className="dash-cat-track"><div className="dash-cat-fill" style={{ width: `${pct}%`, background: color }} /></div>
+      <span className="dash-cat-n">{n}</span>
+    </div>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function ArrowUpRightIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" />
+    </svg>
   );
 }
