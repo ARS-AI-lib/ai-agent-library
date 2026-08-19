@@ -817,14 +817,45 @@ const COMMENT_MAX = 1000;
 // Keep the public review list bounded — it is read on every detail-modal open.
 const REVIEWS_PAGE = 50;
 
+// Bangkok has no DST, so a fixed +7h offset is exact and permanent — no
+// Intl/timeZone dependency needed. Reading UTC-getters off the shifted Date
+// yields Bangkok wall-clock date parts regardless of the server's own TZ.
+// (2026-08-19: added after discovering `new Date().toISOString()` — used
+// everywhere date-keys were needed before this — is pure UTC, so the old
+// "daily" reset actually landed at 07:00 Bangkok, not midnight. Nobody had
+// noticed; fixed here rather than carried into the new weekly logic below.)
+function bangkokParts(date = new Date()) {
+  const b = new Date(date.getTime() + 7 * 3600 * 1000);
+  return { y: b.getUTCFullYear(), m: b.getUTCMonth(), d: b.getUTCDate(), dow: b.getUTCDay() };
+}
+function bangkokDayKey(date = new Date()) {
+  const { y, m, d } = bangkokParts(date);
+  return new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
+}
+// Key = the date of the Sunday that starts this Bangkok-local week (Sun 00:00
+// – Sat 23:59). `d - dow` rolling negative (week's Sunday falls in the
+// previous month) is normalised for free by Date.UTC.
+function bangkokWeekKey(date = new Date()) {
+  const { y, m, d, dow } = bangkokParts(date);
+  return new Date(Date.UTC(y, m, d - dow)).toISOString().slice(0, 10);
+}
+
 /**
  * Record one usage event for an agent.
  *
- * De-duplicated per user, per agent, per kind, PER DAY. That is deliberate and
- * is what makes the number meaningful as well as un-inflatable: "12 people
- * opened this today" survives being put in front of an executive, "12 clicks"
- * does not (one bored person with a mouse produces the same 12). The marker
- * doc mirrors the /rateLimits doc-id-encoding convention.
+ * De-duplicated per user, per agent, per kind — but the bucket size differs
+ * by kind (2026-08-19, tightened from a flat "per day" for all three):
+ *   - `detail` (view) and `endpoint` (use): per Bangkok-local WEEK
+ *     (Sun 00:00 – Sat 23:59). Someone opening the same agent five times on
+ *     a Tuesday and twice more on Thursday is one interested person, not
+ *     seven — daily buckets were inflating that into up to 7x.
+ *   - `search`: stays per Bangkok-local DAY (unchanged cadence, just the
+ *     Bangkok-correct boundary now instead of the old UTC one, since the
+ *     helper was written anyway).
+ * Either way this is what makes the number meaningful as well as
+ * un-inflatable: "12 people opened this this week" survives being put in
+ * front of an executive, "12 clicks" does not. The marker doc mirrors the
+ * /rateLimits doc-id-encoding convention.
  *
  * Callers treat this as fire-and-forget — see the client hooks. Telemetry must
  * never delay or break a UI action, same posture as bumpChatMetrics.
@@ -841,15 +872,18 @@ exports.recordAgentEvent = onCall(
     if (!agentId) throw new HttpsError('invalid-argument', 'agentId is required.');
     if (!EVENT_KINDS.has(kind)) throw new HttpsError('invalid-argument', `kind must be one of ${[...EVENT_KINDS].join('|')}.`);
 
-    const day = new Date().toISOString().slice(0, 10);
-    const markerRef = db.collection('agentEvents').doc(`${agentId}__${uid}__${day}__${kind}`);
+    const period = kind === 'search' ? bangkokDayKey() : bangkokWeekKey();
+    const markerRef = db.collection('agentEvents').doc(`${agentId}__${uid}__${period}__${kind}`);
     const statsRef = db.collection('agentStats').doc(agentId);
 
     // create() throws ALREADY_EXISTS if this user already triggered this kind
-    // for this agent today — that rejection IS the dedup, no read needed.
+    // for this agent in this period — that rejection IS the dedup, no read
+    // needed. Old marker docs (pre-2026-08-19) used a `day` field and a
+    // day-keyed doc ID; this doc ID scheme differs for detail/endpoint now,
+    // so there's no collision risk — old docs simply sit inert.
     try {
       await markerRef.create({
-        agentId, uid, kind, day,
+        agentId, uid, kind, period,
         createdAt: FieldValue.serverTimestamp(),
         // For a future TTL policy, same as /rateLimits. Nothing reads it today.
         expireAt: new Date(Date.now() + 90 * 864e5),

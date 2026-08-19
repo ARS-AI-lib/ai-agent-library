@@ -7,7 +7,9 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 // bad day. A lost event just means one uncounted view — the same posture
 // bumpChatMetrics takes server-side.
 //
-// The server de-duplicates per user / per agent / per kind / per DAY, so the
+// The server de-duplicates per user / per agent / per kind (2026-08-19: the
+// bucket size now differs by kind — 'detail'/'endpoint' are per Bangkok-local
+// WEEK, Sun 00:00–Sat 23:59; 'search' stays per Bangkok-local day), so the
 // counters mean "unique people", not "clicks". That is what makes them both
 // un-inflatable and honest enough to put in front of an executive. It also
 // means calling this more than once is harmless, which is why none of the call

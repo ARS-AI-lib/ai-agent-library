@@ -260,7 +260,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
         <div className="dash-card">
           <div className="dash-card-hdr">
             <span className="dash-card-title">Most Used</span>
-            <span className="dash-card-sub">Views + endpoint clicks, counted as unique people per day</span>
+            <span className="dash-card-sub">Views + endpoint clicks, counted as unique people per week (resets Sunday, Bangkok time)</span>
           </div>
           {usageRows.top.length === 0 ? (
             <div className="dash-empty">No usage data yet — just started collecting</div>
