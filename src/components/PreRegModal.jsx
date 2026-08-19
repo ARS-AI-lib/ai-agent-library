@@ -6,7 +6,7 @@ import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
-import { uniq, splitRoles, extractProcessId, processLabel, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
+import { uniq, splitRoles, extractProcessId, processLabel, agentUseCaseNames } from '../lib/agentUtils';
 import { isInternalToolName } from '../lib/internalTool';
 import useEscapeKey from '../hooks/useEscapeKey';
 import ComboInput from './ComboInput';
@@ -76,7 +76,6 @@ const EMPTY_FORM = {
   tool: '',
   llm: '',
   dataPrivacy: '',
-  endpoint: '',           // optional — where to actually USE the agent / download the skill
   sdlcStage: new Set(),
   sdlcProcessMapping: new Set(),
   useCase: new Set(),
@@ -95,7 +94,7 @@ function emptySkill() {
     name: '', description: '', scope: 'Internal',
     ability: new Set(), relatedRole: new Set(),
     input: '', output: '', reusable: '', reuseCondition: '',
-    hml: false, humanJob: '', endpoint: '',
+    hml: false, humanJob: '',
   };
 }
 
@@ -504,7 +503,6 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         // Sanitised on the way IN as well as at render time — a hostile scheme
         // should never reach Firestore, so no future reader has to remember to
         // re-check it. NOT inherited by sub-skills: each has its own location.
-        endpoint: safeEndpointUrl(form.endpoint),
         // 2026-08-11: no longer blanked for External. Scope (who consumes the
         // agent) is independent of which SDLC process it performs — a
         // customer-facing agent can still be built through, and tracked
@@ -644,7 +642,6 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             tool: inheritedFromAgent.tool,
             llm: inheritedFromAgent.llm,
             dataPrivacy: inheritedFromAgent.dataPrivacy,
-            endpoint: safeEndpointUrl(s.endpoint),
             // SDLC context inherited from the Agent (blanked when the skill
             // itself is customer-facing, mirroring the Agent rule).
             sdlcStage: [...form.sdlcStage],
@@ -914,17 +911,10 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             )}
 
-            <div className="fg">
-              <label>Endpoint</label>
-              <input
-                value={form.endpoint}
-                onChange={(e) => setField('endpoint', e.target.value)}
-                placeholder="ลิงก์เข้าใช้งาน Agent หรือลิงก์ดาวน์โหลด Skill (ไม่บังคับ)"
-              />
-              <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>
-                ผู้ใช้กดจากการ์ดไปใช้งานได้ทันที — รองรับเฉพาะ http/https
-              </div>
-            </div>
+            {/* Endpoint input removed 2026-08-19. A new entry has nowhere to
+                point yet, and the location is now captured at the moment it
+                matters — the transition to 100% (markAgentReady), which
+                refuses to let an agent be declared Ready-to-Use without one. */}
 
             {/* SDLC group — shown regardless of Scope (2026-08-11). It used to
                 be Internal-only, which meant a customer-facing submission
@@ -1063,10 +1053,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                         <input value={s.humanJob} onChange={(e) => setSkillField(s._id, 'humanJob', e.target.value)} placeholder="หน้าที่ของ Human ใน loop" />
                       </div>
                     )}
-                    <div className="fg">
-                      <label>Endpoint</label>
-                      <input value={s.endpoint} onChange={(e) => setSkillField(s._id, 'endpoint', e.target.value)} placeholder="ลิงก์ดาวน์โหลด Skill นี้ (ไม่บังคับ)" />
-                    </div>
+                    {/* Endpoint input removed 2026-08-19 — see the note on the
+                        main Agent form above. */}
                   </div>
                 ))}
               </div>

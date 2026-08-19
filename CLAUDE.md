@@ -746,3 +746,68 @@ render → แล้วค่อยเรียก `getEndpointFile`
 โดนพัก) · งานนี้เริ่มเก็บ artifact ของงานจริงไว้ในโปรเจกต์นั้นตอน runtime และ**ต่างจากไฟล์เดิมที่อยู่ใน
 git** (มี version, diff, คนรีวิวตอน deploy) — ไฟล์ที่อัปโหลด**ไม่มีสามอย่างนั้นเลย**
 ผู้ใช้ตัดสินใจเดินหน้าแล้ว แต่ควรแจ้งทีม security ให้รู้
+
+---
+
+## 25. Ready-to-Use gate + Rename approval (2026-08-19)
+
+### กฎใหม่: จะปรับเป็น 100% ต้องมี endpoint หรือไฟล์แนบก่อน
+`markAgentReady` (callable) เป็นทางเดียวที่ทำให้ `devProgress = 100` ได้
+- **ต้อง `deploymentStatus === 'approved'` ก่อน** (เดิม rules ก็บังคับ >95 อยู่แล้ว)
+- **ต้องมีอย่างใดอย่างหนึ่ง:** `endpoint` เดิม, `endpointFile` ที่อัปไว้, หรือ URL ที่ส่งมาใน call นี้
+- ตั้ง `launchDate` ให้อัตโนมัติถ้ายังไม่มี = เวลาที่กดปรับเป็น 100% (เป็นเวลาจริง ไม่ใช่ค่าประมาณ)
+- **ไม่ย้อนหลัง** — ทำงานเฉพาะตอน *เปลี่ยนเป็น* 100% ของเดิม 15 ตัวที่ 100% แล้วแต่ไม่มี endpoint
+  ถูก grandfather ไว้ และไปโผล่ใน Data Quality Watchlist แทน
+
+### สิทธิ์ — `functions/agentReadyRules.js` เป็น single source of truth
+`checkAgentActor()` = **Creator · Approver/Staff ประจำ Area · Admin**
+ใช้ร่วมกันทั้ง `markAgentReady` และ `attachEndpointFile` (ตามโจทย์ที่ว่าแก้ endpoint/ไฟล์
+ต้องใช้สิทธิ์ชุดเดียวกับการปรับ 100%)
+
+⚠️ **`createdBy` ใช้ระบุ creator ไม่ได้** — 157/239 ตัวมีค่าที่ไม่ตรงกับ user จริง
+เห็นชัดจากค่า `…Z11kTt2`, `…Z11kTt3`, `…Z11kTt162` (uid จริงตัวเดียวต่อเลขจาก CSV import)
+→ **ต้องใช้ `creatorEmails` เป็นหลัก** วัดจริงแล้ว: creator grant มาจาก email **548** ครั้ง
+จาก uid แค่ **2** ครั้ง · `createdBy` เก็บไว้เป็น fallback ของ doc ที่สร้างผ่านฟอร์มจริง
+
+⚠️ **rules เช็ค area ไม่ได้** — `agentApproveAreas()` เป็น resolver 7 ชั้นใน `src/lib`
+เลยต้องใช้ Cloud Function (เหตุผลเดียวกับ `attachEndpointFile`) · ฝั่ง server อ่าน
+**stored `approveArea` เท่านั้น** (layer 1 ที่ชนะทุกชั้นอยู่แล้ว) ส่วน client resolve เต็ม —
+ถ้าต่างกัน client จะหลวมกว่า ซึ่งปลอดภัย เพราะ server ยังปฏิเสธอยู่ดี
+
+### 🔴 Rename หลังเผยแพร่ — และกับดักที่ต้องรู้
+Creator ขอเปลี่ยนชื่อได้หลัง deploy approved โดยเขียนลง `/renameRequests` แล้ว
+**Approver ประจำ Area หรือ Admin** ตัดสินผ่าน `decideRenameRequest` (staff ตัดสินไม่ได้,
+creator อนุมัติของตัวเองไม่ได้)
+
+**ทำไมต้องเป็น Cloud Function ไม่ใช่ rules** — 3 เหตุผลพร้อมกัน:
+1. เช็ค area ไม่ได้ (ข้างบน)
+2. `agentName` ถูก **freeze ทุก tier** เมื่อ deploymentStatus เป็น requested/approved
+   (เดิมมีแต่ admin ที่ rename ได้ — นี่คือข้อจำกัดที่กำลังปลด)
+3. ⚠️ **ต้องแก้ `matchingAgent` ของ sub-skill ลูกใน batch เดียวกัน**
+
+**กับดัก:** `pairedSubSkills()` จับคู่ด้วย **ชื่อ** และ sub-skill เก็บชื่อ parent ไว้ใน
+`matchingAgent` · วัดจริง: **20 agent มีลูก, 51 agent เป็นลูก** (VA Agent 7, Guardrail Agent 6)
+เปลี่ยนชื่อเฉยๆ โดยไม่แก้ลูก → **ลูกหลุดทั้งหมดทันที** พัง cascade ของ progress/launch,
+deploy request, deploy decision, queue de-dup และ lock ของ sub-skill
+พิสูจน์แล้วด้วย `functions/verify-rename-cascade.cjs`: มี fix = 51 pairing อยู่ครบ,
+ไม่มี fix = **20/20 parent เสียลูกหมด**
+
+### ตัดช่อง endpoint ออกจากฟอร์มแล้ว
+ไม่มีใน PreRegModal (ทั้ง agent และ sub-skill) และ EditAgentModal อีกต่อไป
+`endpoint` ถูกถอดออกจาก **Tier A / Tier B / RTU branch** ใน `firestore.rules` ด้วย —
+เขียนได้ทางเดียวคือผ่าน callable (admin SDK ข้าม rules)
+
+### Key files
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `functions/agentReadyRules.js` | ⭐ **สิทธิ์ + กฎ 100% ที่เดียว** — `checkAgentActor`, `checkMarkReady`, `checkRenameDecider` |
+| `functions/verify-agent-ready.cjs` | **รันก่อน deploy** — 29 เคสกับ user/agent จริง (read-only) |
+| `functions/verify-rename-cascade.cjs` | **รันก่อน deploy** — พิสูจน์ parity + ว่าลูกไม่หลุด |
+| `functions/backfill-launch-date.cjs` | เติม launchDate 17 ตัวจาก `createdAt` (one-off, ทำไปแล้ว) |
+
+### ⚠️ launchDate 17 ตัวเป็นค่าประมาณ ไม่ใช่วันเปิดใช้จริง
+ตั้งใจจะใช้ `deployDecidedAt` แต่ **0/17 มีค่านั้น** (เป็น Figma skill ที่ `deploymentStatus: 'none'`
+ไม่เคยขอ deploy) ผู้ใช้เลือกใช้ `createdAt` แทนหลังจากได้รับคำเตือนแล้ว
+→ ทุกแถวติดธง **`launchDateEstimated: true`** และขึ้น Watchlist เพื่อไม่ให้ค่าประมาณ
+ถูกอ่านเป็นข้อเท็จจริง (SYSTEM-OVERVIEW:353) · **ของใหม่ที่ผ่าน `markAgentReady` ไม่ติดธงนี้**
+เพราะเป็นเวลาจริง

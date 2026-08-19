@@ -187,7 +187,18 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
     // opposite. Both true on the same doc means one of them is wrong.
     const scopeContradiction = agents.filter((a) => a.internalTool === true && a.customerFacing === true);
     const noDeployDecidedAt = agents.filter((a) => a.deploymentStatus === 'approved' && !a.deployDecidedAt);
-    return { tbc, scopeContradiction, noDeployDecidedAt };
+    // Grandfathered by the 2026-08-19 Ready-to-Use gate: markAgentReady now
+    // refuses to reach 100% without an endpoint or uploaded file, but it only
+    // ever runs on the transition — 15 agents were already sitting at 100%
+    // without one. Listed rather than force-migrated, so the gap is visible
+    // instead of silently accepted.
+    const readyNoEndpoint = agents.filter((a) => normalizeProgress(a.devProgress) === 100
+      && !String(a.endpoint || '').trim() && !a.endpointFile?.storagePath);
+    // Launch dates written by backfill-launch-date.cjs from `createdAt`, not
+    // from an observed launch — flagged at write time so an estimate never
+    // reads as a fact in Timeline/Dashboard.
+    const estimatedLaunch = agents.filter((a) => a.launchDateEstimated === true);
+    return { tbc, scopeContradiction, noDeployDecidedAt, readyNoEndpoint, estimatedLaunch };
   }, [agents]);
 
   // ── Owner workload ──
@@ -487,6 +498,18 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
         <WatchlistSection
           title="Deploy approved แต่ไม่มี deployDecidedAt"
           rows={watchlist.noDeployDecidedAt}
+          empty="ไม่มี"
+          onAgentClick={onAgentClick}
+        />
+        <WatchlistSection
+          title="100% แต่ไม่มี endpoint (ของเดิมก่อนกฎใหม่)"
+          rows={watchlist.readyNoEndpoint}
+          empty="ไม่มี"
+          onAgentClick={onAgentClick}
+        />
+        <WatchlistSection
+          title="launch date มาจากการประมาณ (createdAt) ไม่ใช่วันเปิดใช้จริง"
+          rows={watchlist.estimatedLaunch}
           empty="ไม่มี"
           onAgentClick={onAgentClick}
         />

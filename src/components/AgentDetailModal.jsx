@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
-import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, pairedSubSkills, isPairedSubSkill, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
+import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, isPairedSubSkill, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { recordAgentEvent, submitRating } from '../lib/agentEvents';
-import { handleEndpointClick } from '../lib/endpointFiles';
+import { handleEndpointClick, isLibraryFileUrl, markAgentReady } from '../lib/endpointFiles';
 import { readStats, ratingDisplay, canRateAgent, STAR_LEVELS } from '../lib/agentStats';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
@@ -33,6 +33,11 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [saveError, setSaveError] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
+  const [editEndpoint, setEditEndpoint] = useState('');
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameMsg, setRenameMsg] = useState('');
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [archiveReason, setArchiveReason] = useState('');
@@ -146,8 +151,26 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // field UserManagementModal already assigns to approvers). Mirrors the
   // Approve Area routing model, so "staff archive rights" reads as "curation
   // rights within your own discipline", not "any staff can retire anything".
+  const agentAreas = agentApproveAreas(agent, schema.categoryAreaMap);
   const staffAreaMatch = userRole === 'staff' && approveAreas.length > 0
-    && agentApproveAreas(agent, schema.categoryAreaMap).some((ar) => approveAreas.includes(ar));
+    && agentAreas.some((ar) => approveAreas.includes(ar));
+
+  // ── Ready-to-Use gate (2026-08-19) ──
+  // Who may flip this agent to 100% and set/replace its endpoint or uploaded
+  // file: creator, an approver/staff of this agent's Approve Area, or admin.
+  // Presentation only — markAgentReady re-checks all of it server-side.
+  const mayMarkReady = canMarkAgentReady(agent, user, userRole, isAdmin, approveAreas, agentAreas);
+  // The endpoint is required BEFORE 100%, so the dialog must know whether one
+  // already exists — either a plain URL or a file uploaded to our repo.
+  const hasUploadedFile = !!agent.endpointFile?.storagePath;
+  const endpointIsOurFile = isLibraryFileUrl(agent.endpoint);
+  const hasEndpoint = !!String(agent.endpoint || '').trim() || hasUploadedFile;
+  // A creator may ask to rename only once the thing is actually live — before
+  // that the ordinary Edit form still lets them rename outright, no approval
+  // needed, so offering a request flow there would be pure friction.
+  const mayRequestRename = deploymentStatus === 'approved'
+    && !isAdmin
+    && (isMyAgent(agent, user) || !!(agent.createdBy && agent.createdBy === user?.uid));
   const mayArchive = isAdmin || userRole === 'approver' || userRole === 'committee' || staffAreaMatch;
   const isArchived = agent.archived === true;
   // Paired sub-skills that would be dragged along by archiving this Agent —
@@ -167,6 +190,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   function startEdit() {
     setEditProgress(progress);
     setEditLaunch(toDateInputValue(agent.launchDate));
+    setEditEndpoint('');
     setSaveError('');
     setEditing(true);
   }
@@ -175,6 +199,42 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
     const clamped = Math.max(0, Math.min(100, Math.round(Number(editProgress) || 0)));
     if (clamped > 95 && deploymentStatus !== 'approved') {
       setSaveError('ไม่สามารถตั้งค่าเกิน 95% ได้จนกว่าจะได้รับอนุมัติ Deployment Request (ปุ่มขออนุมัติอยู่ใต้แถบ Progress ด้านล่าง)');
+      return;
+    }
+    // ── The 100% transition is a different operation, not a bigger number ──
+    // It publishes the agent, so it carries an endpoint requirement, a wider
+    // permission set (creator / area approver / area staff / admin) and an
+    // automatic launch date. None of that is expressible in security rules —
+    // area membership needs the 7-layer agentApproveAreas() resolver — so it
+    // runs through the markAgentReady callable instead of a client write.
+    if (clamped === 100) {
+      if (!mayMarkReady) {
+        setSaveError('คุณไม่มีสิทธิ์ปรับเป็น 100% — ต้องเป็น Creator, Approver/Staff ประจำ Area นี้ หรือ Admin');
+        return;
+      }
+      if (!hasEndpoint && !editEndpoint.trim()) {
+        setSaveError('ต้องระบุ Endpoint URL หรืออัปโหลดไฟล์ก่อน จึงจะปรับเป็น 100% ได้');
+        return;
+      }
+      setSaving(true);
+      setSaveError('');
+      try {
+        const args = { endpointUrl: editEndpoint.trim() || undefined, launchDate: editLaunch || undefined };
+        await markAgentReady({ agentId: agent.id, ...args });
+        // Cascade stays here rather than inside the callable so the one correct
+        // pairing helper (pairedSubSkills) remains the only implementation —
+        // re-deriving it server-side is exactly the drift CLAUDE.md §20 forbids.
+        // Each call is independently authorised; sub-skills inherit the parent's
+        // endpoint only if they have none of their own.
+        for (const sk of pairedSubSkills(agent, allAgents || [])) {
+          await markAgentReady({ agentId: sk.id, ...args }).catch(() => {});
+        }
+        setEditing(false);
+      } catch (e) {
+        setSaveError(e?.message || 'ปรับเป็น 100% ไม่สำเร็จ');
+      } finally {
+        setSaving(false);
+      }
       return;
     }
     setSaving(true);
@@ -265,6 +325,37 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
     }
   }
 
+  // Rename after go-live is a REQUEST, not an edit. Every detail tier freezes
+  // `agentName` once deploymentStatus is requested/approved, and unfreezing it
+  // for the creator alone would let a live entry be renamed with nobody
+  // noticing — so the creator files a row here and an area approver (or admin)
+  // decides via the decideRenameRequest callable, which also rewrites the
+  // paired sub-skills' matchingAgent so the pairing survives.
+  async function handleRequestRename() {
+    const next = renameValue.trim();
+    if (!next) { setRenameMsg('กรุณาระบุชื่อใหม่'); return; }
+    if (next === String(agent.agentName || '').trim()) { setRenameMsg('ชื่อใหม่ซ้ำกับชื่อเดิม'); return; }
+    setRenameBusy(true);
+    setRenameMsg('');
+    try {
+      await addDoc(collection(db, 'renameRequests'), {
+        agentId: agent.id,
+        currentName: agent.agentName || '',
+        requestedName: next,
+        status: 'pending',
+        createdBy: user?.uid || '',
+        createdByEmail: user?.email || '',
+        createdAt: serverTimestamp(),
+      });
+      setRenameMsg('ส่งคำขอแล้ว — รอ Approver ประจำ Area หรือ Admin อนุมัติ');
+      setRenameValue('');
+    } catch (e) {
+      setRenameMsg(e?.message || 'ส่งคำขอไม่สำเร็จ');
+    } finally {
+      setRenameBusy(false);
+    }
+  }
+
   async function handleRequestDeploy() {
     setConfirmingDeploy(false);
     setRequesting(true);
@@ -306,6 +397,13 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             only the redundant inner card frame. */}
         <div className="mtitle-row">
           <h2 className="mtitle">{agent.agentName}</h2>
+          {mayRequestRename && (
+            <button className="mi-btn" title="ขอเปลี่ยนชื่อ (ต้องผ่านการอนุมัติ)" onClick={() => { setRenameValue(agent.agentName || ''); setRenameMsg(''); setRenameOpen(true); }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20h16" /><path d="M14.5 3.5a2.12 2.12 0 0 1 3 3L7 17l-4 1 1-4z" />
+              </svg>
+            </button>
+          )}
           {mayEditDetails && (
             <button className="mi-btn" title="Edit Details" onClick={() => onEditAgent?.(agent)}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
@@ -393,6 +491,16 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 </svg>
                 {endpointLabel(agent.endpoint)}
               </a>
+              {/* Requirement: the system must say WHICH of the two this is —
+                  a plain external URL, or a file uploaded to our own repo
+                  (which is SSO-gated on download). isLibraryFileUrl() is the
+                  existing single source of that distinction, reused not
+                  re-derived. */}
+              <span style={{ fontSize: 10, color: 'var(--mu)', marginLeft: 6, whiteSpace: 'nowrap' }}>
+                {endpointIsOurFile
+                  ? `ไฟล์ในระบบ${agent.endpointFile?.name ? ` · ${agent.endpointFile.name}` : ''}`
+                  : 'ลิงก์ภายนอก'}
+              </span>
             </div>
           )}
           <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
@@ -437,9 +545,45 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 />
               </div>
               <div className="fg" style={{ marginBottom: 0 }}>
-                <label>Launch Date</label>
+                <label>
+                  Launch Date
+                  {Number(editProgress) === 100 && !editLaunch && (
+                    <span className="hint">ไม่ระบุ = ใช้วันที่ปรับเป็น 100% อัตโนมัติ</span>
+                  )}
+                </label>
                 <input type="date" value={editLaunch} onChange={(e) => setEditLaunch(e.target.value)} />
               </div>
+
+              {/* The Ready-to-Use gate. Only rendered while actually crossing to
+                  100% — an agent moving 40% -> 60% has nothing to publish yet,
+                  so demanding a location there would be noise. Hidden entirely
+                  once one exists (URL or uploaded file): this is a requirement
+                  to HAVE an endpoint, not to retype it every time. */}
+              {Number(editProgress) === 100 && !hasEndpoint && (
+                <div className="fg" style={{ marginTop: 8, marginBottom: 0 }}>
+                  <label>Endpoint <span className="req">*</span> <span className="hint">ต้องมีก่อนจึงจะปรับเป็น 100% ได้</span></label>
+                  <input
+                    value={editEndpoint}
+                    onChange={(e) => setEditEndpoint(e.target.value)}
+                    placeholder="https://… ลิงก์เข้าใช้งาน"
+                  />
+                  <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 4 }}>
+                    หรืออัปโหลดไฟล์แทนได้ที่เมนู ☰ → Attach Endpoint File แล้วกลับมาปรับ 100% อีกครั้ง
+                  </div>
+                </div>
+              )}
+              {Number(editProgress) === 100 && hasEndpoint && (
+                <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 8 }}>
+                  {endpointIsOurFile || hasUploadedFile ? 'มีไฟล์แนบในระบบแล้ว' : 'มี Endpoint แล้ว'} — พร้อมปรับเป็น 100%
+                </div>
+              )}
+              {Number(editProgress) === 100 && !mayMarkReady && (
+                <div className="msg warn" style={{ marginTop: 8, fontSize: 11 }}>
+                  <span className="dot" style={{ background: 'var(--msg-warn-fg)' }} />
+                  ต้องเป็น Creator, Approver/Staff ประจำ Area นี้ หรือ Admin จึงจะปรับเป็น 100% ได้
+                </div>
+              )}
+
               <div className="btn-group" style={{ marginTop: 10 }}>
                 <button className="btn btn-secondary" disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
                 <button className="btn btn-success" disabled={saving} onClick={handleSave}>
@@ -586,6 +730,38 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           )}
         </div>
       </div>
+
+      {renameOpen && (
+        <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setRenameOpen(false)}>
+          <div className="mbox" style={{ padding: 18, maxWidth: 420 }}>
+            <button className="mclose" onClick={() => setRenameOpen(false)}>✕</button>
+            <h3 style={{ fontSize: 15, marginBottom: 6 }}>ขอเปลี่ยนชื่อ</h3>
+            <p style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 12 }}>
+              Agent/Skill นี้เผยแพร่แล้ว การเปลี่ยนชื่อต้องได้รับอนุมัติจาก Approver ประจำ Area หรือ Admin ก่อน
+              {subSkills.length > 0 && (
+                <span style={{ display: 'block', marginTop: 6, color: 'var(--mu)', fontSize: 11 }}>
+                  ระบบจะอัปเดตการผูกของ Skill ลูก {subSkills.length} ตัวให้อัตโนมัติเมื่อได้รับอนุมัติ
+                </span>
+              )}
+            </p>
+            <div className="fg" style={{ marginBottom: 10 }}>
+              <label>ชื่อใหม่</label>
+              <input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} maxLength={150} />
+            </div>
+            {renameMsg && (
+              <div className="msg info" style={{ fontSize: 11.5, marginBottom: 10 }}>
+                <span className="dot" style={{ background: '#4a6fa5' }} />{renameMsg}
+              </div>
+            )}
+            <div className="btn-row">
+              <button className="btn-sm rej" disabled={renameBusy} onClick={() => setRenameOpen(false)}>ปิด</button>
+              <button className="btn-sm appr" disabled={renameBusy || !renameValue.trim()} onClick={handleRequestRename}>
+                {renameBusy ? 'กำลังส่ง…' : 'ส่งคำขอ'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmingDeploy && (
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setConfirmingDeploy(false)}>

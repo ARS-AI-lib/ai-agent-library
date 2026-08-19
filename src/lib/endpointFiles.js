@@ -176,6 +176,28 @@ export async function fetchEndpointFile(agentId) {
 }
 
 /**
+ * Flip an agent to 100% / Ready to Use (2026-08-19).
+ *
+ * Awaited, never fire-and-forget: the server enforces the gate this feature
+ * exists for (an endpoint URL or an uploaded file must exist), plus the
+ * creator / area-approver / area-staff / admin permission, so the caller has
+ * to see the refusal and why. Also fills in launchDate when the agent has
+ * none, using the moment of the transition.
+ *
+ * Returns { ok, endpoint, launchWasAutoSet }.
+ */
+export async function markAgentReady({ agentId, endpointUrl, launchDate }) {
+  const { data } = await fn('markAgentReady')({ agentId, endpointUrl, launchDate });
+  return data;
+}
+
+/** Approve or reject a pending rename request. Returns { ok, verdict, childrenUpdated }. */
+export async function decideRenameRequest({ requestId, verdict }) {
+  const { data } = await fn('decideRenameRequest')({ requestId, verdict });
+  return data;
+}
+
+/**
  * Hand the fetched bytes to the browser as a download. Same Blob →
  * createObjectURL → anchor.click() dance already proven in ExportDataModal's
  * CSV export, so downloads behave identically to something users already do.

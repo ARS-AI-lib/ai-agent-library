@@ -63,11 +63,20 @@ function check(label, got, want) {
 
   // ── 2. area scoping, measured not assumed ───────────────────────────
   console.log('\n2) area scoping (staff + approver)');
+  // These used to assert "all staff hold no areas", which was a snapshot of
+  // one moment, not a rule — areas have since been assigned and the test
+  // broke without any code changing. Assert the BEHAVIOUR instead, which is
+  // what the rule actually guarantees regardless of who holds what today.
   const staffEmpty = staff.filter((u) => !(u.approveAreas || []).length);
-  check(`all ${staff.length} staff currently hold no approveAreas`,
-    staffEmpty.length === staff.length, true);
-  check('...so every staff member is allowed 0 agents (empty area != wildcard)',
-    staff.every((u) => countAllowed(u) === 0), true);
+  console.log(`   staff: ${staff.length} total, ${staffEmpty.length} with no areas assigned`);
+  check('a staff member with NO areas is allowed 0 agents (empty != wildcard)',
+    countAllowed({ role: 'staff', approveAreas: [] }), 0);
+  check('staff are scoped to their own areas, never beyond them',
+    staff.every((u) => {
+      const mine = new Set(u.approveAreas || []);
+      return eligible.filter((a) => allowed(a, u))
+        .every((a) => (a.approveArea || []).some((ar) => mine.has(ar)));
+    }), true);
 
   console.log('\n   per-approver reach:');
   approvers
@@ -92,10 +101,13 @@ function check(label, got, want) {
   // areas including Security, but committee is not in UPLOAD_ROLES, so it
   // grants nothing here — asserting over "every non-admin" would fail on that
   // and tell us nothing useful.
-  const uploaderHasSecurity = users.some(
-    (u) => (u.role === 'staff' || u.role === 'approver') && (u.approveAreas || []).includes('Security'),
-  );
-  check('   no staff/approver holds "Security" -> those agents are admin-only', uploaderHasSecurity, false);
+  // Also previously a data snapshot ("nobody holds Security"). The invariant
+  // that actually matters is reachability: a Security-area agent must be
+  // reachable ONLY by someone who holds Security (or admin).
+  const secAgents = eligible.filter((a) => (a.approveArea || []).includes('Security'));
+  check(`Security agents (${secAgents.length}) reachable only by Security holders`,
+    secAgents.every((a) => users.filter((u) => u.role !== 'admin' && allowed(a, u))
+      .every((u) => (u.approveAreas || []).includes('Security'))), true);
 
   // ── 3. agent-state gate ─────────────────────────────────────────────
   console.log('\n3) agent state');

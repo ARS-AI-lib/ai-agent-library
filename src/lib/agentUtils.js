@@ -100,6 +100,50 @@ export function canEditReadyToUseFields(agent, user, isAdmin) {
   return isMyAgent(agent, user) || !!(agent?.createdBy && agent.createdBy === user.uid);
 }
 
+// ── Ready-to-Use actor test (2026-08-19) ──────────────────────────────
+// "May this person flip the agent to 100%, and edit its endpoint / uploaded
+// file?" — creator, an approver/staff whose Approve Area matches, or admin.
+//
+// ⚠️ PRESENTATION ONLY. The authority is functions/agentReadyRules.js
+// (checkAgentActor), because the markAgentReady / attachEndpointFile callables
+// are reachable by any signed-in user who knows their name. This exists so the
+// UI doesn't offer a button that the server will refuse.
+//
+// `agentAreas` is passed in already resolved (the caller runs
+// agentApproveAreas()) rather than resolved here, because approveAreas.js
+// imports agentProcessIds/splitRoles/agentCategories FROM this module —
+// importing it back would make the cycle real. Every call site already has the
+// resolved list to hand for its own area checks.
+//
+// One deliberate asymmetry from the server: callers resolve through the full
+// 7-layer chain while the server reads the STORED approveArea only (it cannot
+// run that resolver). Stored is layer 1 and wins whenever present, and every
+// deploy-approved agent has one, so the two agree today. If they ever diverge
+// the client is the more permissive of the two — the safe direction, since the
+// server still refuses.
+export function canMarkAgentReady(agent, user, userRole, isAdmin, approveAreas, agentAreas) {
+  if (!user || !agent) return false;
+  if (isAdmin) return true;
+  if (isMyAgent(agent, user)) return true;
+  if (agent.createdBy && agent.createdBy === user.uid) return true;
+  if (userRole !== 'approver' && userRole !== 'staff') return false;
+  const mine = Array.isArray(approveAreas) ? approveAreas : [];
+  if (!mine.length) return false;
+  return (agentAreas || []).some((ar) => mine.includes(ar));
+}
+
+// Who may DECIDE a rename request — narrower on purpose: the creator files the
+// request, so letting them approve it too would make the approval meaningless.
+// Staff are excluded as well; approving a rename is an approver act, matching
+// who decides deployment requests. Mirrors checkRenameDecider() server-side.
+export function canDecideRename(userRole, isAdmin, approveAreas, agentAreas) {
+  if (isAdmin) return true;
+  if (userRole !== 'approver') return false;
+  const mine = Array.isArray(approveAreas) ? approveAreas : [];
+  if (!mine.length) return false;
+  return (agentAreas || []).some((ar) => mine.includes(ar));
+}
+
 // "Is this MY agent?" (personal ownership, e.g. for the "My AI" filter/export)
 // — reliable identity check via creatorEmails, same field the security rules
 // and canUpdateProgress() already trust. NOT the same question as "what team

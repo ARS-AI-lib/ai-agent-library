@@ -11,7 +11,12 @@
  * what makes it testable against the live agent/user data offline.
  */
 
+const { checkAgentActor } = require('./agentReadyRules');
+
 const ALLOWED_EXT = new Set(['zip', 'md', 'txt', 'pdf', 'csv']);
+// Retained for the client-side menu gate only. The authoritative actor test is
+// checkAgentActor() — see checkUploadPermission below for why this set alone
+// is no longer sufficient.
 const UPLOAD_ROLES = new Set(['admin', 'staff', 'approver']);
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const ALLOWED_DOMAINS = ['arise.tech', 'infinitaskt.com', 'krungthai.com'];
@@ -50,19 +55,21 @@ function isOrgEmail(email) {
  * May this user attach a file to this agent?
  * Returns null when allowed, or { code, message } describing the refusal.
  *
- * Area scoping reads the agent's STORED `approveArea`. It deliberately does
- * NOT call agentApproveAreas(): that resolver lives in src/lib/approveAreas.js,
- * which is not part of the deployed function bundle, and copying its tables
- * here is explicitly forbidden (CLAUDE.md §20 — same anti-drift rule as
- * normalizeProgress). The stored field is layer 1 of that resolver and beats
- * every other layer anyway, and all 26 currently-eligible agents carry one, so
- * the two agree. An agent with no stored area degrades to admin-only, which is
- * the safe direction to fail in.
+ * ── 2026-08-19: the actor test moved to checkAgentActor() ──
+ * The requirement is that editing the endpoint or the uploaded file uses the
+ * SAME permission set as flipping an agent to 100%, so both call one helper
+ * rather than each keeping their own list. That also fixed a real gap: this
+ * function used to reject on `UPLOAD_ROLES.has(role)` first, which meant a
+ * base-`user` CREATOR — the person who actually built the thing — was denied
+ * upload on their own agent. checkAgentActor allows admin, the creator (by
+ * creatorEmails, since `createdBy` is import-mangled on 157 of 239 agents),
+ * and area-matched approver/staff.
+ *
+ * The deploy-approval precondition stays here rather than moving into the
+ * shared helper: it is specific to publishing an artefact, not to acting on
+ * an agent in general.
  */
-function checkUploadPermission({ agent, role, userApproveAreas }) {
-  if (!UPLOAD_ROLES.has(role)) {
-    return { code: 'permission-denied', message: 'Upload is limited to admin, staff and approver.' };
-  }
+function checkUploadPermission({ agent, role, userEmail, userUid, userApproveAreas }) {
   if (!agent) return { code: 'not-found', message: 'Agent not found.' };
   if (agent.approvalStatus !== 'approved' || agent.archived === true) {
     return { code: 'failed-precondition', message: 'Agent must be approved and not archived.' };
@@ -77,14 +84,7 @@ function checkUploadPermission({ agent, role, userApproveAreas }) {
       message: 'Agent must have an approved deployment request before a file can be attached.',
     };
   }
-  if (role === 'admin') return null;
-
-  const mine = Array.isArray(userApproveAreas) ? userApproveAreas : [];
-  const theirs = Array.isArray(agent.approveArea) ? agent.approveArea : [];
-  if (!mine.length || !theirs.some((a) => mine.includes(a))) {
-    return { code: 'permission-denied', message: 'This agent is outside your Approve Area.' };
-  }
-  return null;
+  return checkAgentActor({ agent, role, userEmail, userUid, userApproveAreas });
 }
 
 /**

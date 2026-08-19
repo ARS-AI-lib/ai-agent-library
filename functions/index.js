@@ -751,9 +751,15 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 // each call carries up to 5 MB, and nobody legitimately attaches files in bulk.
 // getEndpointFile is the download path — a user may reasonably grab several
 // skills in a row, but not hundreds.
+// markAgentReady fires once per agent going live, plus one per paired
+// sub-skill in the client-side cascade — the largest real parent has 7
+// children, so 30/min leaves generous headroom over any legitimate burst.
+// decideRenameRequest is a deliberate human approval action; nobody decides
+// renames in bulk.
 const RATE_LIMITS = {
   embedQuery: 20, recordAgentEvent: 120, submitRating: 20,
   attachEndpointFile: 10, getEndpointFile: 60,
+  markAgentReady: 30, decideRenameRequest: 20,
 };
 
 async function enforceRateLimit(uid, fnName) {
@@ -1028,6 +1034,9 @@ exports.submitRating = onCall(
 const {
   safeName, isOrgEmail, checkUploadPermission, checkUploadFile,
 } = require('./endpointFileRules');
+const {
+  checkAgentActor, checkMarkReady, checkRenameDecider, checkRenameValue,
+} = require('./agentReadyRules');
 
 const BUCKET = 'wolfy-481609.appspot.com';
 const ENDPOINT_FILE_PREFIX = 'endpointFiles';
@@ -1104,6 +1113,8 @@ exports.attachEndpointFile = onCall(
     raise(checkUploadPermission({
       agent,
       role: userDoc.role,
+      userEmail: request.auth.token?.email,
+      userUid: uid,
       userApproveAreas: userDoc.approveAreas,
     }));
 
@@ -1182,5 +1193,192 @@ exports.getEndpointFile = onCall(
       size: buf.length,
       dataBase64: buf.toString('base64'),
     };
+  },
+);
+
+// ── Ready-to-Use gate + rename approval (2026-08-19) ─────────────────
+//
+// WHY THESE ARE CLOUD FUNCTIONS AND NOT RULES. Both need to answer "is this
+// user the approver/staff FOR THIS AGENT'S AREA", and security rules cannot
+// evaluate agentApproveAreas() (a 7-layer resolver in src/lib). Rename has two
+// further reasons: rules freeze `agentName` entirely once deploymentStatus is
+// requested/approved (only admin can rename today, which is exactly the
+// limitation being lifted), and approving a rename must rewrite the children's
+// `matchingAgent` in the same batch — see decideRenameRequest for why that is
+// not optional.
+
+/** Read the caller's /users doc once; both callables need role + areas. */
+async function actorContext(request) {
+  const uid = request.auth.uid;
+  const userDoc = (await db.collection('users').doc(uid).get()).data() || {};
+  return {
+    uid,
+    role: userDoc.role,
+    userEmail: request.auth.token?.email,
+    userUid: uid,
+    userApproveAreas: userDoc.approveAreas,
+  };
+}
+
+/**
+ * Flip one agent to 100% (Ready to Use).
+ *
+ * Enforces the gate the feature exists for: an agent cannot be declared ready
+ * with no way to actually reach it — it must end up with an endpoint URL or an
+ * uploaded file. Also fills in `launchDate` when the agent has none, using the
+ * moment of this transition, which is a real observed event rather than a
+ * guess.
+ *
+ * Sub-skill cascade is deliberately NOT done here. The client calls this once
+ * per `pairedSubSkills()` entry instead, so the one correct pairing helper
+ * (src/lib/agentUtils.js — name + submitter matching) stays the only
+ * implementation rather than being re-derived server-side where it would drift
+ * (CLAUDE.md §20). Every cascaded write is then independently authorised, and
+ * atomicity is unchanged from the loop this replaces.
+ */
+exports.markAgentReady = onCall(
+  { cors: true, timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    if (!isOrgEmail(request.auth.token?.email)) {
+      throw new HttpsError('permission-denied', 'Organisation account required.');
+    }
+    await enforceRateLimit(request.auth.uid, 'markAgentReady');
+
+    const { agentId, endpointUrl, launchDate } = request.data || {};
+    if (!agentId || typeof agentId !== 'string') {
+      throw new HttpsError('invalid-argument', 'agentId is required.');
+    }
+
+    const actor = await actorContext(request);
+    const agentRef = db.collection('agents').doc(agentId);
+    const agentSnap = await agentRef.get();
+    if (!agentSnap.exists) throw new HttpsError('not-found', 'Agent not found.');
+    const agent = agentSnap.data() || {};
+
+    raise(checkAgentActor({ agent, ...actor }));
+    const ready = checkMarkReady({ agent, endpointUrl });
+    raise(ready.code ? ready : null);
+
+    let launch = agent.launchDate || null;
+    if (launchDate) {
+      const d = new Date(launchDate);
+      if (isNaN(d.getTime())) throw new HttpsError('invalid-argument', 'launchDate is not a valid date.');
+      launch = d;
+    } else if (!launch) {
+      // Requirement 4: no launch date given and none stored -> the moment it
+      // went live. This is a real observed event, so it is NOT flagged with
+      // launchDateEstimated — that marker is reserved for the one-off backfill
+      // of pre-existing rows, where the date genuinely is a guess.
+      launch = FieldValue.serverTimestamp();
+    }
+
+    await agentRef.update({
+      devProgress: 100,
+      // Literal rather than importing developmentPhaseLabel() from src/lib
+      // (not in the function bundle): this callable only ever writes 100, and
+      // phaseForProgress(100) is 'ru' whose label is exactly this string.
+      developmentPhase: 'Ready to Use',
+      ...(ready.endpoint ? { endpoint: ready.endpoint } : {}),
+      launchDate: launch,
+      readyMarkedBy: actor.uid,
+      readyMarkedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true, endpoint: ready.endpoint || '', launchWasAutoSet: !agent.launchDate && !launchDate };
+  },
+);
+
+/**
+ * Approve or reject a pending rename request.
+ *
+ * ⚠️ THE CHILD REWRITE IS THE WHOLE POINT OF THE BATCH.
+ * `pairedSubSkills()` matches parents by NAME, and sub-skills store the
+ * parent's name in `matchingAgent`. Measured on live data: 20 agents have
+ * paired sub-skills and 51 agents are sub-skills (VA Agent has 7, Guardrail
+ * Agent 6). Renaming a parent without rewriting its children detaches all of
+ * them at once and silently breaks the progress cascade, the deploy-request
+ * and deploy-decision cascades, the approval-queue de-duplication, and the
+ * sub-skill progress lock. A half-applied rename is precisely that bug, so
+ * name + children + decision stamp all land in one db.batch().
+ *
+ * The child match here is intentionally narrow and literal — same
+ * `matchingAgent` string, same submitter — rather than a port of
+ * pairedSubSkills(). It only has to find the docs that literally store the old
+ * name, which is exactly what needs updating.
+ */
+exports.decideRenameRequest = onCall(
+  { cors: true, timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    if (!isOrgEmail(request.auth.token?.email)) {
+      throw new HttpsError('permission-denied', 'Organisation account required.');
+    }
+    await enforceRateLimit(request.auth.uid, 'decideRenameRequest');
+
+    const { requestId, verdict } = request.data || {};
+    if (!requestId || typeof requestId !== 'string') {
+      throw new HttpsError('invalid-argument', 'requestId is required.');
+    }
+    if (verdict !== 'approved' && verdict !== 'rejected') {
+      throw new HttpsError('invalid-argument', 'verdict must be approved or rejected.');
+    }
+
+    const actor = await actorContext(request);
+    const reqRef = db.collection('renameRequests').doc(requestId);
+    const reqSnap = await reqRef.get();
+    if (!reqSnap.exists) throw new HttpsError('not-found', 'Rename request not found.');
+    const req = reqSnap.data() || {};
+    if (req.status !== 'pending') {
+      throw new HttpsError('failed-precondition', 'This request has already been decided.');
+    }
+
+    const agentRef = db.collection('agents').doc(req.agentId);
+    const agentSnap = await agentRef.get();
+    if (!agentSnap.exists) throw new HttpsError('not-found', 'Agent not found.');
+    const agent = agentSnap.data() || {};
+
+    raise(checkRenameDecider({ agent, role: actor.role, userApproveAreas: actor.userApproveAreas }));
+
+    const stamp = {
+      status: verdict,
+      decidedBy: actor.uid,
+      decidedAt: FieldValue.serverTimestamp(),
+    };
+
+    if (verdict === 'rejected') {
+      await reqRef.update(stamp);
+      return { ok: true, verdict, childrenUpdated: 0 };
+    }
+
+    raise(checkRenameValue({ agent, requestedName: req.requestedName }));
+
+    const oldName = String(agent.agentName || '').trim();
+    const newName = String(req.requestedName || '').trim();
+
+    // Children are found by the name they literally store. `matchingAgent` is
+    // a string on every doc that has one (59 library-wide), so an equality
+    // query finds them directly; the submitter check then mirrors
+    // sameSubmitter()'s intent so an unrelated agent that merely happens to
+    // reference the same name is not swept up.
+    const childSnap = await db.collection('agents').where('matchingAgent', '==', oldName).get();
+    const children = childSnap.docs.filter((d) => {
+      const c = d.data();
+      if (agent.createdBy && c.createdBy && c.createdBy === agent.createdBy) return true;
+      const ca = String(c.creator || '').trim().toLowerCase();
+      const cb = String(agent.creator || '').trim().toLowerCase();
+      return !!ca && ca === cb;
+    });
+
+    const batch = db.batch();
+    batch.update(agentRef, { agentName: newName, updatedAt: FieldValue.serverTimestamp() });
+    children.forEach((d) => {
+      batch.update(d.ref, { matchingAgent: newName, updatedAt: FieldValue.serverTimestamp() });
+    });
+    batch.update(reqRef, { ...stamp, appliedName: newName, childrenUpdated: children.length });
+    await batch.commit();
+
+    return { ok: true, verdict, childrenUpdated: children.length };
   },
 );

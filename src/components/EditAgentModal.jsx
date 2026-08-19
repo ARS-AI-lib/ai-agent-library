@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill } from '../lib/tier';
-import { splitRoles, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditReadyToUseFields, safeEndpointUrl, agentUseCaseNames } from '../lib/agentUtils';
+import { splitRoles, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditReadyToUseFields, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
@@ -58,7 +58,9 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   // canEditTierA is true nothing extra is needed, Description/Endpoint are
   // already editable as part of that group.
   const canEditRTU = lockTierA && canEditReadyToUseFields(agent, user, isAdmin);
-  const descEndpointLocked = lockTierA && !canEditRTU;
+  // Description is the only field left in this block after Endpoint moved out
+  // (2026-08-19), so the name now describes exactly what it gates.
+  const descLocked = lockTierA && !canEditRTU;
   // Ready to Use (2026-07-22): once deploymentStatus is 'approved', canEditTierA
   // and canEditSDLCFlag are ALREADY false by construction (see canEditDetails/
   // canEditSDLC) — but canEditSensitive (Tier B: creator/progress/launchDate)
@@ -87,7 +89,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     reuseCondition: agent.reuseCondition || '',
     hml: !!agent.hml,
     humanJob: agent.humanJob || '',
-    endpoint: agent.endpoint || '',
     launchDate: toDateInputValue(agent.launchDate),
     compatibleAgents: Array.isArray(agent.compatibleAgents) ? agent.compatibleAgents : [],
     sdlcStage: new Set(Array.isArray(agent.sdlcStage) ? agent.sdlcStage : [agent.sdlcStage].filter(Boolean)),
@@ -253,7 +254,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           humanJob: form.hml ? form.humanJob.trim() : '',
           // Sanitised on write, same as pre-registration — never store a
           // scheme we would refuse to render.
-          endpoint: safeEndpointUrl(form.endpoint),
           // Sensitive: creator list — writes `creator` display alongside
           // creatorEmails so the card/detail reflect new names immediately.
           ...(canEditSensitive ? {
@@ -321,13 +321,12 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
       }
 
       // Write 3 — Ready-to-Use exception (2026-07-22): admin/creator touching
-      // ONLY description + endpoint on an agent already 'approved'. Mutually
+      // ONLY description on an agent already 'approved'. Mutually
       // exclusive with Write 1 (canEditTierA is false whenever this runs) —
       // its own affectedKeys matches the dedicated rules branch exactly.
       if (canEditRTU) {
         await updateDoc(doc(db, 'agents', agent.id), {
           description: form.description.trim(),
-          endpoint: safeEndpointUrl(form.endpoint),
           updatedAt: serverTimestamp(),
         });
       }
@@ -388,25 +387,19 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         {canEditRTU && (
           <div className="msg info" style={{ fontSize: 11 }}>
             <span className="dot" style={{ background: '#4a6fa5' }} />
-            Agent/Skill นี้พร้อมใช้งานแล้ว — แก้ไขได้เฉพาะ Description และ Endpoint
+            Agent/Skill นี้พร้อมใช้งานแล้ว — แก้ไขได้เฉพาะ Description
+            (Endpoint/ไฟล์แนบแก้ผ่านปุ่มใน Agent Detail, ชื่อต้องขออนุมัติ)
           </div>
         )}
         <div className="fg">
           <label>Description <span className="req">*</span></label>
-          <textarea rows={3} disabled={descEndpointLocked} value={form.description} onChange={(e) => setField('description', e.target.value)} />
+          <textarea rows={3} disabled={descLocked} value={form.description} onChange={(e) => setField('description', e.target.value)} />
         </div>
-        <div className="fg">
-          <label>Endpoint</label>
-          <input
-            disabled={descEndpointLocked}
-            value={form.endpoint}
-            onChange={(e) => setField('endpoint', e.target.value)}
-            placeholder="ลิงก์เข้าใช้งาน Agent หรือลิงก์ดาวน์โหลด Skill (ไม่บังคับ)"
-          />
-          <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>
-            ผู้ใช้กดจากการ์ดไปใช้งานได้ทันที — รองรับเฉพาะ http/https
-          </div>
-        </div>
+        {/* Endpoint input removed 2026-08-19. It is now set at the moment it
+            matters — the transition to 100% (markAgentReady, which refuses to
+            declare an agent Ready-to-Use without one) — and edited afterwards
+            from Agent Detail, where the same permission set applies (creator,
+            area approver/staff, admin) instead of this form's narrower one. */}
 
         {/* ── Everything else: Tier A (minus Name, moved above), SDLC,
              Creator/Team, Progress/Launch —

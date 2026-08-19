@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
+import { isMyAgent } from '../lib/agentUtils';
 import {
   ACCEPT_ATTR, ALLOWED_EXT, MAX_UPLOAD_BYTES,
   attachEndpointFile, formatBytes, validateUploadFile,
@@ -25,7 +26,7 @@ import {
  * never enforcement.
  */
 export default function UploadEndpointFileModal({
-  onClose, agents = [], role, isAdmin, approveAreas = [],
+  onClose, agents = [], role, isAdmin, approveAreas = [], user,
 }) {
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState('');
@@ -45,7 +46,15 @@ export default function UploadEndpointFileModal({
       // agent's STORED approveArea, matching what the server enforces — all 26
       // eligible agents carry one, and an agent without a stored area is
       // admin-only rather than silently open to everyone.
-      .filter((a) => isAdmin || (Array.isArray(a.approveArea) && a.approveArea.some((x) => mine.has(x))))
+      // 2026-08-19: creators included. This filter used to be area-only, which
+      // silently excluded the person who actually built the thing whenever
+      // they hold no Approve Area — measured: 8 base-'user' creators own a
+      // deploy-approved agent. Mirrors checkAgentActor() server-side.
+      .filter((a) => isAdmin
+        || isMyAgent(a, user)
+        || !!(a.createdBy && a.createdBy === user?.uid)
+        || ((role === 'approver' || role === 'staff')
+            && Array.isArray(a.approveArea) && a.approveArea.some((x) => mine.has(x))))
       .sort((a, b) => {
         // Most-recently deploy-approved first. `deployDecidedAt` (set by
         // decideDeploy() in PendingApprovalModal on every approve/reject) is
@@ -65,7 +74,7 @@ export default function UploadEndpointFileModal({
           || ts(b.createdAt) - ts(a.createdAt)
           || (a.agentName || '').localeCompare(b.agentName || '');
       });
-  }, [agents, isAdmin, approveAreas]);
+  }, [agents, isAdmin, approveAreas, role, user]);
 
   // Client-side substring filter only — the eligible list is already small
   // (26 agents total today) and this is a picker, not a search feature, so
@@ -115,7 +124,7 @@ export default function UploadEndpointFileModal({
             <span className="dot" style={{ background: '#4a6fa5' }} />
             {isAdmin
               ? 'ยังไม่มี Agent/Skill ที่ deployment ผ่านการอนุมัติ'
-              : `ไม่มีรายการใน Approve Area ของคุณ (${(approveAreas || []).join(', ') || 'ยังไม่ได้กำหนด area'})`}
+              : `ไม่มีรายการที่คุณมีสิทธิ์แนบไฟล์ — ต้องเป็น Agent ที่คุณสร้างเอง หรืออยู่ใน Approve Area ของคุณ (${(approveAreas || []).join(', ') || 'ยังไม่ได้กำหนด area'})`}
           </div>
         ) : (
           <>

@@ -139,7 +139,11 @@ export default function App() {
   // visible while the list inside is empty: staff currently hold no
   // approveAreas at all, so the modal tells them that rather than the menu
   // pretending the feature doesn't exist.
-  const canUploadFiles = !!user && ['admin', 'staff', 'approver'].includes(role);
+  // 2026-08-19: any signed-in user may open this — a base-'user' CREATOR must
+  // be able to attach a file to their own agent (measured: 8 such creators own
+  // a deploy-approved agent). The modal's own list, and checkAgentActor()
+  // server-side, decide which agents they actually see.
+  const canUploadFiles = !!user && !!role;
 
   // Pending Category proposals (2026-08) — admin-only badge/panel; the query
   // itself is fine for isKnownUser() per rules, but there's no reason for a
@@ -566,6 +570,7 @@ export default function App() {
           role={role}
           isAdmin={isAdmin}
           approveAreas={approveAreas}
+          user={user}
         />
       )}
     </div>

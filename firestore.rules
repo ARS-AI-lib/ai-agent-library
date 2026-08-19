@@ -146,11 +146,16 @@ service cloud.firestore {
         // gated by canEditCategory). Safe to remove: no client path other than
         // the admin editor, the create rule, and CategoryApprovalPanel (admin)
         // has ever sent it.
+        // 2026-08-19: `endpoint` removed from this list. It is now written
+        // ONLY by the markAgentReady / attachEndpointFile callables (admin SDK,
+        // bypassing rules) so that reaching 100% and setting a location are one
+        // authorised act. The input was removed from both forms at the same
+        // time, so no client path sends it any more.
         || (userRole() in ['staff', 'committee']
             && affectedKeys().hasOnly([
                  'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing',
                  'internalUse', 'coreAbility', 'relatedRole', 'reusable', 'reuseCondition', 'hml',
-                 'humanJob', 'endpoint', 'updatedAt',
+                 'humanJob', 'updatedAt',
                ])
             && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved']))
         // Detail edit — Tier B (2026-07-03, widened): the agent's owner
@@ -159,10 +164,11 @@ service cloud.firestore {
         // list, launchDate, devProgress) — but ONLY until a deployment request
         // is filed. Type (aiAgent/skillMd) is still NOT editable — locked once
         // approved. admin has unconditional access via the isAdmin() branch.
+        // `endpoint` removed 2026-08-19 — see the note on Tier A above.
         || (affectedKeys().hasOnly([
               'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing', 'internalUse',
               'coreAbility', 'relatedRole', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
-              'humanJob', 'endpoint', 'launchDate', 'devProgress', 'developmentPhase', 'updatedAt',
+              'humanJob', 'launchDate', 'devProgress', 'developmentPhase', 'updatedAt',
             ])
             && isOwnerCreatorOrApprover(resource.data)
             && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved'])
@@ -214,16 +220,45 @@ service cloud.firestore {
             && request.resource.data.archived is bool)
         // Ready-to-Use post-freeze exception (2026-07-22): every detail tier
         // above freezes ENTIRELY once deploymentStatus is 'approved' — but
-        // Description and Endpoint legitimately need touch-ups after go-live
-        // (e.g. the real endpoint link only exists once the agent is live).
-        // admin is already covered by the blanket isAdmin() branch above, so
-        // this only needs to add the creator identity; deliberately NOT
-        // approvedBy-only (a bare approver shouldn't get ongoing edit rights
-        // here) and NOT 'requested' (still under active review).
+        // Description legitimately needs touch-ups after go-live. admin is
+        // already covered by the blanket isAdmin() branch above, so this only
+        // needs to add the creator identity; deliberately NOT approvedBy-only
+        // (a bare approver shouldn't get ongoing edit rights here) and NOT
+        // 'requested' (still under active review).
+        //
+        // 2026-08-19: `endpoint` dropped from this branch too — post-go-live
+        // endpoint edits now go through markAgentReady/attachEndpointFile,
+        // which apply the same permission set (creator, area approver/staff,
+        // admin) instead of this branch's creator-only test. `agentName` is
+        // deliberately still NOT here: renaming after go-live requires an
+        // approval, via /renameRequests + the decideRenameRequest callable.
         || (resource.data.get('deploymentStatus', 'none') == 'approved'
-            && affectedKeys().hasOnly(['description', 'endpoint', 'updatedAt'])
+            && affectedKeys().hasOnly(['description', 'updatedAt'])
             && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid));
 
+      allow delete: if isAdmin();
+    }
+
+    // ── Rename requests (2026-08-19) ──────────────────────────────────
+    // A creator may ask to rename an agent after it has gone live; an approver
+    // for that agent's area (or an admin) decides. Modelled on
+    // /categoryProposals — the only other request→approve flow here.
+    //
+    // Note `allow update: if false`. Unlike categoryProposals (admin-decides,
+    // so a plain isAdmin() update works), deciding a rename needs an area
+    // check that rules cannot evaluate, AND it must rewrite `agentName` on a
+    // doc every tier above has frozen, AND it must rewrite `matchingAgent` on
+    // every paired sub-skill in the same batch or the pairing silently breaks.
+    // All three force it through the decideRenameRequest callable, so no
+    // client update path should exist at all.
+    match /renameRequests/{id} {
+      allow read: if isKnownUser();
+      allow create: if isKnownUser()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.agentId is string
+        && request.resource.data.requestedName is string;
+      allow update: if false;
       allow delete: if isAdmin();
     }
 

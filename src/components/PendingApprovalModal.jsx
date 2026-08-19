@@ -5,6 +5,8 @@ import { getTier, TIER_DEF } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
 import { matchingAgentNames, pairedSubSkills, fmtDate, categoryColor } from '../lib/agentUtils';
 import { queueViewer, visiblePending, visibleDeployRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
+import { canDecideRename } from '../lib/agentUtils';
+import { decideRenameRequest } from '../lib/endpointFiles';
 import AgentDetailModal from './AgentDetailModal';
 import useEscapeKey from '../hooks/useEscapeKey';
 
@@ -86,6 +88,16 @@ const RISK_COLOR = { high: '#c5221f', medium: '#c96a00', low: '#137333' };
 export default function PendingApprovalModal({ pending, deployRequests = [], onClose, user, userRole, isAdmin, isCommittee, approveAreas = [], agents = [], schema = {} }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
+  // Rename requests (2026-08-19) — a third queue beside New Entry and Deploy
+  // Request. Self-fetched rather than threaded from App: this modal is the
+  // only consumer, and the collection is tiny.
+  const [renameReqs, setRenameReqs] = useState([]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'renameRequests'), where('status', '==', 'pending'));
+    const unsub = onSnapshot(q, (snap) => setRenameReqs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setRenameReqs([]));
+    return unsub;
+  }, []);
   // Wraps agentApproveAreas with the live category->area overrides an admin
   // may have set via CategoryApprovalPanel, so a brand-new category doesn't
   // silently misroute here even before approveAreas.js's code-level table is
@@ -159,6 +171,28 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
   // with no approver rights at all — own-submissions-only, no explanation.
   // That reads as "you lost your approver access" when it's really just
   // "your queue is empty today". Distinguished here so a message can say so.
+  // Only requests whose agent this person may actually decide — same area
+  // model as the other two queues, via canDecideRename (approver-of-area or
+  // admin; deliberately NOT staff, and never the creator who filed it).
+  const visibleRenames = useMemo(() => renameReqs
+    .map((r) => ({ r, agent: agents.find((a) => a.id === r.agentId) }))
+    .filter(({ agent }) => !!agent)
+    .filter(({ agent }) => canDecideRename(userRole, isAdmin, approveAreas, resolveAreas(agent))),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [renameReqs, agents, userRole, isAdmin, approveAreas, schema.categoryAreaMap]);
+
+  async function decideRename(reqId, verdict) {
+    setBusyId(reqId);
+    setError('');
+    try {
+      await decideRenameRequest({ requestId: reqId, verdict });
+    } catch (e) {
+      setError(e?.message || 'ตัดสินคำขอเปลี่ยนชื่อไม่สำเร็จ');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const areaEmptyForApprover = queueAreaEmptyForApprover(pending, viewer);
 
   function canApprove(agent) {
@@ -447,6 +481,49 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
               </div>
             );
           })
+        )}
+
+        {/* Rename requests (2026-08-19) — third queue. Approving one is not a
+            field edit: decideRenameRequest also rewrites matchingAgent on every
+            paired sub-skill in the same batch, because pairing is by NAME and a
+            bare rename would detach all of them. */}
+        {visibleRenames.length > 0 && (
+          <>
+            <div className="sec-title" style={{ marginTop: 16 }}>Rename Request</div>
+            <div className="msub">{visibleRenames.length} items · เปลี่ยนชื่อหลังเผยแพร่แล้ว ต้องอนุมัติก่อน</div>
+            {visibleRenames.map(({ r, agent }) => {
+              const kids = pairedSubSkills(agent, agents);
+              return (
+                <div className="queue-row" key={r.id}>
+                  <div className="queue-content">
+                    <div className="dup-name">
+                      <span style={{ color: 'var(--mu)', textDecoration: 'line-through' }}>{r.currentName || agent.agentName}</span>
+                      {'  →  '}
+                      <span>{r.requestedName}</span>
+                    </div>
+                    <div className="queue-meta">
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
+                        <span>Owner: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{agent.owner || '—'}</strong></span>
+                        <span>ผู้ขอ: {r.createdByEmail || '—'}</span>
+                        <AreaChips areas={resolveAreas(agent)} />
+                      </div>
+                      {kids.length > 0 && (
+                        <div style={{ marginTop: 3, color: 'var(--msg-warn-fg)' }}>
+                          จะอัปเดตการผูกของ Skill ลูก {kids.length} ตัวให้อัตโนมัติ
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="btn-row">
+                    <button className="btn-sm rej" disabled={busyId === r.id} onClick={() => decideRename(r.id, 'rejected')}>Reject</button>
+                    <button className="btn-sm appr" disabled={busyId === r.id} onClick={() => decideRename(r.id, 'approved')}>
+                      {busyId === r.id ? '…' : 'Approve'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </>
         )}
 
         {myRejected.length > 0 && (
