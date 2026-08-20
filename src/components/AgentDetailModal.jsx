@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
@@ -7,7 +7,7 @@ import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetail
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { recordAgentEvent, submitRating } from '../lib/agentEvents';
-import { handleEndpointClick, isLibraryFileUrl, markAgentReady } from '../lib/endpointFiles';
+import { handleEndpointClick, isLibraryFileUrl, markAgentReady, attachEndpointFile, validateUploadFile, formatBytes, ACCEPT_ATTR, ALLOWED_EXT, MAX_UPLOAD_BYTES } from '../lib/endpointFiles';
 import { notifyEvent } from '../lib/notify';
 import { readStats, ratingDisplay, canRateAgent, STAR_LEVELS } from '../lib/agentStats';
 
@@ -35,6 +35,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [requesting, setRequesting] = useState(false);
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
   const [editEndpoint, setEditEndpoint] = useState('');
+  const [editFile, setEditFile] = useState(null);
+  const readyFileRef = useRef(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [renameBusy, setRenameBusy] = useState(false);
@@ -192,6 +194,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
     setEditProgress(progress);
     setEditLaunch(toDateInputValue(agent.launchDate));
     setEditEndpoint('');
+    setEditFile(null);
+    if (readyFileRef.current) readyFileRef.current.value = '';
     setSaveError('');
     setEditing(true);
   }
@@ -213,23 +217,58 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         setSaveError('คุณไม่มีสิทธิ์ปรับเป็น 100% — ต้องเป็น Creator, Approver/Staff ประจำ Area นี้ หรือ Admin');
         return;
       }
-      if (!hasEndpoint && !editEndpoint.trim()) {
-        setSaveError('ต้องระบุ Endpoint URL หรืออัปโหลดไฟล์ก่อน จึงจะปรับเป็น 100% ได้');
+      // Either/or, and exactly one of them: a URL typed here, a file picked
+      // here, or something already attached from an earlier session.
+      if (!hasEndpoint && !editEndpoint.trim() && !editFile) {
+        setSaveError('ต้องระบุ Endpoint URL หรืออัปโหลดไฟล์อย่างใดอย่างหนึ่งก่อน จึงจะปรับเป็น 100% ได้');
         return;
+      }
+      if (editFile) {
+        const fileErr = validateUploadFile(editFile);
+        if (fileErr) { setSaveError(fileErr); return; }
       }
       setSaving(true);
       setSaveError('');
       try {
-        const args = { endpointUrl: editEndpoint.trim() || undefined, launchDate: editLaunch || undefined };
-        await markAgentReady({ agentId: agent.id, ...args });
+        // Upload FIRST when a file was picked. attachEndpointFile writes both
+        // `endpoint` and `endpointFile` server-side, so by the time
+        // markAgentReady runs its gate the agent already has a location and
+        // the transition passes. Both callables share one permission test
+        // (checkAgentActor), so anyone allowed to do the second is allowed the
+        // first — there is no half-authorised state between them.
+        if (editFile) {
+          await attachEndpointFile({ agentId: agent.id, file: editFile });
+        }
+        const parentRes = await markAgentReady({
+          agentId: agent.id,
+          endpointUrl: editEndpoint.trim() || undefined,
+          launchDate: editLaunch || undefined,
+        });
         notifyEvent('agent.ready', { agentId: agent.id });
+
         // Cascade stays here rather than inside the callable so the one correct
         // pairing helper (pairedSubSkills) remains the only implementation —
         // re-deriving it server-side is exactly the drift CLAUDE.md §20 forbids.
-        // Each call is independently authorised; sub-skills inherit the parent's
-        // endpoint only if they have none of their own.
+        // Each call is independently authorised.
+        //
+        // The endpoint each sub-skill gets is decided PER SUB-SKILL, and that
+        // matters in both directions (2026-08-20):
+        //   · checkMarkReady() resolves `supplied || existing`, so passing the
+        //     parent's URL blindly would OVERWRITE a sub-skill that has its own
+        //     location. Only lend the parent's to one that has nothing.
+        //   · When the parent was satisfied by an uploaded FILE there is no URL
+        //     to pass at all, so an endpoint-less sub-skill would be rejected by
+        //     the gate and silently stall at 95% behind the .catch(). Falling
+        //     back to the parent's resolved endpoint keeps the pair in lock-step,
+        //     which is exactly what the sub-skill lock promises.
+        const parentEndpoint = editEndpoint.trim() || parentRes?.endpoint || '';
         for (const sk of pairedSubSkills(agent, allAgents || [])) {
-          await markAgentReady({ agentId: sk.id, ...args }).catch(() => {});
+          const skHasOwn = !!String(sk.endpoint || '').trim() || !!sk.endpointFile?.storagePath;
+          await markAgentReady({
+            agentId: sk.id,
+            endpointUrl: skHasOwn ? undefined : (parentEndpoint || undefined),
+            launchDate: editLaunch || undefined,
+          }).catch(() => {});
         }
         setEditing(false);
       } catch (e) {
@@ -568,14 +607,63 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   to HAVE an endpoint, not to retype it every time. */}
               {Number(editProgress) === 100 && !hasEndpoint && (
                 <div className="fg" style={{ marginTop: 8, marginBottom: 0 }}>
-                  <label>Endpoint <span className="req">*</span> <span className="hint">ต้องมีก่อนจึงจะปรับเป็น 100% ได้</span></label>
+                  <label>
+                    ช่องทางใช้งาน <span className="req">*</span>
+                    <span className="hint">ต้องมีอย่างใดอย่างหนึ่งก่อนจึงจะปรับเป็น 100% ได้</span>
+                  </label>
+                  {/* Either/or, made visible rather than explained: picking one
+                      disables the other, so there is never a state where both
+                      are filled and the user has to guess which one wins. */}
                   <input
                     value={editEndpoint}
                     onChange={(e) => setEditEndpoint(e.target.value)}
+                    disabled={!!editFile}
                     placeholder="https://… ลิงก์เข้าใช้งาน"
                   />
-                  <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 4 }}>
-                    หรืออัปโหลดไฟล์แทนได้ที่เมนู ☰ → Attach Endpoint File แล้วกลับมาปรับ 100% อีกครั้ง
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
+                    <span style={{ flex: 1, height: 1, background: 'var(--bd-soft)' }} />
+                    <span style={{ fontSize: 10.5, color: 'var(--mu2)' }}>หรือ</span>
+                    <span style={{ flex: 1, height: 1, background: 'var(--bd-soft)' }} />
+                  </div>
+                  {editFile ? (
+                    <div className="uef-drop has" style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {editFile.name} · {formatBytes(editFile.size)}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn-sm rej"
+                        onClick={() => { setEditFile(null); setSaveError(''); if (readyFileRef.current) readyFileRef.current.value = ''; }}
+                      >
+                        เอาออก
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className="uef-drop"
+                      role="button"
+                      tabIndex={0}
+                      style={editEndpoint.trim() ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+                      onClick={() => !editEndpoint.trim() && readyFileRef.current?.click()}
+                      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !editEndpoint.trim() && readyFileRef.current?.click()}
+                    >
+                      อัปโหลดไฟล์
+                    </div>
+                  )}
+                  <input
+                    ref={readyFileRef}
+                    type="file"
+                    accept={ACCEPT_ATTR}
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      const err = f ? validateUploadFile(f) : '';
+                      setSaveError(err);
+                      setEditFile(err ? null : f);
+                    }}
+                  />
+                  <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 6 }}>
+                    {ALLOWED_EXT.map((x) => `.${x}`).join(' ')} · ไม่เกิน {formatBytes(MAX_UPLOAD_BYTES)} · ไฟล์ที่อัปโหลดต้อง login ก่อนดาวน์โหลด
                   </div>
                 </div>
               )}
@@ -594,7 +682,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               <div className="btn-group" style={{ marginTop: 10 }}>
                 <button className="btn btn-secondary" disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
                 <button className="btn btn-success" disabled={saving} onClick={handleSave}>
-                  {saving ? 'กำลังบันทึก…' : 'Save'}
+                  {saving ? (editFile ? 'กำลังอัปโหลด…' : 'กำลังบันทึก…') : 'Save'}
                 </button>
               </div>
             </div>
