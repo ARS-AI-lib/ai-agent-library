@@ -250,8 +250,9 @@ Tier:
 
 **⚠️ กฎเหล็ก — โปรเจกต์ `wolfy-481609` แชร์กับแอป Portfolio:** ทั้ง 2 แอปอยู่ GCP project เดียวกัน
 - **ห้ามรัน `firebase deploy` เปล่าๆ หรือ `--only functions` เปล่าๆ เด็ดขาด**
-  **ตัวเลขจริง (ยืนยันด้วย `npx firebase-tools functions:list` เมื่อ 2026-08-20):**
-  deploy อยู่จริง **14 ตัว** · `functions/index.js` ใน local มี **11 ตัว**
+  **ตัวเลขจริง (ยืนยันด้วย `npx firebase-tools functions:list` เมื่อ 2026-08-20 (นับใหม่รอบบ่าย)):**
+  deploy อยู่จริง **15 ตัว** · `functions/index.js` ใน local มี **11 ตัว**
+  (ตัวเลข 14 ที่เคยเขียนไว้ **ผิดตั้งแต่ตอนเขียน** — นับซ้ำอีกครั้ง 2026-08-20 ได้ 15)
   | | ชื่อ |
   |---|---|
   | AI Lib — มีใน local | `analyzeDuplicate`, `chatLibrary`, `embedQuery`, `reindexAgentVectors`, `recordAgentEvent`, `submitRating`, `attachEndpointFile`, `getEndpointFile`, `markAgentReady`, `decideRenameRequest`, `notifyEvent` |
@@ -622,7 +623,7 @@ npx firebase-tools hosting:channel:deploy test-migration   # preview ไม่�
 `/config/schema.category` มี 21 ค่า แบ่งเป็น
 - **discipline** (15) — "งานนี้เกี่ยวกับเรื่องอะไร" เช่น `Writing & Content`, `Software Development`
 - **product / business vertical** (6) — "ทำให้ผลิตภัณฑ์ตัวไหน" = `Investment`, `Lending & Credit`,
-  `NEXT`, `เป๋าตัง, เป๋าตุง, ถุงเงิน`, `CLIX`, `Core bank`
+  `NEXT`, `เป๋าตัง, เป๋าตุง, ถุงเงิน`, `CLICX`, `Core bank`
 
 **single source of truth ของฝั่ง product = `VERTICAL_CATEGORIES` ใน `src/lib/approveAreas.js`**
 → `CATEGORY_AREA` spread จากลิสต์นี้ (ทุกตัว route ไป `Business & Product`)
@@ -659,10 +660,12 @@ product 1 · เพิ่มช่องแก้ใน Edit form
 มันเขียน `category: [ตัวเดียว]` = **replace** → product tag หายหมด (ใส่คำเตือนไว้ในไฟล์แล้ว)
 
 ### ค้างอยู่
-- ⚠️ **"VB" = CLIX** (CLIX คือชื่อของ Virtual Bank — ยืนยันจากผู้ใช้ 2026-08-17)
-  **ไม่ใช่ vertical ใหม่** — `UX Writer AI Agent` ที่ระบุว่ารองรับ VB ควรแท็ก `CLIX` ไม่ใช่เพิ่ม
+- ⚠️ **"VB" = CLICX** (CLICX คือชื่อของ Virtual Bank — ยืนยันจากผู้ใช้ 2026-08-17
+  · **เปลี่ยนชื่อจาก `CLIX` → `CLICX` เมื่อ 2026-08-20** ตอนนั้นยังไม่มี agent ตัวไหนติดแท็กนี้
+  จึงเป็นแค่การ retire ชื่อเก่าใน `/config/schema` ไม่ต้อง migrate agent สักตัว)
+  **ไม่ใช่ vertical ใหม่** — `UX Writer AI Agent` ที่ระบุว่ารองรับ VB ควรแท็ก `CLICX` ไม่ใช่เพิ่ม
   category ใหม่ **แต่ตั้งใจปล่อยว่างไว้ก่อน** ผู้ใช้จะเพิ่ม skill/แท็กเองทีหลัง — ห้าม backfill เอง
-- `CLIX` / `Core bank` ยังเป็น 0 — **ถูกต้อง ณ ตอนนี้** ไม่มี agent ตัวไหนทำให้ 2 ตัวนี้โดยเฉพาะ
+- `CLICX` / `Core bank` ยังเป็น 0 — **ถูกต้อง ณ ตอนนี้** ไม่มี agent ตัวไหนทำให้ 2 ตัวนี้โดยเฉพาะ
   (ทั้งไลบรารี 239 ตัว มีแค่ 5 ตัวที่ผูกกับ product จริงๆ ที่เหลือเป็นเครื่องมือข้าม product)
 
 ---
@@ -881,3 +884,81 @@ OAuth2 refresh token ของบัญชีตัวเอง = ให้ส�
 | `/mailLog` | audit ทุกครั้งที่พยายามส่ง (sent / dry-run / held / error) — rules: read admin, write false |
 
 ⚠️ **เรียก `notifyEvent` ครั้งเดียวต่อ 1 การกระทำ นอก loop cascade เสมอ**
+
+---
+
+## 27. Type = Agent+Skill แก้ได้ + ผูก Skill เดิมจากไลบรารี (2026-08-20)
+
+### "Agent+Skill" เคยแปลได้ 2 อย่างพร้อมกัน — เคาะแล้วว่าอันไหน
+| โมเดล | เก็บยังไง | จำนวนจริง |
+|---|---|---|
+| A — ธงคู่ `aiAgent=true, skillMd=true` ใน doc เดียว | 1 doc | **22** (มาจาก CSV import) |
+| B — parent + child skill คนละ doc | หลาย doc | **20** |
+
+**ไม่ทับกันเลยสักตัว** และ `typeToFlags()` ในฟอร์มสร้างได้แต่โมเดล B เท่านั้น (parent ถูกเขียน
+`skillMd: false`) → **โมเดล A สร้างจากฟอร์มไม่ได้มาตั้งแต่แรก** ซ้ำร้าย `getType()` อ่านโมเดล A
+เป็น `'agent'` ทำให้ 22 ตัวนั้นขึ้นการ์ดว่า **AGENT** แต่ในคิวอนุมัติเขียนว่า **"Agent + Skill"**
+(เพราะอ่านธงดิบ) — **ป้ายชื่อขัดกันเองอยู่ก่อนแล้ว**
+
+**เคาะ: Agent+Skill = Agent ที่เรียก skill ทำงาน (parent→child) โดย skill บางตัวใช้เดี่ยวก็ได้**
+= โมเดล B → **Type เป็นค่า derived จากการมีลูก ไม่เก็บลง Firestore** · **ไม่แตะ `aiAgent`/`skillMd` เลย**
+→ ไม่ต้องแก้ rules เรื่องธง (ทั้งสอง field ไม่อยู่ใน `hasOnly()` ไหนเลย) และ **tier ไม่ขยับ**
+`agentTypeLabel(agent, allAgents)` ใน `agentUtils.js` เป็นที่เดียวที่ตอบว่า "นี่ type อะไร"
+
+### 🔴 ผูก skill ของทีมอื่นเคยล้มเหลวเงียบ ~98%
+`pairedSubSkills()` บังคับ `sameSubmitter()` (`createdBy` ตรง **หรือ** ชื่อ `creator` ตรง) วัดจริง:
+`Writing & Language Craft` จับคู่ได้ 1 จาก 53 agent · `DailySync.md` ได้ **0**
+ผูกข้ามทีมแล้ว **หน้าตาเหมือนผูกติด** (`relationshipLabel`/`skillsOfAgent` ไม่เช็ค submitter)
+แต่ cascade ทุกตัวไม่ทำงาน — progress/launch, deploy request, deploy decision, queue de-dup, lock
+
+**แก้ด้วย link ตรงด้วย doc ID: `parent.childSkillIds: string[]`**
+- `pairedSubSkills()`/`isPairedSubSkill()` เป็น **union** ของ link ใหม่ **หรือ** heuristic เดิม
+  ⛔ **ต้องเป็น union ห้ามแทนที่** — 51 pairing ที่มีอยู่ไม่มี `childSkillIds` สักตัว
+- **link อยู่บน parent ไม่ใช่ child** เพราะ Tier B ต้องการ `isOwnerCreatorOrApprover(resource.data)`
+  ของ **doc ที่กำลังเขียน** → ทีม A เขียนลง skill ของทีม B ไม่ได้ และ child ที่ deploy approved
+  ถูก freeze ไปแล้ว · ผลพลอยได้: **multi-parent ได้ฟรี** (มี 4 skill ที่มี 2 parent อยู่แล้ว)
+- **ทนการเปลี่ยนชื่อ** ต่างจาก `matchingAgent` ที่เก็บ *ชื่อ* (ดูข้อ 25)
+
+### `cascadeTargets(parent, all)` — กันลากของที่เสร็จแล้วถอยหลัง
+เดิมพันจริงในกลุ่ม skill เดี่ยว 129 ตัวที่ผูกได้: **18 ตัวอยู่ที่ 100%**, **55 ตัวมี endpoint ของตัวเอง**
+ถ้าผูกเข้ากับ parent ที่เพิ่งเริ่ม (0%) แล้ว cascade ตรงๆ = **ลบงานที่เสร็จแล้วทิ้ง**
+กฎ: ข้าม child ที่ progress สูงกว่า parent และข้าม child ที่ deploy approved แล้วแต่ parent ยังไม่
+**ใช้แทน `pairedSubSkills` ที่จุด cascade ทุกจุด** (progress save, deploy request, markAgentReady loop)
+— จุดแสดงผล/รายการ archive ยังใช้ `pairedSubSkills` ตามเดิมเพราะต้องเห็นลูกครบ
+
+### สลับกลับเป็น Agent = **แค่ยกเลิกการผูก**
+`childSkillIds: []` · **doc ของ skill ไม่ถูกแตะเลย** ยังอยู่ในไลบรารีตามปกติ
+(เป็น entry อิสระที่ agent ตัวอื่นอาจพึ่งอยู่ด้วย)
+
+### Skill Name field ผูกของเดิมได้ (ทั้ง New และ Edit form)
+`src/components/SkillNameInput.jsx` — pattern เดียวกับช่อง Team/Owner แต่**คืนค่าว่าเลือกทางไหน**
+`{mode:'existing', id}` vs `{mode:'new', name}` เพราะสองทางนี้แยกกันคนละเรื่องหลังจากนั้น
+- ผูกด้วย **doc ID เท่านั้น ห้ามผูกด้วยชื่อ**
+- เลือกได้เฉพาะ skill ที่ `approved` + ไม่ archived + ยังไม่ถูกผูกในแถวอื่น
+- พิมพ์ทับเมื่อไหร่ = กลับเป็น `mode:'new'` ทันที (กันไม่ให้โชว์ชื่อหนึ่งแต่ถือ id อีกอันข้างใต้)
+- **เลือกของเดิม → ข้อมูลทั้งหมด read-only** ดึงจาก `allAgents` ที่โหลดอยู่แล้ว ไม่ยิง query เพิ่ม
+
+### Key files
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `src/components/SkillRow.jsx` | ⭐ **แถว sub-skill ที่ New form กับ Edit form ใช้ร่วมกัน** + `emptySkillRow()` + `validateSkillRows()` — ห้ามเขียนแยกสองที่ |
+| `src/components/SkillNameInput.jsx` | combobox ผูก existing / สร้างใหม่ |
+| `functions/verify-child-links.cjs` | **รันก่อน deploy** — 15 เคส พิสูจน์ว่าเป็น superset (53 agent resolve เหมือนเดิมเป๊ะ, 51 pairing ครบ) + cascade guard + multi-parent + ป้าย type |
+
+### firestore.rules
+`childSkillIds` เป็น **branch ของตัวเอง** (`hasOnly(['childSkillIds','updatedAt'])`, Tier B identity,
+freeze เมื่อ deploy requested/approved) เพราะ EditAgentModal เขียนเป็น **Write 4** แยก updateDoc
+— เหตุผลเดียวกับ Write 2b/2c ⚠️ **ต้อง publish ผ่าน Console (named DB `ai-agent-lib`)**
+
+⚠️ **Skill ที่สร้างจาก Edit form เข้าคิวอนุมัติเสมอ** — rules `allow create` ไม่มีข้อยกเว้นให้ admin
+และบังคับ `approvalStatus == 'pending'`
+
+### วิธีเปลี่ยนชื่อ category (ทำจริงแล้ว 2026-08-20: `CLIX` → `CLICX`)
+1. แก้ชื่อใน `VERTICAL_CATEGORIES` (`src/lib/approveAreas.js`) — **ที่เดียว** `CATEGORY_AREA` spread ตาม
+2. แก้ `FALLBACK_CATEGORY` + fallback product list ใน `functions/index.js` ให้ตรง
+3. **เช็คก่อนเสมอว่ามี agent ตัวไหนติดชื่อเก่าอยู่ไหม** — ถ้ามีต้อง migrate ก่อน ไม่งั้นเหลือ label ค้าง
+4. `node functions/seed-approve-area-schema.cjs` (dry run) → ต้องเห็น `+ ชื่อใหม่` กับ `- ชื่อเก่า (RETIRED)`
+   อย่างละ 1 บรรทัด **ไม่มีบรรทัดอื่นขยับ** แล้วค่อย `--apply`
+   (สคริปต์นี้คือทางเดียวที่ retire category ได้ เพราะ rules บังคับ grow-only)
+5. ⚠️ `realign-categories.cjs` / `backfill-product-category.cjs` มีสำเนาชื่อเก่าแบบ **freeze**
+   ไว้เป็นประวัติ — **ห้ามแก้และห้ามรันซ้ำ**
