@@ -248,7 +248,7 @@ export const VERTICAL_CATEGORIES = [
   'Lending & Credit',
   'NEXT',                          // added 2026-08-10
   'เป๋าตัง, เป๋าตุง, ถุงเงิน',        // added 2026-08-10, renamed same day
-  'CLIX',                          // added 2026-08-10
+  'CLICX',                         // added 2026-08-10, renamed from 'CLIX' 2026-08-20
   'Core bank',                     // added 2026-08-10
 ];
 

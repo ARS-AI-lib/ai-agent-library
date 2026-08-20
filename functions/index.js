@@ -62,13 +62,13 @@ const FALLBACK_CATEGORY = [
   'UX Research', 'Design & UI', 'Writing & Content', 'Architecture',
   'Software Development', 'SIT', 'QA', 'Security', 'DevOps & Platform',
   'SRE & Reliability', 'Incident Management', 'Data & Analytics',
-  'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLIX', 'Core bank',
+  'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLICX', 'Core bank',
 ];
 // Which of the above are PRODUCTS rather than disciplines. Mirrors
 // VERTICAL_CATEGORIES in src/lib/approveAreas.js; the live value comes from
 // /config/schema.productCategory, seeded from that same constant.
 const FALLBACK_PRODUCT_CATEGORY = [
-  'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLIX', 'Core bank',
+  'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLICX', 'Core bank',
 ];
 let categoryCache = null;
 // Returns { all, disciplines, products }. Splitting these matters: until
