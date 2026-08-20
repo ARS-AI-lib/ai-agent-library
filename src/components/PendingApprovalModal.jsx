@@ -77,6 +77,15 @@ async function recordOutcome(agentId, outcome, uid) {
   } catch { /* no KB doc for this agent, or transient — non-fatal */ }
 }
 
+// The candidate popup splits on this: a hard overlap is a reason to reject or
+// merge, a merely-related one is context for the reviewer. 'unrelated' is
+// deliberately not shown — it is the AI saying it checked and found nothing.
+const CANDIDATE_GROUPS = [
+  { key: 'overlap', label: 'ทับซ้อน', verdicts: ['clear_duplicate', 'likely_overlap'] },
+  { key: 'related', label: 'คล้าย / เกี่ยวข้อง', verdicts: ['distinct_but_related'] },
+];
+const CANDIDATE_VERDICTS = CANDIDATE_GROUPS.flatMap((g) => g.verdicts);
+
 const RISK_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
 const RISK_COLOR = { high: '#c5221f', medium: '#c96a00', low: '#137333' };
 
@@ -141,20 +150,47 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
   const [detailAgent, setDetailAgent] = useState(null); // nested click-through (own AgentDetailModal — see z-index note below)
   const agentByName = (name) => agents.find((a) => a.agentName === name) || null;
 
+  // Loads EVERY candidate the AI compared against, not just the overlapping
+  // ones (2026-08-20). The badge this opens reads "ทับซ้อน/คล้าย" — showing
+  // only clear_duplicate/likely_overlap answered the "ทับซ้อน" half and left
+  // "คล้าย" unanswered, which is exactly what an approver is asking when they
+  // click a Medium risk that has few hard overlaps. Grouped at render time.
   async function openOverlapPopup(agent) {
     setOverlapFor(agent);
     setOverlapCandidates(null);
     try {
       const snap = await getDoc(doc(db, 'analysisRuns', agent.id));
       const candidates = snap.exists() ? (snap.data()?.result?.candidates || []) : [];
-      setOverlapCandidates(
-        candidates
-          .filter((c) => c.verdict === 'clear_duplicate' || c.verdict === 'likely_overlap')
-          .sort((a, b) => b.confidence - a.confidence)
-      );
+      setOverlapCandidates([...candidates].sort((a, b) => (b.confidence || 0) - (a.confidence || 0)));
     } catch {
       setOverlapCandidates([]); // best-effort — a fetch failure just shows "no data" rather than breaking the queue
     }
+  }
+
+  // One row of the candidate popup. A helper rather than an inline map so the
+  // two verdict groups render identically by construction.
+  function renderCandidate(c, i, total) {
+    const vColor = VERDICT_COLOR[c.verdict] || 'var(--mu)';
+    const target = agentByName(c.agentName);
+    return (
+      <div key={`${c.agentName}-${i}`} style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '8px 0', borderBottom: i < total - 1 ? '1px solid var(--bd)' : 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontWeight: 700, color: vColor, fontFamily: "'IBM Plex Mono',monospace", minWidth: 36 }}>{c.confidence}%</span>
+          <span
+            role="button"
+            tabIndex={0}
+            style={{ fontWeight: 600, fontSize: 13, cursor: target ? 'pointer' : 'default', textDecoration: target ? 'underline' : 'none', textDecorationStyle: 'dotted' }}
+            onClick={() => target && setDetailAgent(target)}
+          >
+            {c.agentName}
+          </span>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: vColor, background: `${vColor}15`, border: 'none', padding: '2px 8px', borderRadius: 6 }}>
+            {VERDICT_LABEL[c.verdict] || c.verdict}
+          </span>
+        </div>
+        {c.reason && <div style={{ fontSize: 11, color: 'var(--tx2)' }}>{c.reason}</div>}
+      </div>
+    );
   }
 
   // Visibility now comes from src/lib/pendingQueue.js so the badge counter in
@@ -384,8 +420,25 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 5 }}>
                     <AreaChips areas={resolveAreas(agent)} />
                     <span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
+                    {/* Clickable since 2026-08-20: the risk level alone told an
+                        approver there was a problem without telling them WHICH
+                        agents it overlapped — the candidate list was already
+                        stored in /analysisRuns, just never reachable from here
+                        unless the separate breadthFlag happened to be set. */}
                     {risk && (
-                      <span>เสี่ยงทับซ้อน/คล้าย: <span style={{ color: RISK_COLOR[risk] || 'var(--mu)', fontWeight: 700 }}>{RISK_LABEL[risk] || risk}</span></span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openOverlapPopup(agent)}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openOverlapPopup(agent)}
+                        style={{ cursor: 'pointer' }}
+                        title="กดเพื่อดูว่าคล้ายกับ Agent ตัวไหนบ้าง"
+                      >
+                        เสี่ยงทับซ้อน/คล้าย:{' '}
+                        <span style={{ color: RISK_COLOR[risk] || 'var(--mu)', fontWeight: 700, textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
+                          {RISK_LABEL[risk] || risk}
+                        </span>
+                      </span>
                     )}
                     {breadthFlag && (
                       <span
@@ -590,7 +643,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setOverlapFor(null)}>
           <div className="mbox" style={{ padding: 18, maxWidth: 480 }}>
             <button className="mclose" onClick={() => setOverlapFor(null)}>✕</button>
-            <h3 style={{ fontSize: 15, marginBottom: 4 }}>ทับซ้อนกับ Agent เดิม</h3>
+            <h3 style={{ fontSize: 15, marginBottom: 4 }}>Agent เดิมที่ทับซ้อน / คล้ายกัน</h3>
             <div style={{ fontSize: 12, color: 'var(--mu)', marginBottom: 12 }}>{overlapFor.agentName}</div>
 
             {overlapCandidates === null && (
@@ -599,29 +652,29 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
             {overlapCandidates?.length === 0 && (
               <div className="msg warn"><span className="dot" style={{ background: '#fbbc04' }} />ไม่พบข้อมูลรายละเอียด (อาจถูกข้ามตอนบันทึกเนื่องจากซ้ำกับ analysis อื่นที่มีอยู่แล้ว)</div>
             )}
-            {overlapCandidates?.map((c, i) => {
-              const vColor = VERDICT_COLOR[c.verdict] || 'var(--mu)';
-              const target = agentByName(c.agentName);
+            {/* Two groups, not one list: an approver reads "ทับซ้อน" and "คล้าย"
+                as different decisions — the first is a reason to reject or
+                merge, the second is context. Flattening them would make the
+                AI look like it flagged 9 duplicates when it found 2. */}
+            {CANDIDATE_GROUPS.map(({ key, label, verdicts }) => {
+              const rows = (overlapCandidates || []).filter((c) => verdicts.includes(c.verdict));
+              if (!rows.length) return null;
               return (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '8px 0', borderBottom: i < overlapCandidates.length - 1 ? '1px solid var(--bd)' : 'none' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontWeight: 700, color: vColor, fontFamily: "'IBM Plex Mono',monospace", minWidth: 36 }}>{c.confidence}%</span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      style={{ fontWeight: 600, fontSize: 13, cursor: target ? 'pointer' : 'default', textDecoration: target ? 'underline' : 'none', textDecorationStyle: 'dotted' }}
-                      onClick={() => target && setDetailAgent(target)}
-                    >
-                      {c.agentName}
-                    </span>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: vColor, background: `${vColor}15`, border: 'none', padding: '2px 8px', borderRadius: 6 }}>
-                      {VERDICT_LABEL[c.verdict] || c.verdict}
-                    </span>
+                <div key={key}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--mu)', letterSpacing: '.04em', textTransform: 'uppercase', marginTop: 12, marginBottom: 2 }}>
+                    {label} ({rows.length})
                   </div>
-                  {c.reason && <div style={{ fontSize: 11, color: 'var(--tx2)' }}>{c.reason}</div>}
+                  {rows.map((c, i) => renderCandidate(c, i, rows.length))}
                 </div>
               );
             })}
+            {overlapCandidates?.length > 0
+              && overlapCandidates.every((c) => !CANDIDATE_VERDICTS.includes(c.verdict)) && (
+              <div className="msg info" style={{ marginTop: 10 }}>
+                <span className="dot" style={{ background: '#4a6fa5' }} />
+                AI เทียบกับ {overlapCandidates.length} ตัวแล้วไม่พบตัวที่ทับซ้อนหรือคล้ายกัน
+              </div>
+            )}
           </div>
         </div>
       )}
