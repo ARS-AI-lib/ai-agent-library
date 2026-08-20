@@ -7,6 +7,7 @@ import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import { uniq, splitRoles, extractProcessId, processLabel, agentUseCaseNames } from '../lib/agentUtils';
+import { notifyEvent } from '../lib/notify';
 import { isInternalToolName } from '../lib/internalTool';
 import useEscapeKey from '../hooks/useEscapeKey';
 import ComboInput from './ComboInput';
@@ -673,6 +674,10 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // both see them semantically. Fire-and-forget — a submit must never fail
       // because the search index is unavailable.
       reindexAgent(agentRef.id);
+      // One email for the whole submission — the parent agent. Sub-skills are
+      // filed as separate docs but reviewed as a package, and the notifier
+      // skips anything carrying matchingAgent for exactly that reason.
+      notifyEvent('agent.pending', { agentId: agentRef.id });
 
       // Analysis is now committed to the KB — drop the transient session cache
       // so nothing lingers post-submit (per the "clear cache after submit" rule).

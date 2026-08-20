@@ -8,6 +8,7 @@ import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { recordAgentEvent, submitRating } from '../lib/agentEvents';
 import { handleEndpointClick, isLibraryFileUrl, markAgentReady } from '../lib/endpointFiles';
+import { notifyEvent } from '../lib/notify';
 import { readStats, ratingDisplay, canRateAgent, STAR_LEVELS } from '../lib/agentStats';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
@@ -221,6 +222,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       try {
         const args = { endpointUrl: editEndpoint.trim() || undefined, launchDate: editLaunch || undefined };
         await markAgentReady({ agentId: agent.id, ...args });
+        notifyEvent('agent.ready', { agentId: agent.id });
         // Cascade stays here rather than inside the callable so the one correct
         // pairing helper (pairedSubSkills) remains the only implementation —
         // re-deriving it server-side is exactly the drift CLAUDE.md §20 forbids.
@@ -289,6 +291,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         updatedAt: serverTimestamp(),
       };
       await updateDoc(doc(db, 'agents', agent.id), stamp);
+      notifyEvent('agent.archived', { agentId: agent.id });
       // Cascade to paired sub-skills EXCEPT the ones explicitly kept, so a
       // still-useful reusable skill can outlive its parent Agent.
       for (const sk of subSkills) {
@@ -338,7 +341,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
     setRenameBusy(true);
     setRenameMsg('');
     try {
-      await addDoc(collection(db, 'renameRequests'), {
+      const reqRef = await addDoc(collection(db, 'renameRequests'), {
         agentId: agent.id,
         currentName: agent.agentName || '',
         requestedName: next,
@@ -347,6 +350,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         createdByEmail: user?.email || '',
         createdAt: serverTimestamp(),
       });
+      notifyEvent('rename.requested', { requestId: reqRef.id });
       setRenameMsg('ส่งคำขอแล้ว — รอ Approver ประจำ Area หรือ Admin อนุมัติ');
       setRenameValue('');
     } catch (e) {
@@ -369,6 +373,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         updatedAt: serverTimestamp(),
       };
       await updateDoc(doc(db, 'agents', agent.id), patch);
+      // Parent only: the cascade below writes one doc per sub-skill, and a
+      // 7-child parent would otherwise produce 8 emails for one request.
+      notifyEvent('deploy.requested', { agentId: agent.id });
       // Cascade the deploy request onto the paired sub-skills too, so the
       // approver's single decision on the parent flips the whole package
       // (the skills are filtered out of the approver's deploy queue — the

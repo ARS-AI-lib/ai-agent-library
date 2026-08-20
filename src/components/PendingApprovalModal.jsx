@@ -7,6 +7,7 @@ import { matchingAgentNames, pairedSubSkills, fmtDate, categoryColor } from '../
 import { queueViewer, visiblePending, visibleDeployRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
 import { canDecideRename } from '../lib/agentUtils';
 import { decideRenameRequest } from '../lib/endpointFiles';
+import { notifyEvent } from '../lib/notify';
 import AgentDetailModal from './AgentDetailModal';
 import useEscapeKey from '../hooks/useEscapeKey';
 
@@ -186,6 +187,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
     setError('');
     try {
       await decideRenameRequest({ requestId: reqId, verdict });
+      notifyEvent('rename.decided', { requestId: reqId });
     } catch (e) {
       setError(e?.message || 'ตัดสินคำขอเปลี่ยนชื่อไม่สำเร็จ');
     } finally {
@@ -232,6 +234,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
         updatedAt: serverTimestamp(),
       };
       await updateDoc(doc(db, 'agents', agent.id), patch);
+      notifyEvent(verdict === 'approved' ? 'deploy.approved' : 'deploy.rejected', { agentId: agent.id });
       for (const sk of pairedSubSkills(agent, agents)) {
         if ((sk.deploymentStatus || 'none') === 'requested') {
           await updateDoc(doc(db, 'agents', sk.id), patch);
@@ -274,6 +277,9 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
         updatedAt: serverTimestamp(),
       });
       await recordOutcome(agent.id, 'approved', user?.uid);
+      // Parent only — the cascade below moves siblings, but this is one
+      // decision and must be one email.
+      notifyEvent('agent.approved', { agentId: agent.id });
 
       for (const sib of findCascadeSiblings(agent)) {
         await updateDoc(doc(db, 'agents', sib.id), {
@@ -309,6 +315,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
         ...rejectFields,
       });
       await recordOutcome(agent.id, 'rejected', user?.uid);
+      notifyEvent('agent.rejected', { agentId: agent.id });
 
       // Same cascade principle as approve — a rejected/withdrawn parent
       // shouldn't leave its paired sub-skills orphaned pending forever.

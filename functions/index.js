@@ -760,6 +760,9 @@ const RATE_LIMITS = {
   embedQuery: 20, recordAgentEvent: 120, submitRating: 20,
   attachEndpointFile: 10, getEndpointFile: 60,
   markAgentReady: 30, decideRenameRequest: 20,
+  // Notifications ride along with ordinary UI actions, so the cap is a
+  // runaway guard rather than a usage budget. Real volume is ~7 events/WEEK.
+  notifyEvent: 60,
 };
 
 async function enforceRateLimit(uid, fnName) {
@@ -1380,5 +1383,106 @@ exports.decideRenameRequest = onCall(
     await batch.commit();
 
     return { ok: true, verdict, childrenUpdated: children.length };
+  },
+);
+
+
+// ── Email notifications (2026-08-20) ─────────────────────────────────
+//
+// WHY A CALLABLE AND NOT A FIRESTORE TRIGGER. Two measurements decided it:
+//   · Of 78 agents created in the last 30 days, only 7 came through the UI —
+//     the other 71 were script/bulk writes. A trigger would have emailed on
+//     all 78; a callable is invoked only by the UI, so migrations and imports
+//     notify nobody BY CONSTRUCTION.
+//   · Paired sub-skills cascade: one deploy request on a 7-child parent writes
+//     8 documents. A per-write trigger sends 8 emails for one human decision.
+// (The orphaned `send-approval-email` trigger still deployed in this project
+// is the cautionary example — it fires twice on every agent write and has
+// never sent anything, because it gates on a `status` field the app stopped
+// writing before the baseline commit.)
+//
+// SAFETY. The client sends only { type, agentId } — it never names recipients,
+// and every event is re-verified against the real document before anything is
+// sent (notifyRules.EVENTS[type].verify). A forged event describes a state
+// that is not true, so it resolves to no recipients and dies here.
+
+const { buildNotification, EVENT_TYPES } = require('./notifyRules');
+const { sendMail } = require('./mailer');
+
+exports.notifyEvent = onCall(
+  { cors: true, timeoutSeconds: 60 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    if (!isOrgEmail(request.auth.token?.email)) {
+      throw new HttpsError('permission-denied', 'Organisation account required.');
+    }
+    await enforceRateLimit(request.auth.uid, 'notifyEvent');
+
+    const { type, agentId, requestId, targetUid } = request.data || {};
+    if (!EVENT_TYPES.includes(type)) {
+      throw new HttpsError('invalid-argument', `type must be one of ${EVENT_TYPES.join('|')}.`);
+    }
+
+    // Load the subject document for this event's scope.
+    let doc = null;
+    let agent = null;
+    if (type.startsWith('rename.')) {
+      if (!requestId) throw new HttpsError('invalid-argument', 'requestId is required.');
+      const rs = await db.collection('renameRequests').doc(requestId).get();
+      doc = rs.exists ? { id: rs.id, ...rs.data() } : null;
+      if (doc?.agentId) {
+        const as = await db.collection('agents').doc(doc.agentId).get();
+        agent = as.exists ? { id: as.id, ...as.data() } : null;
+      }
+    } else if (type === 'user.roleChanged') {
+      if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid is required.');
+      const us = await db.collection('users').doc(targetUid).get();
+      doc = us.exists ? { id: us.id, ...us.data() } : null;
+    } else {
+      if (!agentId) throw new HttpsError('invalid-argument', 'agentId is required.');
+      const as = await db.collection('agents').doc(agentId).get();
+      doc = as.exists ? { id: as.id, ...as.data() } : null;
+      agent = doc;
+    }
+    if (!doc) return { ok: false, reason: 'subject-not-found' };
+
+    // Recipients need /users for area routing, uid->name rendering and opt-out.
+    const usersSnap = await db.collection('users').get();
+    const users = usersSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((u) => u.emailOptOut !== true);
+
+    // Sub-skill count is context for the approver ("this decision moves 7
+    // other records"), not routing. Matched the same way decideRenameRequest
+    // finds children: by the name they literally store.
+    let subSkillCount = 0;
+    if (agent?.agentName) {
+      const kids = await db.collection('agents').where('matchingAgent', '==', agent.agentName).get();
+      subSkillCount = kids.size;
+    }
+
+    const note = buildNotification({ type, doc, agent, users, subSkillCount });
+    if (!note) return { ok: false, reason: 'no-recipients-or-unverified' };
+
+    const result = await sendMail(db, note);
+
+    // Always logged — dry runs, holds and failures included. This IS the audit
+    // trail, and it is what verification reads to confirm routing without
+    // sending anything.
+    await db.collection('mailLog').add({
+      type,
+      subjectDocId: doc.id || null,
+      agentId: agent?.id || null,
+      subject: note.subject,
+      to: note.to,
+      status: result.status,
+      provider: result.provider,
+      error: result.error || null,
+      heldFrom: result.heldFrom || [],
+      triggeredBy: request.auth.uid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return { ok: result.status === 'sent' || result.status === 'dry-run', status: result.status, to: note.to.length };
   },
 );

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { notifyEvent } from '../lib/notify';
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getDirectoryMeta, syncDirectoryToFirestore } from '../lib/directory';
@@ -95,6 +96,11 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
         approveAreas: [...d.approveAreas],
         updatedAt: serverTimestamp(),
       });
+      // Being granted an Approve Area silently changes what lands in your
+      // queue, so the person it happens TO is told. The email deliberately
+      // does not name who made the change — this write has no audit field
+      // for it and the user chose not to add one.
+      notifyEvent('user.roleChanged', { targetUid: u.uid });
       setDrafts((prev) => { const n = { ...prev }; delete n[u.uid]; return n; });
     } catch (e) {
       setError(e.message || 'บันทึกไม่สำเร็จ');

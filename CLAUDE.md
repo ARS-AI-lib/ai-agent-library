@@ -250,13 +250,15 @@ Tier:
 
 **⚠️ กฎเหล็ก — โปรเจกต์ `wolfy-481609` แชร์กับแอป Portfolio:** ทั้ง 2 แอปอยู่ GCP project เดียวกัน
 - **ห้ามรัน `firebase deploy` เปล่าๆ หรือ `--only functions` เปล่าๆ เด็ดขาด**
-  **ตัวเลขจริง (ยืนยันด้วย `npx firebase-tools functions:list` เมื่อ 2026-08-18):**
-  deploy อยู่จริง **8 ตัว** · `functions/index.js` ใน local มี **4 ตัว**
+  **ตัวเลขจริง (ยืนยันด้วย `npx firebase-tools functions:list` เมื่อ 2026-08-20):**
+  deploy อยู่จริง **14 ตัว** · `functions/index.js` ใน local มี **11 ตัว**
   | | ชื่อ |
   |---|---|
-  | AI Lib — มีใน local | `analyzeDuplicate`, `chatLibrary`, `embedQuery`, `reindexAgentVectors` |
-  | AI Lib — **ไม่มีใน local** | `send-approval-email` (legacy) |
+  | AI Lib — มีใน local | `analyzeDuplicate`, `chatLibrary`, `embedQuery`, `reindexAgentVectors`, `recordAgentEvent`, `submitRating`, `attachEndpointFile`, `getEndpointFile`, `markAgentReady`, `decideRenameRequest`, `notifyEvent` |
+  | AI Lib — **ไม่มีใน local** | `send-approval-email` (legacy zombie — ดูข้อ 26) |
   | **Portfolio (คนละ repo!)** | `files`, `logProjectActivity`, `logTaskActivity` |
+  ⚠️ **ตารางนี้เพี้ยนมาแล้ว 3 รอบใน 2 สัปดาห์** (แก้ 2026-08-18 แล้วเพี้ยนอีก 2 ครั้งจากการเพิ่ม
+  function ใหม่) → **ห้ามเชื่อตัวเลขในตารางนี้ ให้รัน `functions:list` ทุกครั้งก่อนแตะ functions**
   → unscoped deploy จะเสนอ **ลบ 4 ตัวที่ไม่มีใน local รวมของ Portfolio ทั้งหมด**
   **เวลาแก้ functions ให้ scope เฉพาะตัวที่แก้จริงเสมอ** เช่น
   `--only functions:analyzeDuplicate` · เพิ่ม function ใหม่ก็ scope เฉพาะตัวใหม่
@@ -811,3 +813,71 @@ deploy request, deploy decision, queue de-dup และ lock ของ sub-skill
 → ทุกแถวติดธง **`launchDateEstimated: true`** และขึ้น Watchlist เพื่อไม่ให้ค่าประมาณ
 ถูกอ่านเป็นข้อเท็จจริง (SYSTEM-OVERVIEW:353) · **ของใหม่ที่ผ่าน `markAgentReady` ไม่ติดธงนี้**
 เพราะเป็นเวลาจริง
+
+
+---
+
+## 26. Email Notifications (2026-08-20)
+
+### 🔴 ก่อนอื่น: มี zombie function ยิงทุก write อยู่
+`send-approval-email` **ยัง deploy อยู่และทำงานอยู่ตอนนี้** — เป็น Eventarc Firestore trigger
+บน `/agents/{id}` ยิง **2 instance ทุกครั้งที่มีการเขียน** log บอกว่า:
+```
+Status is not pending, skipping. status=undefined
+```
+มันเช็ค field `.status` ซึ่งเป็น**ข้อมูลตายแล้ว** (`"active"` 224 doc, ไม่มี 22 doc, `"pending"` **0 doc**)
+ระบบจริงใช้ `approvalStatus` → **ไม่เคยส่งอีเมลได้เลย และไปไม่ถึง SMTP ด้วยซ้ำ**
+
+**source ไม่มีอยู่ที่ไหนเลย** — `git log --all -S"nodemailer"` / `-S"sendApprovalEmail"` เจอแต่
+commit เอกสาร ไม่เคยมีโค้ดใน repo นี้ (hand-deploy จาก Cloud Shell ยุคก่อน baseline)
+→ **เหตุผลใน §9 ที่ว่า "SMTP AUTH ถูก org policy บล็อก" ยืนยันจากสถานะปัจจุบันไม่ได้**
+ผู้ใช้เลือกเก็บไว้ก่อน · ระบบใหม่ไม่เกี่ยวข้องกับมันเลย
+
+### สถาปัตยกรรม: callable ไม่ใช่ Firestore trigger
+ข้อมูลจริง 2 ตัวเป็นคนตัดสิน:
+- **78 agent ใหม่ใน 30 วัน แต่มาจาก UI แค่ 7** (อีก 71 เป็น script/bulk import)
+  → callable ถูกเรียกจาก UI เท่านั้น **bulk import ไม่ส่งอีเมลเลยโดยธรรมชาติ** · trigger จะยิงครบ 78
+- **cascade**: deploy request บน parent ที่มีลูก 7 = เขียน 8 doc → trigger ส่ง 8 ฉบับต่อ 1 การตัดสินใจ
+
+**ความปลอดภัย 3 ชั้น** (ดู `functions/notifyRules.js`):
+1. client ส่งแค่ `{type, agentId}` — **ไม่ได้ระบุผู้รับ** server เป็นคนหา
+2. **ทุก event ถูก verify กับ doc จริงก่อนส่ง** — event ปลอมอธิบายสถานะที่ไม่จริง จึงได้ผู้รับ 0 คนแล้วตายไป
+3. **1 การกระทำ = 1 อีเมล** — doc ที่มี `matchingAgent` (sub-skill) ถูกข้ามทิ้งเสมอ
+
+### Transport สลับได้ที่ `/config/mail`
+`{ enabled, provider, from, replyTo, allowRecipients[] }` — เปลี่ยน provider = แก้ Firestore ไม่ต้อง deploy
+- `none` — **ค่าเริ่มต้น** render + log ลง `/mailLog` แต่ไม่ส่งจริง → ตรวจได้ครบก่อนส่งจริงสักฉบับ
+- `gmail-oauth` — Gmail API + refresh token ของ `tinnapat.p@arise.tech` (อนาคตเปลี่ยนเป็นกล่องกลาง)
+- `smtp-relay` / `resend` — stub ไว้
+
+⚠️ **refresh token อยู่ใน Secret Manager ไม่ใช่ Firestore** — `/config/mail` เก็บแค่สวิตช์ที่ไม่ลับ
+env: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`
+
+⚠️ **`allowRecipients` คือเบรกมือตอน rollout** — ถ้าไม่ว่าง จะส่งเฉพาะรายชื่อในนั้นเท่านั้น
+ไม่ว่าการ routing จะคำนวณได้ใครก็ตาม · ส่งจริงครั้งแรกให้ใส่แค่อีเมลตัวเอง
+
+### ทำไมใช้บัญชีตัวเองส่งได้โดยไม่ต้องขอ IT
+OAuth2 refresh token ของบัญชีตัวเอง = ให้สิทธิ์ตัวเอง ไม่ต้องมี Workspace admin
+**หลักฐานว่า consent screen เป็น Internal:** แอปขอ scope `directory.readonly` (sensitive) อยู่แล้ว
+และใช้งานได้จริง — `/config/directory` มี **1,936 คน** sync ล่าสุด 2026-08-19 · ถ้าเป็น External+Testing
+จะติดเพดาน 100 test user แต่ระบบมี user 195 คนที่ login ได้ปกติ
+⚠️ `gmail.send` เป็น **restricted** (เข้มกว่า sensitive) — ควรยืนยัน consent screen ใน Console อีกครั้ง
+
+### 8 จุดเตือน (11 event type)
+`agent.pending` · `agent.approved` · `agent.rejected` · `deploy.requested` · `deploy.approved` ·
+`deploy.rejected` · `agent.archived` · `agent.ready` · `rename.requested` · `rename.decided` ·
+`user.roleChanged`
+
+**ไม่รวม rating** — กันไม่ให้หลุดว่าใครรีวิว (ระบบตั้งใจให้ anonymous)
+**`user.roleChanged` ไม่บอกว่าใครเปลี่ยน** — `UserManagementModal` ไม่มี audit field และผู้ใช้เลือกไม่เพิ่ม
+
+### Key files
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `functions/notifyRules.js` | ⭐ **catalog + verify + routing + render ที่เดียว** — pure ทดสอบ offline ได้ |
+| `functions/mailer.js` | transport adapter + `allowRecipients` guard |
+| `functions/verify-notify.cjs` | **รันก่อน deploy** — 14 เคสกับข้อมูลจริง · `--preview` ดูเนื้อหาอีเมลทุกฉบับ |
+| `src/lib/notify.js` | client wrapper fire-and-forget (แบบเดียวกับ `agentEvents.js`) |
+| `/mailLog` | audit ทุกครั้งที่พยายามส่ง (sent / dry-run / held / error) — rules: read admin, write false |
+
+⚠️ **เรียก `notifyEvent` ครั้งเดียวต่อ 1 การกระทำ นอก loop cascade เสมอ**

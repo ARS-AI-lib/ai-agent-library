@@ -239,6 +239,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Mail log (2026-08-20) ─────────────────────────────────────────
+    // Audit trail for every notification attempt — sent, dry-run, held and
+    // failed alike. Function-only writes (admin SDK bypasses these rules),
+    // matching the /metrics + /agentStats posture: there is no legitimate
+    // client reason to forge a record of an email.
+    //
+    // Read is admin-only rather than isKnownUser(): rows carry the recipient
+    // lists for approval and archive decisions, which is more than a general
+    // user needs to see.
+    match /mailLog/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ── Rename requests (2026-08-19) ──────────────────────────────────
     // A creator may ask to rename an agent after it has gone live; an approver
     // for that agent's area (or an admin) decides. Modelled on
