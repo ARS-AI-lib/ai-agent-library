@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { doc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
+import { doc, addDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { isInternalOrExternal, isSkill } from '../lib/tier';
-import { splitRoles, uniq, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditReadyToUseFields, agentUseCaseNames } from '../lib/agentUtils';
+import { isInternalOrExternal, isSkill, getType } from '../lib/tier';
+import { splitRoles, uniq, pairedSubSkills, childSkillIdList, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditReadyToUseFields, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
@@ -11,6 +11,8 @@ import TagMultiSelect from './TagMultiSelect';
 import AgentMultiSelect from './AgentMultiSelect';
 import ComboInput from './ComboInput';
 import CreatorPicker from './CreatorPicker';
+import SkillRow, { emptySkillRow, validateSkillRows } from './SkillRow';
+import { isInternalToolName } from '../lib/internalTool';
 import useEscapeKey from '../hooks/useEscapeKey';
 
 const REUSABLE_OPTIONS = ['Reusable', 'Reusable with Conditions', 'Non-reusable'];
@@ -102,6 +104,30 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   // for the saved-data corruption that firing on mount caused.
   const stageTouched = useRef(false);
   const processTouched = useRef(false);
+  // ── Type: Agent ⇄ Agent+Skill (2026-08-20) ──
+  // Type is DERIVED from having linked children, never stored — aiAgent/skillMd
+  // are not touched, so tier cannot move. Skills-only docs have nothing to
+  // attach, so the control is Agent-only.
+  const canEditType = getType(agent) === 'agent' && canEditTierA;
+  const existingChildren = useMemo(
+    () => pairedSubSkills(agent, allAgents),
+    [agent, allAgents],
+  );
+  const [skillRows, setSkillRows] = useState(() => existingChildren.map((c, i) => ({
+    ...emptySkillRow(`ex-${i}`),
+    link: { mode: 'existing', id: c.id },
+  })));
+  const [typePick, setTypePick] = useState(() => (existingChildren.length ? 'Agent+Skill' : 'Agent'));
+  const skillSeqRef = useRef(0);
+  function addSkillRow() {
+    skillSeqRef.current += 1;
+    setSkillRows((r) => [...r, emptySkillRow(`new-${skillSeqRef.current}`)]);
+  }
+  function removeSkillRow(id) { setSkillRows((r) => r.filter((x) => x._id !== id)); }
+  function setSkillRowField(id, k, v) {
+    setSkillRows((r) => r.map((x) => (x._id === id ? { ...x, [k]: v } : x)));
+  }
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [processes, setProcesses] = useState([]);
@@ -225,9 +251,14 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         setError('กรุณาระบุ Reuse Conditions');
         return;
       }
-    } else if (canEditRTU && !form.description.trim()) {
+    }
+    if (!canEditTierA && canEditRTU && !form.description.trim()) {
       setError('กรุณากรอก Description');
       return;
+    }
+    if (canEditType && typePick === 'Agent+Skill') {
+      const skErr = validateSkillRows(skillRows, allAgents);
+      if (skErr) { setError(skErr); return; }
     }
     setSaving(true);
     setError('');
@@ -331,6 +362,71 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         });
       }
 
+      // Write 4 — Type / child-skill links (2026-08-20). Its OWN updateDoc so
+      // affectedKeys stays ['childSkillIds','updatedAt'] and matches the rules
+      // branch, same reason as Write 2b/2c. Switching back to Agent only
+      // UNLINKS: every skill doc is left exactly as it is, because a skill is
+      // an independent library entry that other agents may also depend on.
+      if (canEditType) {
+        const childIds = [];
+        if (typePick === 'Agent+Skill') {
+          for (const s of skillRows) {
+            if (s.link?.mode === 'existing') { childIds.push(s.link.id); continue; }
+            const sName = s.link.name.trim();
+            const sExternal = s.scope === 'External';
+            // A skill created here enters the approval queue like any other
+            // submission — firestore.rules' create branch has no admin
+            // exemption and demands approvalStatus 'pending'.
+            const ref = await addDoc(collection(db, 'agents'), {
+              agentName: sName,
+              description: s.description.trim(),
+              aiAgent: false,
+              skillMd: true,
+              owner: agent.owner || '',
+              coreAbility: [...s.ability],
+              relatedRole: [...s.relatedRole],
+              customerFacing: sExternal,
+              internalUse: !sExternal,
+              internalTool: isInternalToolName(sName),
+              reusable: s.reusable,
+              reuseCondition: s.reusable === 'Reusable with Conditions' ? s.reuseCondition.trim() : '',
+              hml: s.hml,
+              humanJob: s.hml ? s.humanJob.trim() : '',
+              tool: agent.tool || '',
+              llm: agent.llm || '',
+              dataPrivacy: agent.dataPrivacy || '',
+              sdlcStage: Array.isArray(agent.sdlcStage) ? agent.sdlcStage : [],
+              sdlcProcessMapping: Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping : [],
+              useCase: agentUseCaseNames(agent),
+              category: Array.isArray(agent.category) ? agent.category : [],
+              input: s.input.trim(),
+              output: s.output.trim(),
+              businessValue: agent.businessValue || '',
+              matchingAgent: form.agentName.trim() || agent.agentName,
+              analysisResult: null,
+              developmentPhase: 'To Do',
+              devProgress: 0,
+              deploymentStatus: 'none',
+              launchDate: null,
+              approvalStatus: 'pending',
+              approvedBy: '',
+              creator: agent.creator || '',
+              creatorEmails: Array.isArray(agent.creatorEmails) ? agent.creatorEmails : [],
+              createdBy: user?.uid || '',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+            childIds.push(ref.id);
+            reindexAgent(ref.id);
+          }
+        }
+        const before = childSkillIdList(agent);
+        const changed = before.length !== childIds.length || before.some((id, i) => id !== childIds[i]);
+        if (changed) {
+          await updateDoc(doc(db, 'agents', agent.id), { childSkillIds: childIds, updatedAt: serverTimestamp() });
+        }
+      }
+
       // One reindex after ALL the conditional writes above — the searchable
       // text may have moved (name/description/input/output/ability/role/use
       // case), and the index has to follow or search silently ranks on stale
@@ -379,6 +475,64 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           <label>Agent / Skill Name <span className="req">*</span></label>
           <input disabled={lockTierA} value={form.agentName} onChange={(e) => setField('agentName', e.target.value)} />
         </div>
+
+        {/* ── Type (2026-08-20): Agent+Skill means "an Agent that calls skills",
+             i.e. parent + linked child skill docs. It is derived from those
+             links, so switching here never touches aiAgent/skillMd and never
+             moves the Tier. ── */}
+        {canEditType && (
+          <div className="fg">
+            <label>Type</label>
+            <div className="toggle2" role="radiogroup" aria-label="Type">
+              {['Agent', 'Agent+Skill'].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={typePick === t}
+                  className={typePick === t ? 'sel' : ''}
+                  onClick={() => {
+                    setTypePick(t);
+                    // Default one blank row in immediately, same as the New form.
+                    if (t === 'Agent+Skill' && skillRows.length === 0) addSkillRow();
+                  }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            {typePick === 'Agent' && existingChildren.length > 0 && (
+              <div className="msg info" style={{ fontSize: 11, marginTop: 6 }}>
+                <span className="dot" style={{ background: '#4a6fa5' }} />
+                จะยกเลิกการผูก {existingChildren.length} Skill — ตัว Skill ยังอยู่ในไลบรารีตามเดิม ไม่ถูกลบ
+              </div>
+            )}
+          </div>
+        )}
+
+        {canEditType && typePick === 'Agent+Skill' && (
+          <div style={{ marginTop: 6, padding: '12px 14px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>Cascade Skills</div>
+              <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }} onClick={addSkillRow}>+ Add Skill</button>
+            </div>
+            {skillRows.map((s, idx) => (
+              <SkillRow
+                key={s._id}
+                skill={s}
+                index={idx}
+                onField={(k, v) => setSkillRowField(s._id, k, v)}
+                onRemove={() => removeSkillRow(s._id)}
+                canRemove={skillRows.length > 1}
+                allAgents={allAgents}
+                excludeIds={[agent.id, ...skillRows.filter((x) => x._id !== s._id && x.link?.mode === 'existing').map((x) => x.link.id)]}
+                abilityOptions={abilityOptions}
+                roleOptions={roleOptions}
+                onAddRelatedRole={onAddRelatedRole}
+              />
+            ))}
+          </div>
+        )}
 
         {/* ── Description + Endpoint live OUTSIDE the Tier A fieldset (2026-07-22):
              a disabled <fieldset> forces every descendant control disabled with
@@ -570,10 +724,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           <div className="fg">
             <label>Category</label>
             <MultiSelect label="เลือก Category…" options={categoryOptions} selected={form.category} onChange={(s) => setField('category', s)} />
-            <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 5, lineHeight: 1.5 }}>
-              ปกติ AI กำหนดให้ตอน submit — แก้ที่นี่เมื่อจัดหมวดผิด · เลือกได้ทั้งสายงาน
-              และผลิตภัณฑ์ (เช่น Writing &amp; Content + NEXT) · เพิ่มหมวดใหม่เองไม่ได้
-            </div>
           </div>
         )}
 

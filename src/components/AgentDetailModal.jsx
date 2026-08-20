@@ -3,7 +3,7 @@ import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
-import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, isPairedSubSkill, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
+import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { recordAgentEvent, submitRating } from '../lib/agentEvents';
@@ -262,7 +262,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         //     back to the parent's resolved endpoint keeps the pair in lock-step,
         //     which is exactly what the sub-skill lock promises.
         const parentEndpoint = editEndpoint.trim() || parentRes?.endpoint || '';
-        for (const sk of pairedSubSkills(agent, allAgents || [])) {
+        for (const sk of cascadeTargets(agent, allAgents || [])) {
           const skHasOwn = !!String(sk.endpoint || '').trim() || !!sk.endpointFile?.storagePath;
           await markAgentReady({
             agentId: sk.id,
@@ -291,7 +291,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // Live cascade (2026-07-06): keep paired sub-skills in lock-step with the
       // parent Agent's progress/launch. Only an Agent has sub-skills; a skill
       // never reaches this branch because its own edit button is hidden.
-      for (const sk of pairedSubSkills(agent, allAgents || [])) {
+      // cascadeTargets, not pairedSubSkills: a child that is further along
+      // than its parent (its own 100%, its own deploy approval) must not be
+      // dragged backwards — 18 standalone skills sit at 100% today.
+      for (const sk of cascadeTargets(agent, allAgents || [])) {
         await updateDoc(doc(db, 'agents', sk.id), patch);
       }
       setEditing(false);
@@ -420,7 +423,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // (the skills are filtered out of the approver's deploy queue — the
       // parent represents them). Same createdBy ⇒ the deploy-request rule
       // permits this write.
-      for (const sk of pairedSubSkills(agent, allAgents || [])) {
+      // cascadeTargets, not pairedSubSkills: a child that is further along
+      // than its parent (its own 100%, its own deploy approval) must not be
+      // dragged backwards — 18 standalone skills sit at 100% today.
+      for (const sk of cascadeTargets(agent, allAgents || [])) {
         await updateDoc(doc(db, 'agents', sk.id), patch);
       }
     } catch (e) {
@@ -584,7 +590,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             <div style={{ marginTop: 8, padding: 10, background: 'var(--sf)', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-sm)' }}>
               {saveError && <div className="msg error" style={{ marginBottom: 8 }}><span className="dot" style={{ background: '#ea4335' }} />{saveError}</div>}
               <div className="fg" style={{ marginBottom: 8 }}>
-                <label>Dev Progress (%) <span className="hint">0-100, สูงสุด 100</span></label>
+                <label>Dev Progress (%) <span className="hint">0-100</span></label>
                 <input
                   type="number" min={0} max={100} value={editProgress}
                   onChange={(e) => setEditProgress(e.target.value)}

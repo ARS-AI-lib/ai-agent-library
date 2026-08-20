@@ -193,6 +193,16 @@ service cloud.firestore {
         || (affectedKeys().hasOnly(['approveArea', 'updatedAt'])
             && userRole() == 'staff'
             && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved']))
+        // childSkillIds (2026-08-20): the explicit parent -> child-skill link
+        // behind Type = Agent+Skill. Its own branch (EditAgentModal Write 4
+        // sends it alone) rather than a member of Tier A/B, because the editors
+        // are the Tier B set: it is ordinary parent-owned metadata about the
+        // agent's own composition, and the link lives on the PARENT precisely
+        // so nobody has to write onto someone else's skill doc. Frozen once a
+        // deployment request is filed, same as every other detail edit.
+        || (affectedKeys().hasOnly(['childSkillIds', 'updatedAt'])
+            && isOwnerCreatorOrApprover(resource.data)
+            && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved']))
         // Deployment decision: approver-or-above approves/rejects a pending
         // deployment request (area scoping is UI-side, same pattern as the
         // new-entry approve/reject action above).

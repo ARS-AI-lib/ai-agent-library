@@ -345,15 +345,43 @@ function sameSubmitter(a, b) {
   return !!ca && ca === cb;
 }
 
+// ── Explicit link (2026-08-20) ───────────────────────────────────────
+// `agent.childSkillIds` is a list of skill DOC IDs the parent explicitly
+// linked. It exists because the name+sameSubmitter heuristic below cannot
+// express a deliberate cross-team link: measured on live data, a typical
+// standalone skill passes sameSubmitter against only 1 of 53 agents (some
+// against 0). Linking someone else's skill therefore LOOKED linked while
+// every cascade silently did nothing.
+//
+// Two deliberate properties:
+//   · Doc IDs, not names — unlike matchingAgent, this survives a rename, so
+//     it does not inherit the detach-on-rename fragility (CLAUDE.md §25).
+//   · Stored on the PARENT, not the child. firestore.rules Tier B gates on
+//     isOwnerCreatorOrApprover(resource.data) of the doc being WRITTEN, so
+//     one team cannot write onto another team's skill doc — and a
+//     deploy-approved child is frozen outright. The parent always owns its
+//     own doc, and multi-parent falls out for free (several agents may list
+//     the same skill id), which is what "add a parent, never steal" needs.
+export function childSkillIdList(agent) {
+  return Array.isArray(agent?.childSkillIds) ? agent.childSkillIds.filter(Boolean) : [];
+}
+
 // The full skill docs that are paired sub-skills of `agent` (for cascading
 // writes from the parent). `agent` is expected to be an Agent, not a Skill.
+//
+// UNION of the explicit link and the original heuristic — never a
+// replacement. 51 existing pairings across 20 parents predate childSkillIds
+// and have none, so dropping the heuristic would detach every one of them.
 export function pairedSubSkills(agent, allAgents) {
   if (!agent || getType(agent) !== 'agent') return [];
+  const linked = new Set(childSkillIdList(agent));
   return allAgents.filter((s) =>
     getType(s) === 'skill'
     && s.id !== agent.id
-    && sameSubmitter(s, agent)
-    && matchingAgentNames(s).includes(agent.agentName)
+    && (
+      linked.has(s.id)
+      || (sameSubmitter(s, agent) && matchingAgentNames(s).includes(agent.agentName))
+    )
   );
 }
 
@@ -361,12 +389,48 @@ export function pairedSubSkills(agent, allAgents) {
 export function isPairedSubSkill(skill, allAgents) {
   if (!skill || getType(skill) !== 'skill') return false;
   const parents = matchingAgentNames(skill);
-  if (!parents.length) return false;
-  return allAgents.some((a) =>
-    getType(a) === 'agent'
-    && sameSubmitter(skill, a)
-    && parents.includes(a.agentName)
-  );
+  return allAgents.some((a) => {
+    if (getType(a) !== 'agent') return false;
+    if (childSkillIdList(a).includes(skill.id)) return true;
+    return parents.length > 0 && sameSubmitter(skill, a) && parents.includes(a.agentName);
+  });
+}
+
+// ── Type label (2026-08-20) ──────────────────────────────────────────
+// The single answer to "what type is this", so the card, the approval queue
+// and the Edit form stop disagreeing.
+//
+// Before this, PendingApprovalModal read the raw aiAgent/skillMd flags while
+// the card read getType(), and the 22 CSV-imported docs carrying BOTH flags
+// therefore showed "Agent + Skill" in the queue and "AGENT" on the card.
+// "Agent+Skill" now means exactly one thing everywhere — an Agent that has
+// linked child skills — which is also what the Edit form's Type selector
+// sets. getType()/getTier() keep their two-value meaning on purpose: tier
+// must not shift for those 22 docs.
+export function agentTypeLabel(agent, allAgents = []) {
+  if (getType(agent) === 'skill') return 'Skill';
+  return pairedSubSkills(agent, allAgents).length > 0 ? 'Agent+Skill' : 'Agent';
+}
+
+// ── Cascade guard (2026-08-20) ───────────────────────────────────────
+// Which children a parent's progress/deploy write may actually touch.
+//
+// Linking an EXISTING skill means the child can be further along than the
+// parent: of the 129 linkable standalone skills, 18 sit at 100% and 55 have
+// their own endpoint. Cascading a fresh parent's 0% over those would erase
+// finished work, so a child ahead of the parent is skipped rather than
+// dragged backwards. Lives here, next to pairedSubSkills, so the five
+// cascade call sites share one definition instead of five comparisons.
+export function cascadeTargets(agent, allAgents) {
+  const parentProgress = normalizeProgress(agent?.devProgress);
+  const parentDeployed = (agent?.deploymentStatus || 'none') === 'approved';
+  return pairedSubSkills(agent, allAgents).filter((s) => {
+    if (normalizeProgress(s.devProgress) > parentProgress) return false;
+    // A child already through deploy approval is likewise not dragged back by
+    // a parent that has not been approved itself.
+    if ((s.deploymentStatus || 'none') === 'approved' && !parentDeployed) return false;
+    return true;
+  });
 }
 
 export function relationshipLabel(agent, allAgents) {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { addDoc, doc, setDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
+import { addDoc, doc, setDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
@@ -16,6 +16,7 @@ import TagMultiSelect from './TagMultiSelect';
 import AgentMultiSelect from './AgentMultiSelect';
 import CreatorPicker from './CreatorPicker';
 import AgentDetailModal from './AgentDetailModal';
+import SkillRow, { emptySkillRow, validateSkillRows } from './SkillRow';
 
 // Submit is hard-blocked based on verdict FIRST, confidence as a secondary
 // filter within that verdict — not a single flat confidence ceiling. Decided
@@ -90,13 +91,9 @@ let skillSeq = 0;
 // the parent Agent at submit time.
 function emptySkill() {
   skillSeq += 1;
-  return {
-    _id: `sk-${skillSeq}`,
-    name: '', description: '', scope: 'Internal',
-    ability: new Set(), relatedRole: new Set(),
-    input: '', output: '', reusable: '', reuseCondition: '',
-    hml: false, humanJob: '',
-  };
+  // Shape and validation live in SkillRow.jsx so the New form and the Edit
+  // form cannot drift apart (2026-08-20).
+  return emptySkillRow(`sk-${skillSeq}`);
 }
 
 function typeToFlags(t) {
@@ -269,20 +266,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     }
     if (form.hml && !form.humanJob.trim()) return 'กรุณากรอก Human Job (เมื่อเปิด HML)';
     if (form.type === 'Agent+Skill') {
-      if (form.skills.length === 0) return 'Type = Agent+Skill ต้องเพิ่ม Skill อย่างน้อย 1 ตัว (หรือเปลี่ยน Type เป็น Agent)';
-      for (let i = 0; i < form.skills.length; i++) {
-        const s = form.skills[i];
-        const n = `Skill #${i + 1}`;
-        if (!s.name.trim()) return `${n}: กรุณากรอกชื่อ Skill`;
-        if (!s.description.trim()) return `${n}: กรุณากรอก Description`;
-        if (s.ability.size === 0) return `${n}: กรุณาเลือก Core Ability`;
-        if (s.relatedRole.size === 0) return `${n}: กรุณาเลือก Related Role`;
-        if (!s.input.trim()) return `${n}: กรุณากรอก Input`;
-        if (!s.output.trim()) return `${n}: กรุณากรอก Output`;
-        if (!s.reusable) return `${n}: กรุณาเลือก Reusable`;
-        if (s.reusable === 'Reusable with Conditions' && !s.reuseCondition.trim()) return `${n}: กรุณากรอก Reuse Conditions`;
-        if (s.hml && !s.humanJob.trim()) return `${n}: กรุณากรอก Human Job`;
-      }
+      const skErr = validateSkillRows(form.skills, allAgents);
+      if (skErr) return skErr;
     }
     return '';
   }
@@ -620,11 +605,17 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // own scope/ability/role/input/output/reusable/HML; everything else is
       // inherited from the Agent above. They are NOT individually dup-checked
       // (analysisResult null) — only the parent Agent was analyzed.
+      const childIds = [];
       if (form.type === 'Agent+Skill') {
         for (const s of form.skills) {
+          // An EXISTING library skill is only LINKED — never re-created and
+          // never rewritten. It belongs to whoever registered it and may be a
+          // child of other agents too.
+          if (s.link?.mode === 'existing') { childIds.push(s.link.id); continue; }
+          const sName = s.link.name.trim();
           const sExternal = s.scope === 'External';
           const skillRef = await addDoc(collection(db, 'agents'), {
-            agentName: s.name.trim(),
+            agentName: sName,
             description: s.description.trim(),
             aiAgent: false,
             skillMd: true,
@@ -635,7 +626,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             internalUse: !sExternal,
             // Same auto-flag as the parent Agent above — a paired sub-skill
             // named e.g. "3.safety.md" must be caught too.
-            internalTool: isInternalToolName(s.name.trim()),
+            internalTool: isInternalToolName(sName),
             reusable: s.reusable,
             reuseCondition: s.reusable === 'Reusable with Conditions' ? s.reuseCondition.trim() : '',
             hml: s.hml,
@@ -666,8 +657,16 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+          childIds.push(skillRef.id);
           reindexAgent(skillRef.id);
         }
+      }
+
+      // Explicit doc-ID link on the PARENT. matchingAgent (a name) still ties
+      // new skills back for legacy readers, but only this survives a rename
+      // and only this works across submitters (CLAUDE.md §25).
+      if (childIds.length) {
+        await updateDoc(doc(db, 'agents', agentRef.id), { childSkillIds: childIds, updatedAt: serverTimestamp() });
       }
 
       // Index the new entries so the very next duplicate check and the chat can
@@ -973,94 +972,24 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             {form.type === 'Agent+Skill' && (
               <div style={{ marginTop: 6, padding: '12px 14px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf2)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>Type: Agent+Skill — กรุณาให้รายละเอียด skill ที่ใช้ร่วมกับ Agent ดังกล่าวเพิ่มเติม</div>
-                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }} onClick={addSkill}>+ เพิ่ม Skill</button>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>Cascade Skills</div>
+                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }} onClick={addSkill}>+ Add Skill</button>
                 </div>
 
                 {form.skills.map((s, idx) => (
-                  <div key={s._id} style={{ marginTop: 12, padding: '12px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <strong style={{ fontSize: 12.5, color: 'var(--ag)' }}>Skill #{idx + 1}</strong>
-                      {idx > 0 && (
-                        <button type="button" onClick={() => removeSkill(s._id)} title="ลบ Skill นี้"
-                          style={{ border: '1px solid var(--clr-bd)', background: 'var(--clr-bg)', color: 'var(--clr-fg)', borderRadius: 6, padding: '2px 9px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>
-                          ✕ ลบ
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="fg">
-                      <label>Skill Name <span className="req">*</span></label>
-                      <input value={s.name} onChange={(e) => setSkillField(s._id, 'name', e.target.value)} placeholder="ชื่อ Skill" />
-                    </div>
-                    <div className="fg">
-                      <label>Description <span className="req">*</span></label>
-                      <textarea rows={2} value={s.description} onChange={(e) => setSkillField(s._id, 'description', e.target.value)} placeholder="Skill นี้ทำอะไร" />
-                    </div>
-                    <div className="fg">
-                      <label>Scope <span className="req">*</span></label>
-                      <div className="toggle2" role="radiogroup" aria-label={`Scope ของ ${s.name || 'skill นี้'}`}>
-                        {[['Internal', 'Internal Use'], ['External', 'Customer Facing']].map(([v, lbl]) => (
-                          <button
-                            key={v}
-                            type="button"
-                            role="radio"
-                            aria-checked={s.scope === v}
-                            className={s.scope === v ? 'sel' : ''}
-                            onClick={() => setSkillField(s._id, 'scope', v)}
-                          >
-                            {lbl}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="grid2">
-                      <div className="fg">
-                        <label>Core Ability <span className="req">*</span></label>
-                        <MultiSelect label="เลือก Core Ability…" options={abilityOptions} selected={s.ability} onChange={(v) => setSkillField(s._id, 'ability', v)} />
-                      </div>
-                      <div className="fg">
-                        <label>Related Role <span className="req">*</span></label>
-                        <TagMultiSelect label="เลือก Related Role…" options={roleOptions} selected={s.relatedRole} onChange={(v) => setSkillField(s._id, 'relatedRole', v)} onAddNew={onAddRelatedRole} />
-                      </div>
-                    </div>
-                    <div className="grid2">
-                      <div className="fg">
-                        <label>Input <span className="req">*</span></label>
-                        <textarea rows={2} value={s.input} onChange={(e) => setSkillField(s._id, 'input', e.target.value)} placeholder="ข้อมูลที่ Skill รับ" />
-                      </div>
-                      <div className="fg">
-                        <label>Output <span className="req">*</span></label>
-                        <textarea rows={2} value={s.output} onChange={(e) => setSkillField(s._id, 'output', e.target.value)} placeholder="ผลลัพธ์ที่สร้าง" />
-                      </div>
-                    </div>
-                    <div className="grid2">
-                      <div className="fg">
-                        <label>Reusable <span className="req">*</span></label>
-                        <ComboInput value={s.reusable} onChange={(v) => setSkillField(s._id, 'reusable', v)} options={REUSABLE_OPTIONS} placeholder="— เลือก —" readOnly />
-                      </div>
-                      {s.reusable === 'Reusable with Conditions' && (
-                        <div className="fg">
-                          <label>Reuse Conditions <span className="req">*</span></label>
-                          <input value={s.reuseCondition} onChange={(e) => setSkillField(s._id, 'reuseCondition', e.target.value)} placeholder="เงื่อนไขในการนำกลับมาใช้" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="fg">
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                        <input type="checkbox" checked={s.hml} onChange={(e) => setSkillField(s._id, 'hml', e.target.checked)} />
-                        HML (Human-in-the-Loop)
-                      </label>
-                    </div>
-                    {s.hml && (
-                      <div className="fg">
-                        <label>Human Job <span className="req">*</span></label>
-                        <input value={s.humanJob} onChange={(e) => setSkillField(s._id, 'humanJob', e.target.value)} placeholder="หน้าที่ของ Human ใน loop" />
-                      </div>
-                    )}
-                    {/* Endpoint input removed 2026-08-19 — see the note on the
-                        main Agent form above. */}
-                  </div>
+                  <SkillRow
+                    key={s._id}
+                    skill={s}
+                    index={idx}
+                    onField={(k, v) => setSkillField(s._id, k, v)}
+                    onRemove={() => removeSkill(s._id)}
+                    canRemove={form.skills.length > 1}
+                    allAgents={allAgents.length ? allAgents : approvedAgents}
+                    excludeIds={form.skills.filter((x) => x._id !== s._id && x.link?.mode === 'existing').map((x) => x.link.id)}
+                    abilityOptions={abilityOptions}
+                    roleOptions={roleOptions}
+                    onAddRelatedRole={onAddRelatedRole}
+                  />
                 ))}
               </div>
             )}

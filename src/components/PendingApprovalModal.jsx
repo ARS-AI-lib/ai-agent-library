@@ -3,7 +3,7 @@ import { collection, doc, getDoc, onSnapshot, query, updateDoc, where, serverTim
 import { db } from '../lib/firebase';
 import { getTier, TIER_DEF } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
-import { matchingAgentNames, pairedSubSkills, fmtDate, categoryColor } from '../lib/agentUtils';
+import { matchingAgentNames, pairedSubSkills, agentTypeLabel, fmtDate, categoryColor } from '../lib/agentUtils';
 import { queueViewer, visiblePending, visibleDeployRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
 import { canDecideRename } from '../lib/agentUtils';
 import { decideRenameRequest } from '../lib/endpointFiles';
@@ -377,7 +377,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                 <div className="dup-name">{agent.agentName}</div>
                 <div className="queue-meta">
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
-                    <span>{agent.aiAgent ? 'Agent' : ''}{agent.aiAgent && agent.skillMd ? ' + ' : ''}{agent.skillMd ? 'Skill' : ''}</span>
+                    <span>{agentTypeLabel(agent, agents)}</span>
                     <span>Owner: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{agent.owner || '—'}</strong></span>
                     <span>Created by: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{primaryCreatorName(agent)}</strong></span>
                   </div>
@@ -542,7 +542,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
                 <div className="queue-content">
                   <div className="dup-name">{agent.agentName}</div>
                   <div className="queue-meta">
-                    {agent.aiAgent ? 'Agent' : ''}{agent.aiAgent && agent.skillMd ? ' + ' : ''}{agent.skillMd ? 'Skill' : ''}
+                    {agentTypeLabel(agent, agents)}
                     {agent.rejectedAt && <>{' · '}{fmtDate(agent.rejectedAt)}</>}
                   </div>
                   <div
