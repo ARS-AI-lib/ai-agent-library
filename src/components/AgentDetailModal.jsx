@@ -614,8 +614,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               {Number(editProgress) === 100 && !hasEndpoint && (
                 <div className="fg" style={{ marginTop: 8, marginBottom: 0 }}>
                   <label>
-                    ช่องทางใช้งาน <span className="req">*</span>
-                    <span className="hint">ต้องมีอย่างใดอย่างหนึ่งก่อนจึงจะปรับเป็น 100% ได้</span>
+                    Usage Channel <span className="req">*</span>
                   </label>
                   {/* Either/or, made visible rather than explained: picking one
                       disables the other, so there is never a state where both
@@ -624,7 +623,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                     value={editEndpoint}
                     onChange={(e) => setEditEndpoint(e.target.value)}
                     disabled={!!editFile}
-                    placeholder="https://… ลิงก์เข้าใช้งาน"
+                    placeholder="https://… link to use"
                   />
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
                     <span style={{ flex: 1, height: 1, background: 'var(--bd-soft)' }} />
@@ -653,7 +652,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                       onClick={() => !editEndpoint.trim() && readyFileRef.current?.click()}
                       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && !editEndpoint.trim() && readyFileRef.current?.click()}
                     >
-                      อัปโหลดไฟล์
+                      Upload File
                     </div>
                   )}
                   <input
@@ -846,7 +845,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               )}
             </p>
             <div className="fg" style={{ marginBottom: 10 }}>
-              <label>ชื่อใหม่</label>
+              <label>New Name</label>
               <input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} maxLength={150} />
             </div>
             {renameMsg && (
@@ -928,7 +927,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             )}
 
             <div className="fg" style={{ marginBottom: 14 }}>
-              <label>เหตุผล</label>
+              <label>Reason</label>
               <input
                 value={archiveReason}
                 onChange={(e) => setArchiveReason(e.target.value)}

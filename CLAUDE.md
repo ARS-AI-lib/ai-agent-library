@@ -159,6 +159,10 @@ Tier:
 - Verify ด้วย `node --check` และ mock-DOM smoke test ก่อนส่งมอบไฟล์เสมอ
 - CSV parsing: ใช้วิธี character-by-character พร้อม quote-state tracking (รองรับ multi-field quoted CSV) และตรวจนับ column ก่อน generate เป็น JS literal
 - การแทนที่ HTML block ขนาดใหญ่ที่มีอักขระพิเศษ: ใช้ Python `str.index()` + heredoc แทน `str_replace`
+- **⭐ Header/Label ต้องเป็นภาษาอังกฤษเสมอ ทุกจุดในเว็บ (สั่งไว้ 2026-08-20)** — `<label>`, หัวข้อ section,
+  ชื่อปุ่ม, placeholder ของช่อง action (เช่น "Usage Channel", "1. Select Agent / Skill", "Upload File")
+  ต้องเป็นอังกฤษหมด **ภาษาไทยอนุญาตเฉพาะข้อความอธิบาย/คำเตือน/เนื้อหาที่มาจากข้อมูลจริง**
+  (เช่น "ต้องเป็น Creator/Approver ประจำ Area นี้", ชื่อ agent, เหตุผล reject) ไม่ใช่ label ของ field/ปุ่ม
 
 ---
 

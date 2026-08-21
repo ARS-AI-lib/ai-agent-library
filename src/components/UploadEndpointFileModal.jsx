@@ -129,7 +129,7 @@ export default function UploadEndpointFileModal({
         ) : (
           <>
             <div className="fg" style={{ marginBottom: 12 }}>
-              <label>1. เลือก Agent / Skill <span className="hint">{eligible.length} items</span></label>
+              <label>1. Select Agent / Skill <span className="hint">{eligible.length} items</span></label>
               <input
                 type="text"
                 value={query}
@@ -157,7 +157,7 @@ export default function UploadEndpointFileModal({
 
             <div className="fg" style={{ marginBottom: 12 }}>
               <label>
-                2. เลือกไฟล์{' '}
+                2. Select File{' '}
                 <span className="hint">{ALLOWED_EXT.map((e) => `.${e}`).join(' ')} · ไม่เกิน {formatBytes(MAX_UPLOAD_BYTES)}</span>
               </label>
               <div
@@ -167,7 +167,7 @@ export default function UploadEndpointFileModal({
                 tabIndex={0}
                 onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && inputRef.current?.click()}
               >
-                {file ? `${file.name} · ${formatBytes(file.size)}` : 'คลิกเพื่อเลือกไฟล์'}
+                {file ? `${file.name} · ${formatBytes(file.size)}` : 'Click to select file'}
               </div>
               <input
                 ref={inputRef}

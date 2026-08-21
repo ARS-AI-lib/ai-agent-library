@@ -9,3 +9,4 @@
 - [Chat retrieval re-architecture](project_chat_retrieval_rearchitecture.md) — locked 2026-08-04: hybrid embeddings (text-multilingual-embedding-002 @256), client-drawn answers, idea-check included; measured evidence for every choice — read before touching search/prompt
 - [Machine migration](feedback_machine_migration.md) — moved to the company laptop 2026-08-05; what git carries vs what never does, and the standing rule that CLAUDE.md + docs/memory ARE the handover
 - [Approve Area taxonomy](project_approve_area_taxonomy.md) — approver routing = 16 disciplines (NOT SDLC stage) since 2026-08-10; single source of truth in src/lib/approveAreas.js, admin/staff-only field, scope≠SDLC — read before touching approver scoping
+- [English headers rule](feedback_english_headers.md) — labels/headers always English, Thai only for explanatory copy — applies everywhere in the app
