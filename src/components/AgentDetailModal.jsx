@@ -614,7 +614,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               {Number(editProgress) === 100 && !hasEndpoint && (
                 <div className="fg" style={{ marginTop: 8, marginBottom: 0 }}>
                   <label>
-                    Usage Channel <span className="req">*</span>
+                    Endpoint <span className="req">*</span>
                   </label>
                   {/* Either/or, made visible rather than explained: picking one
                       disables the other, so there is never a state where both
