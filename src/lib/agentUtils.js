@@ -248,15 +248,54 @@ export function normalizeProgress(raw) {
   return isNaN(num) ? 0 : num;
 }
 
+// Parses a Firestore Timestamp / date string / Date into a plain JS Date, or
+// null on anything unparseable. fmtDate and sortAgents share this rather than
+// each re-deriving their own — launchDate alone carries 3 live shapes
+// (Timestamp, a legacy "M/D/YYYY" string, and null/missing), so this is
+// exactly the kind of parsing that drifts if copy-pasted (CLAUDE.md §6).
+export function toJsDate(v) {
+  if (!v) return null;
+  try {
+    const dt = v?.toDate ? v.toDate() : new Date(v);
+    return isNaN(dt) ? null : dt;
+  } catch {
+    return null;
+  }
+}
+
 export function fmtDate(d) {
   if (!d) return '';
-  try {
-    const dt = d?.toDate ? d.toDate() : new Date(d);
-    if (isNaN(dt)) return String(d);
-    return dt.toLocaleDateString('en-GB', { year: '2-digit', month: 'short', day: 'numeric' });
-  } catch {
-    return String(d);
+  const dt = toJsDate(d);
+  return dt ? dt.toLocaleDateString('en-GB', { year: '2-digit', month: 'short', day: 'numeric' }) : String(d);
+}
+
+// Card-grid sort control (2026-08-20 grilling session — locked decisions):
+//   · applies WITHIN each VIEW group (Owner/Role/Ability), not instead of it
+//   · Create/Launch Date default newest-first
+//   · an agent with no Launch Date always sorts LAST regardless of direction
+//     — it hasn't launched, so there is nothing to rank it by
+//   · Name uses a locale compare (agent names mix Thai and English)
+export const SORT_OPTIONS = [
+  ['name', 'Name (Default)'],
+  ['created', 'Create Date'],
+  ['launch', 'Launch Date'],
+];
+
+export function sortAgents(agents, sortKey) {
+  if (sortKey === 'created') {
+    return [...agents].sort((a, b) => (toJsDate(b.createdAt)?.getTime() || 0) - (toJsDate(a.createdAt)?.getTime() || 0));
   }
+  if (sortKey === 'launch') {
+    return [...agents].sort((a, b) => {
+      const da = toJsDate(a.launchDate);
+      const db = toJsDate(b.launchDate);
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return db.getTime() - da.getTime();
+    });
+  }
+  return [...agents].sort((a, b) => (a.agentName || '').localeCompare(b.agentName || '', undefined, { sensitivity: 'base' }));
 }
 
 // `endpoint` (2026-07-22) is free text typed by a creator that we then render

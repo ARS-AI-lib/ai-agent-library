@@ -1,6 +1,7 @@
 import MultiSelect from './MultiSelect';
 import Dropdown from './Dropdown';
 import { TIER_ORDER } from '../lib/tier';
+import { SORT_OPTIONS } from '../lib/agentUtils';
 
 const VIEWS = [
   ['by-owner', 'By Owner'],
@@ -18,6 +19,7 @@ const TYPES = [
 
 export default function ControlBar({
   view, setView,
+  sort, setSort,
   ownerOptions, owner, setOwner,
   roleOptions, role, setRole,
   tier, setTier,
@@ -31,6 +33,14 @@ export default function ControlBar({
       <div className="cg">
         <span className="cl">VIEW</span>
         <Dropdown options={VIEWS} value={view} onChange={setView} ariaLabel="จัดกลุ่มตาม" />
+      </div>
+
+      <div className="cg">
+        <span className="cl">SORT</span>
+        {/* Popularity is already its own ranking (demandScore) — a second sort
+            on top of it would just fight the reason someone picked that view,
+            so the control is disabled rather than silently ignored there. */}
+        <Dropdown options={SORT_OPTIONS} value={sort} onChange={setSort} ariaLabel="เรียงลำดับ" disabled={view === 'by-popularity'} />
       </div>
 
       <div className="csep" />

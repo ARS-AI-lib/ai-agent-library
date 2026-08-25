@@ -1,5 +1,5 @@
 import AgentCard from './AgentCard';
-import { groupAgents, categoryColor } from '../lib/agentUtils';
+import { groupAgents, categoryColor, sortAgents } from '../lib/agentUtils';
 import { demandScore } from '../lib/agentStats';
 
 // Group-header bar colour. Was one fixed hex per view (owner/ability/role),
@@ -9,7 +9,7 @@ import { demandScore } from '../lib/agentStats';
 // put as data changes (same helper and same reasoning as the sidebar dots).
 
 
-export default function CardGrid({ agents, allAgents, view, onCardClick, statsById}) {
+export default function CardGrid({ agents, allAgents, view, sort = 'name', onCardClick, statsById }) {
   // Popularity is a SORT, not a grouping like the other views — an agent has
   // one owner but no natural "popularity bucket". So it renders one flat,
   // ranked list. Ordering is by raw event counts (demandScore); no average is
@@ -36,10 +36,14 @@ export default function CardGrid({ agents, allAgents, view, onCardClick, statsBy
   }
 
   const key = view === 'by-role' ? 'role' : view === 'by-ability' ? 'ability' : 'owner';
-  const { groups, byGroup } = groupAgents(agents, key);
+  const { groups, byGroup: byGroupRaw } = groupAgents(agents, key);
+  // Sort applies WITHIN each group, not instead of it (locked 2026-08-20) —
+  // the grouping the user picked via VIEW still stands, only the card order
+  // inside each bucket changes.
+  const byGroup = (g) => sortAgents(byGroupRaw(g), sort);
 
   const unassigned =
-    key === 'owner' ? agents.filter((a) => !(a.owner || '')) : [];
+    key === 'owner' ? sortAgents(agents.filter((a) => !(a.owner || '')), sort) : [];
 
   if (groups.length === 0 && unassigned.length === 0) {
     return <div className="empty-state">No data matching filters</div>;

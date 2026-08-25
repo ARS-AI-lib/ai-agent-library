@@ -966,3 +966,37 @@ freeze เมื่อ deploy requested/approved) เพราะ EditAgentModal
    (สคริปต์นี้คือทางเดียวที่ retire category ได้ เพราะ rules บังคับ grow-only)
 5. ⚠️ `realign-categories.cjs` / `backfill-product-category.cjs` มีสำเนาชื่อเก่าแบบ **freeze**
    ไว้เป็นประวัติ — **ห้ามแก้และห้ามรันซ้ำ**
+
+---
+
+## 28. Card Sort control (2026-08-20, grilling session)
+
+### เคาะแล้ว 4 ข้อ
+| คำถาม | คำตอบ |
+|---|---|
+| Sort กับ VIEW (group) ทำงานร่วมกันยังไง | **Sort ภายในแต่ละกลุ่ม** — VIEW ยังจัดกลุ่มเหมือนเดิม |
+| Agent ไม่มี Launch Date (56/241 = 23%) | **ไว้ท้ายสุดเสมอ** ไม่ว่าทิศทางไหน |
+| ทิศทาง Create/Launch Date | **ใหม่สุดก่อน** (ไม่มีปุ่ม asc/desc แยก) |
+| จำค่าที่เลือกไว้ข้ามการเปิดเว็บใหม่ไหม | **ไม่จำ** เหมือน VIEW dropdown ที่มีอยู่แล้ว |
+
+### ทำไม launchDate ต้องมี parser กลาง
+`launchDate` มี **3 รูปแบบจริงพร้อมกัน**: Firestore Timestamp (134), null/missing (56),
+**legacy string `"M/D/YYYY"`** (51 — มาจากยุคก่อน `markAgentReady`) `toJsDate()` ใน
+`src/lib/agentUtils.js` เป็นที่เดียวที่แปลงทั้ง 3 แบบ — `fmtDate()` ก็รีแฟกเตอร์ให้ใช้ตัวเดียวกัน
+⚠️ **ไม่ได้ import จาก `timeline.js`** แม้จะมี `toDate()` เหมือนกันอยู่แล้ว เพราะ `timeline.js`
+import **จาก** `agentUtils.js` อยู่แล้ว (circular) — เป็น debt ที่รู้ตัว มี date-parser ซ้ำอยู่
+อย่างน้อย 6 จุดในโค้ด (`toDateInputValue` ×2, `toDateInput`, `toDateStr`, `timeline.toDate`,
+`agentUtils.toJsDate`) ยังไม่ได้รวมให้เป็นที่เดียวในรอบนี้ — ถ้าจะแก้ทีหลังต้องยกเครื่องพร้อมกันหมด
+
+### Popularity view ปิด Sort dropdown (ตัดสินใจเองระหว่าง implement ไม่ได้ถาม)
+`by-popularity` เป็น flat list ที่จัดอันดับด้วย `demandScore()` อยู่แล้ว ไม่มี "กลุ่ม" ให้ sort ข้างใน
+ให้ Sort control แสดงแต่กด `disabled` แทนการซ่อน (เห็นว่ามีอยู่ แต่ใช้ไม่ได้ตอนนี้ เข้าใจง่ายกว่าเมนู
+หาย) — เพิ่ม `disabled` prop จริงให้ `Dropdown.jsx` (เดิมไม่มี)
+
+### Key files
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `src/lib/agentUtils.js` | `toJsDate()`, `SORT_OPTIONS`, `sortAgents()` |
+| `src/components/CardGrid.jsx` | เรียก `sortAgents()` ต่อกลุ่ม (`byGroup`) และ unassigned bucket |
+| `src/components/ControlBar.jsx` | SORT dropdown ข้าง VIEW, `disabled` เมื่อ view = by-popularity |
+| `src/components/Dropdown.jsx` | เพิ่ม `disabled` prop จริง (คลิก/keyboard ถูกปิด + opacity ใน theme.css) |

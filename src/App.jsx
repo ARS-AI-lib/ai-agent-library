@@ -158,6 +158,7 @@ export default function App() {
 
   const [search, setSearch] = useState('');
   const [view, setView] = useState('by-owner');
+  const [sort, setSort] = useState('name'); // reset on reload, same as view — not persisted (locked 2026-08-20)
   const [owner, setOwner] = useState(new Set());
   const [role_, setRole_] = useState(new Set());
   const [tier, setTier] = useState(new Set());
@@ -329,6 +330,7 @@ export default function App() {
 
   function clearFilters() {
     setView('by-owner');
+    setSort('name');
     setOwner(new Set());
     setRole_(new Set());
     setTier(new Set());
@@ -423,6 +425,7 @@ export default function App() {
 
           <ControlBar
             view={view} setView={setView}
+            sort={sort} setSort={setSort}
             ownerOptions={ownerOptions} owner={owner} setOwner={setOwner}
             roleOptions={roleOptions} role={role_} setRole={setRole_}
             tier={tier} setTier={setTier}
@@ -449,7 +452,7 @@ export default function App() {
               {agentsLoading ? (
                 <div className="empty-state">Loading…</div>
               ) : (
-                <CardGrid agents={filtered} allAgents={agents} view={view} onCardClick={setSelectedAgent} statsById={statsById} />
+                <CardGrid agents={filtered} allAgents={agents} view={view} sort={sort} onCardClick={setSelectedAgent} statsById={statsById} />
               )}
             </div>
           </div>

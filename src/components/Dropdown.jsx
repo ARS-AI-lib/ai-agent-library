@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react';
  * `options` is [value, label][] so callers keep their existing value/label
  * split (ControlBar's VIEWS constant is already in that shape).
  */
-export default function Dropdown({ options, value, onChange, ariaLabel }) {
+export default function Dropdown({ options, value, onChange, ariaLabel, disabled = false }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0); // keyboard cursor, not the selection
   const wrapRef = useRef(null);
@@ -73,12 +73,13 @@ export default function Dropdown({ options, value, onChange, ariaLabel }) {
         type="button"
         ref={btnRef}
         className="dd"
+        disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
         aria-activedescendant={open ? `${id}-${active}` : undefined}
-        onClick={() => (open ? setOpen(false) : openList())}
-        onKeyDown={onKeyDown}
+        onClick={() => !disabled && (open ? setOpen(false) : openList())}
+        onKeyDown={(e) => !disabled && onKeyDown(e)}
       >
         {current ? current[1] : ''}
       </button>
