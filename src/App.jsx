@@ -157,8 +157,8 @@ export default function App() {
   }, [isAdmin]);
 
   const [search, setSearch] = useState('');
-  const [view, setView] = useState('by-owner');
-  const [sort, setSort] = useState('name'); // reset on reload, same as view — not persisted (locked 2026-08-20)
+  const [view, setView] = useState('by-category');
+  const [sort, setSort] = useState('created'); // reset on reload, same as view — not persisted (locked 2026-08-20)
   const [owner, setOwner] = useState(new Set());
   const [role_, setRole_] = useState(new Set());
   const [tier, setTier] = useState(new Set());
@@ -329,8 +329,8 @@ export default function App() {
   );
 
   function clearFilters() {
-    setView('by-owner');
-    setSort('name');
+    setView('by-category');
+    setSort('created');
     setOwner(new Set());
     setRole_(new Set());
     setTier(new Set());

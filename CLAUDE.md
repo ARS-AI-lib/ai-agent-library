@@ -124,6 +124,7 @@ Tier:
 - **Preview card แสดง Owner แทน Creator** (detail card ยังแสดงครบ)
 - **CSV export เพิ่ม UTF-8 BOM** — Excel เคยอ่านภาษาไทยเป็นตัวต่างดาว (Numbers ไม่เป็น เลยไม่มีใครเห็นบั๊ก)
 - **Default view เปลี่ยนเป็น By Owner** (เดิม By Role)
+  ⚠️ **เปลี่ยนอีกครั้ง 2026-08-20 เป็น By Category** — ดูข้อ 28
 - **Import 73 รายการใหม่จาก Google Sheet** — เพิ่มอย่างเดียว ไม่แตะของเดิม
 - **⭐ รื้อ semantic search ทั้งระบบ (ข้อ 18)** — งานใหญ่ที่สุดของรอบนี้
 - **ตรวจซ้ำตอน Pre-Registration เป็น hybrid ด้วย** — เดิมพลาดตัวซ้ำที่เขียนคนละคำ (วัดได้อันดับ #89/#135/#43 จาก 244 = หลุด top-15 ทั้งหมด)
@@ -994,9 +995,23 @@ import **จาก** `agentUtils.js` อยู่แล้ว (circular) — เ
 หาย) — เพิ่ม `disabled` prop จริงให้ `Dropdown.jsx` (เดิมไม่มี)
 
 ### Key files
+
+
+### อัปเดต 2026-08-20 (รอบที่สอง) — Default View/Sort + Category grouping
+- **VIEW default เปลี่ยนจาก By Owner → By Category** และเพิ่ม **By Category** เป็นตัวเลือกใหม่
+  (เดิมมีแค่ Owner/Role/Ability/Popularity) — `groupAgents(agents, 'category')` ใช้
+  `agentCategories(agent)` ตัวเดิม (multi-value เหมือน role/ability, §23) ไม่ต้องเขียน logic ใหม่
+- **SORT default เปลี่ยนจาก Name → Create Date**
+- **ตัดคำว่า "(Default)" ออกจาก label ทุกจุด** — ทั้ง VIEW และ SORT dropdown ไม่มีวงเล็บบอก default
+  อีกต่อไป (ค่า default บอกด้วยพฤติกรรม ไม่ใช่ข้อความในตัวเลือก)
+- **"ยอดนิยม" → "Popularity"** (ภาษาอังกฤษ ตามกฎข้อ 6 ล่าสุด)
+- Category ที่ live agent 0 ตัวไม่มี ณ ตอนนี้ (243/243 มี category ครบ) แต่ยังเผื่อ `(unassigned)`
+  bucket ไว้เหมือน Owner — ป้องกันข้อมูลหลุดหายจาก grid เงียบๆ ถ้า category ว่างในอนาคต
+
 | ไฟล์ | หน้าที่ |
 |---|---|
-| `src/lib/agentUtils.js` | `toJsDate()`, `SORT_OPTIONS`, `sortAgents()` |
-| `src/components/CardGrid.jsx` | เรียก `sortAgents()` ต่อกลุ่ม (`byGroup`) และ unassigned bucket |
-| `src/components/ControlBar.jsx` | SORT dropdown ข้าง VIEW, `disabled` เมื่อ view = by-popularity |
+| `src/lib/agentUtils.js` | `toJsDate()`, `SORT_OPTIONS`, `sortAgents()`, `groupAgents()` (+ key `'category'`) |
+| `src/components/CardGrid.jsx` | เรียก `sortAgents()` ต่อกลุ่ม (`byGroup`) และ unassigned bucket (owner + category) |
+| `src/components/ControlBar.jsx` | VIEW/SORT dropdown, `disabled` เมื่อ view = by-popularity |
 | `src/components/Dropdown.jsx` | เพิ่ม `disabled` prop จริง (คลิก/keyboard ถูกปิด + opacity ใน theme.css) |
+| `functions/rename-team-amp-cin.cjs` | one-off: เปลี่ยนชื่อทีม "AMP&CIN" → "Project Committee" (ทำไปแล้ว 2026-08-20) |

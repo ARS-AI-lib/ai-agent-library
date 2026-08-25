@@ -276,8 +276,8 @@ export function fmtDate(d) {
 //     — it hasn't launched, so there is nothing to rank it by
 //   · Name uses a locale compare (agent names mix Thai and English)
 export const SORT_OPTIONS = [
-  ['name', 'Name (Default)'],
   ['created', 'Create Date'],
+  ['name', 'Name'],
   ['launch', 'Launch Date'],
 ];
 
@@ -539,6 +539,14 @@ export function groupAgents(agents, key) {
     const groups = uniq(agents.flatMap((a) => (Array.isArray(a.coreAbility) ? a.coreAbility : [a.coreAbility]))).sort();
     const byGroup = (g) =>
       agents.filter((a) => (Array.isArray(a.coreAbility) ? a.coreAbility : [a.coreAbility]).includes(g));
+    return { groups, byGroup };
+  }
+  // category (2026-08-20 — new default view): a mix of discipline + product
+  // (§23), multi-valued, so an agent can land in more than one group —
+  // same shape as role/ability.
+  if (key === 'category') {
+    const groups = uniq(agents.flatMap((a) => agentCategories(a))).sort();
+    const byGroup = (g) => agents.filter((a) => agentCategories(a).includes(g));
     return { groups, byGroup };
   }
   // owner (department/team)

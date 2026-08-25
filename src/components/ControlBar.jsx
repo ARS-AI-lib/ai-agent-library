@@ -4,11 +4,12 @@ import { TIER_ORDER } from '../lib/tier';
 import { SORT_OPTIONS } from '../lib/agentUtils';
 
 const VIEWS = [
+  ['by-category', 'By Category'],
   ['by-owner', 'By Owner'],
   ['by-role', 'By Role'],
   ['by-ability', 'By Ability'],
   // Flat ranked list rather than a grouping — see CardGrid.
-  ['by-popularity', 'ยอดนิยม'],
+  ['by-popularity', 'Popularity'],
 ];
 
 const TYPES = [

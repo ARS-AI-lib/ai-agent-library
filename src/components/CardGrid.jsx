@@ -1,5 +1,5 @@
 import AgentCard from './AgentCard';
-import { groupAgents, categoryColor, sortAgents } from '../lib/agentUtils';
+import { groupAgents, categoryColor, sortAgents, agentCategories } from '../lib/agentUtils';
 import { demandScore } from '../lib/agentStats';
 
 // Group-header bar colour. Was one fixed hex per view (owner/ability/role),
@@ -23,7 +23,7 @@ export default function CardGrid({ agents, allAgents, view, sort = 'name', onCar
       <div className="sb">
         <div className="sh">
           <div className="sbar" style={{ background: 'var(--accent)' }} />
-          <span className="sname">เรียงตามการใช้งาน</span>
+          <span className="sname">Popularity</span>
           <span className="sbadge">{ranked.length}</span>
         </div>
         <div className="agrid">
@@ -35,15 +35,22 @@ export default function CardGrid({ agents, allAgents, view, sort = 'name', onCar
     );
   }
 
-  const key = view === 'by-role' ? 'role' : view === 'by-ability' ? 'ability' : 'owner';
+  const key = view === 'by-role' ? 'role' : view === 'by-ability' ? 'ability' : view === 'by-owner' ? 'owner' : 'category';
   const { groups, byGroup: byGroupRaw } = groupAgents(agents, key);
   // Sort applies WITHIN each group, not instead of it (locked 2026-08-20) —
   // the grouping the user picked via VIEW still stands, only the card order
   // inside each bucket changes.
   const byGroup = (g) => sortAgents(byGroupRaw(g), sort);
 
-  const unassigned =
-    key === 'owner' ? sortAgents(agents.filter((a) => !(a.owner || '')), sort) : [];
+  // An agent missing the group's own field falls into its own bucket rather
+  // than vanishing from the grid — Owner is the case with live data (some
+  // agents have owner === ''); Category is defensive (0 live agents lack a
+  // category today, per CLAUDE.md §28, but the shape can drift).
+  const unassigned = key === 'owner'
+    ? sortAgents(agents.filter((a) => !(a.owner || '')), sort)
+    : key === 'category'
+      ? sortAgents(agents.filter((a) => agentCategories(a).length === 0), sort)
+      : [];
 
   if (groups.length === 0 && unassigned.length === 0) {
     return <div className="empty-state">No data matching filters</div>;
