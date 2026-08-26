@@ -1015,3 +1015,61 @@ import **จาก** `agentUtils.js` อยู่แล้ว (circular) — เ
 | `src/components/ControlBar.jsx` | VIEW/SORT dropdown, `disabled` เมื่อ view = by-popularity |
 | `src/components/Dropdown.jsx` | เพิ่ม `disabled` prop จริง (คลิก/keyboard ถูกปิด + opacity ใน theme.css) |
 | `functions/rename-team-amp-cin.cjs` | one-off: เปลี่ยนชื่อทีม "AMP&CIN" → "Project Committee" (ทำไปแล้ว 2026-08-20) |
+
+---
+
+## 29. Batch 2026-08-20 (รอบเย็น) — queue badge, chat gap-matching, cascade picker
+
+### 🔴 Rename queue ที่สาม แต่ badge นับแค่ 2 คิว
+`pendingBadgeCount()` นับแค่ `pending + deployRequests` ส่วน rename request **ถูก fetch อยู่ใน
+`PendingApprovalModal` เอง** ทำให้ badge มองไม่เห็นเลย → มีคำขอค้างอยู่โดยไม่มีตัวเลขชี้ไปหา
+**นี่คือบั๊กชนิดเดียวกับที่ `pendingQueue.js` ถูกสร้างขึ้นมาแก้ (2026-08-12) แต่เกิดซ้ำกับคิวที่ 3**
+→ ย้าย filter มาเป็น `visibleRenameRequests()` ใน `pendingQueue.js` · App.jsx subscribe
+`/renameRequests` แล้วส่งเป็น prop ลงมา (listener เดียว ป้อนทั้ง badge และ modal)
+
+⚠️ **rename ใช้เกณฑ์แคบกว่าอีก 2 คิว** — `canDecideRename` = admin **หรือ** approver ประจำ area
+เท่านั้น (committee และ staff ตัดสินไม่ได้) ตรงกับ `RENAME_DECIDER_ROLES` ฝั่ง server เป๊ะ
+เพราะฉะนั้น `queueViewer()` ต้องพก `role` + `isAdmin` + `areaList` ดิบมาด้วย จะยุบเป็น
+`fullAccess` (admin||committee) อย่างเดียวไม่ได้ · request ที่หา agent ไม่เจอถูกตัดทิ้งทั้ง 2 ที่
+(ไม่งั้น badge จะสัญญาแถวที่ modal วาดไม่ได้)
+
+### Layout ของ Rename row ที่เพี้ยน
+ใช้ `.btn-row` ขณะที่อีก 2 คิวใช้ `.queue-actions` — `.btn-row` ตั้ง `.btn-sm { flex: 1 }`
+(ปุ่มยืดเต็มความกว้าง สำหรับ footer ของ modal) และ **ไม่มี `flex-shrink: 0`** พอไปอยู่ใน
+`.queue-row` ที่เป็น flex เลยโดนบีบ → เปลี่ยนเป็น `.queue-actions` + ทำให้ section
+แสดง empty-state เหมือนอีก 2 คิว (เดิมซ่อนทั้ง section ตอนว่าง)
+
+### 🔴 Chat ตอบ "ของที่มีอยู่เอาไปปิด gap ไหนได้" ไม่ได้ เพราะ tool ไม่มีแกนนั้น
+ผู้ใช้ถาม "Agent/Skill ที่ไม่ได้ผูก SDLC process มีตัวไหนช่วยปิด gaps ได้บ้าง" → ALPHA ตอบว่า
+"ไม่มีฟังก์ชันสำหรับกรอง" **ซึ่งถูกต้องตามความจริงตอนนั้น** — `query_library` กรองได้แค่
+"ผูกกับ process ไหน" ไม่มีทางถาม "ยังไม่ผูกกับอะไรเลย"
+**วัดจริง: 116 จาก 243 ตัว (48%) ไม่มี process mapping · 29 จาก 58 process ไม่มี agent เลย**
+→ เพิ่ม `sdlcMapped: 'mapped' | 'unmapped'` ใน `query_library` (ทั้ง `skills.js` และ
+tool declaration ใน `chatPrompt.js`) + เขียน workflow 4 ขั้นลง system prompt:
+gap list → unmapped list → `capability_search` ต่อ gap → **จับคู่และให้ความเห็นเอง**
+กฎที่คุมไว้: ชื่อ agent/process ทุกตัวต้องมาจากผลลัพธ์ tool จริง · ห้ามพูดว่า agent
+"ถูกผูกกับ" process ที่ยังไม่ผูก (ให้พูดว่า "น่าจะเอาไปใช้กับ...ได้") · กฎห้าม force-fit ใช้ที่นี่ด้วย
+
+⚠️ **`regression.cjs` แกว่ง 16/17 เป็นปกติ** — รัน baseline (ยังไม่แก้ prompt) 2 ครั้งได้ 16/17
+ทั้งคู่แต่ **ตกคนละเคสกัน** เป็น non-determinism ของโมเดล ไม่ใช่ regression
+เวลาเช็คว่าการแก้ prompt ทำอะไรพัง **ต้องรัน baseline เทียบด้วยเสมอ อย่าดูรอบเดียวแล้วสรุป**
+
+### Cascade progress: จากเงียบและบังคับ → เห็นและเลือกได้
+เดิม save progress ที่ parent = เขียนทับลูกทุกตัวเงียบๆ · ตอนนี้มี checkbox list
+"Share Progress With" ในฟอร์ม update progress **ติ๊กครบทุกตัวเป็นค่าเริ่มต้น**
+(พฤติกรรมเดิมไม่เปลี่ยนถ้าผู้ใช้ไม่แตะ) แล้ว filter ด้วย `cascadePick` ที่ **ทั้ง 2 จุด**
+(branch 100% ที่เรียก `markAgentReady` และ branch updateDoc ปกติ)
+⚠️ list มาจาก `cascadeTargets()` ไม่ใช่ `pairedSubSkills()` — ลูกที่ล้ำหน้า parent อยู่แล้ว
+ถูกกันออกตั้งแต่ต้นทาง ถ้าเอามาโชว์แล้วให้ติ๊กจะเป็นการสัญญา write ที่ guard จะปฏิเสธอยู่ดี
+
+### View ตามฟิลเตอร์
+เลือก filter Owner / Role หรือกด Category ใน sidebar → สลับ VIEW เป็น **By Owner** ทันที
+(เหตุผล: กรอง category เดียวแล้วจัดกลุ่มตาม category = ได้ header เดียวไร้ประโยชน์ ·
+กรอง owner แล้ว owner ที่เลือกไม่โผล่ใน heading เลย) ทำที่ **setter** ไม่ใช่ `useEffect`
+เพื่อให้ยิงเฉพาะตอนผู้ใช้กดจริง และไม่ไปสู้กับการเปลี่ยน VIEW ด้วยมือทีหลัง
+— pattern เดียวกับ group-exclusivity ของ sidebar ที่มีอยู่แล้ว
+
+### ตัดป้าย "ไฟล์ในระบบ · <ชื่อไฟล์>" ออก
+เหลือป้าย **"ลิงก์ภายนอก"** อย่างเดียว · ข้อกำหนด §24/§25 ที่ว่า "ต้องบอกว่าเป็น URL หรือไฟล์"
+ยังอยู่ แต่ตอนนี้สื่อด้วย **การมี/ไม่มีป้าย** แทน — และครึ่งที่ต้องใช้คำเตือนจริงๆ คือฝั่ง
+"กำลังจะออกไปนอกระบบ" ไม่ใช่ฝั่งไฟล์ของเราเอง

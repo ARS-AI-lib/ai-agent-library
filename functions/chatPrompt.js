@@ -24,6 +24,7 @@ const TOOL_DECLARATIONS = [
         scope: { type: Type.STRING, description: '"Internal" | "External"' },
         sdlcStage: { type: Type.ARRAY, items: { type: Type.STRING } },
         sdlcProcessMapping: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'process id เช่น "2.2"' },
+        sdlcMapped: { type: Type.STRING, description: '"mapped" | "unmapped" — unmapped = เฉพาะ Agent/Skill ที่ยังไม่ได้ผูกกับ SDLC process ใดเลย · ใช้ตอบ "ตัวไหนยังไม่ได้ผูก process" และใช้คู่กับ query_sdlc({withAgentCounts:true,onlyGaps:true}) เพื่อหาว่าของที่มีอยู่แล้วเอาไปปิด gap ไหนได้บ้าง' },
         category: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'ชื่อหมวดหมู่ (Category) เช่น "Investment", "Design & UI", "Software Development" — หมวดตามโดเมนงาน 1 ตัวอยู่ได้หลายหมวด ใช้ตอบ "หมวด X มีอะไรบ้าง"' },
         useCase: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'ชื่อ use case (เลือกได้หลายอัน — agent อาจผูกกับ use case มากกว่า 1 อัน)' },
         keyword: { type: Type.STRING },
@@ -152,6 +153,23 @@ const CHAT_SYSTEM_PROMPT = `คุณคือ "ALPHA" ผู้ช่วยส�
   คำถามแนวนี้ ไม่ใช่ปฏิเสธ เมื่อได้ผลลัพธ์กลับมา (มี agentCount ต่อ process) ให้จัดกลุ่มตาม stage
   สรุปว่า stage ไหน/process ไหนขาด AI มากที่สุด แล้วให้ความเห็นว่าน่าจะเริ่มเติมจุดไหนก่อน
   (อ้างอิงหลัก SDLC/Agile ที่คุณรู้ประกอบได้) ไม่ใช่แค่ list ชื่อ process ดิบๆ
+  ⭐⭐ คำถามต่อยอดที่ต้องทำให้ได้ด้วย (2026-08-20): "ของที่มีอยู่แล้วในไลบรารี เอาไปปิด gap ไหนได้บ้าง",
+  "Agent/Skill ที่ยังไม่ได้ผูก process มีตัวไหนช่วยปิดช่องว่างได้", "ช่วย match ของในไลบรารีกับ SDLC
+  process ให้หน่อย" — ⛔ ห้ามตอบว่า "ไม่มีฟังก์ชันสำหรับกรอง" หรือ "ระบุไม่ได้โดยตรง" เด็ดขาด
+  ทำได้จริงและต้องทำ ขั้นตอน:
+    1) query_sdlc({ withAgentCounts: true, onlyGaps: true }) → ได้ process ที่ยังไม่มีใครคุม
+    2) query_library({ sdlcMapped: "unmapped" }) → ได้ของที่มีอยู่แล้วแต่ยังไม่ถูกผูก process
+       (พารามิเตอร์ sdlcMapped มีจริง ใช้ได้เลย)
+    3) ถ้าอยากเจาะ gap ตัวใดตัวหนึ่ง ให้เรียก capability_search ด้วยคำอธิบายของ "งาน" ใน process
+       นั้น (เช่น process ชื่อ "SIT Test Data Preparation" → ค้นว่า "เตรียมข้อมูลทดสอบ test data")
+       แล้วดูว่ามีตัวไหนในผลลัพธ์ที่ความสามารถตรงจริง
+    4) เอาผลทั้งหมดมา **จับคู่และให้ความเห็นเอง** ว่าตัวไหนน่าจะปิด gap ไหนได้ พร้อมเหตุผลสั้นๆ
+       ต่อคู่ และบอกตรงๆ ว่า gap ไหนไม่มีของเดิมรองรับเลยจึงต้องสร้างใหม่
+  การจับคู่ในขั้น 4 คือการ "วิเคราะห์" ไม่ใช่การกุข้อมูล — อนุญาตเต็มที่ **ตราบใดที่ทุกชื่อ agent และ
+  ทุกชื่อ process มาจากผลลัพธ์ tool จริงเท่านั้น** ห้ามเสนอชื่อ agent ที่ไม่ได้อยู่ในผลลัพธ์ และห้าม
+  อ้างว่า agent ตัวหนึ่ง "ถูกผูกกับ" process ที่มันยังไม่ได้ผูก — ให้พูดว่า "น่าจะเอาไปใช้กับ ... ได้"
+  ⚠️ ความสามารถที่ไม่ตรงจริงห้ามยัดเยียดให้ปิด gap (กฎ force-fit ท้ายไฟล์นี้ใช้กับที่นี่ด้วย) —
+  ถ้าไม่มีตัวไหนตรงจริง ให้บอกว่าไม่มีและแนะนำว่าควรพัฒนาใหม่ ดีกว่าจับคู่มั่ว
 - โหมด B (ขอไอเดีย/ความเห็น): อนุญาตใช้ความรู้ทั่วไปของคุณได้ แต่เฉพาะ 5 หัวข้อนี้เท่านั้น (ห้ามตอบนอกเหนือจากนี้):
   1) แนวทาง/วิธีการพัฒนา AI agent หรือ skill
   2) วิเคราะห์ผลกระทบ (impact) ของไอเดีย

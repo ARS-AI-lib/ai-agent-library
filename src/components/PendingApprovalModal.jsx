@@ -4,8 +4,7 @@ import { db } from '../lib/firebase';
 import { getTier, TIER_DEF } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
 import { matchingAgentNames, pairedSubSkills, agentTypeLabel, fmtDate, categoryColor } from '../lib/agentUtils';
-import { queueViewer, visiblePending, visibleDeployRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
-import { canDecideRename } from '../lib/agentUtils';
+import { queueViewer, visiblePending, visibleDeployRequests, visibleRenameRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
 import { decideRenameRequest } from '../lib/endpointFiles';
 import { notifyEvent } from '../lib/notify';
 import AgentDetailModal from './AgentDetailModal';
@@ -95,19 +94,14 @@ const RISK_COLOR = { high: '#c5221f', medium: '#c96a00', low: '#137333' };
 //                     overlaps their own approveAreas.
 //   user (base)     — see only their own submissions, and may only reject
 //                     (withdraw) them — never approve their own idea.
-export default function PendingApprovalModal({ pending, deployRequests = [], onClose, user, userRole, isAdmin, isCommittee, approveAreas = [], agents = [], schema = {} }) {
+export default function PendingApprovalModal({ pending, deployRequests = [], renameReqs = [], onClose, user, userRole, isAdmin, isCommittee, approveAreas = [], agents = [], schema = {} }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
   // Rename requests (2026-08-19) — a third queue beside New Entry and Deploy
-  // Request. Self-fetched rather than threaded from App: this modal is the
-  // only consumer, and the collection is tiny.
-  const [renameReqs, setRenameReqs] = useState([]);
-
-  useEffect(() => {
-    const q = query(collection(db, 'renameRequests'), where('status', '==', 'pending'));
-    const unsub = onSnapshot(q, (snap) => setRenameReqs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setRenameReqs([]));
-    return unsub;
-  }, []);
+  // Request. Now passed in from App rather than self-fetched (2026-08-20):
+  // while this modal owned the subscription, the Pending BADGE could not see
+  // the queue at all, so a rename request sat here with no counter pointing
+  // at it. One listener in App feeds both.
   // Wraps agentApproveAreas with the live category->area overrides an admin
   // may have set via CategoryApprovalPanel, so a brand-new category doesn't
   // silently misroute here even before approveAreas.js's code-level table is
@@ -197,8 +191,8 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
   // App.jsx counts EXACTLY what this list renders (2026-08-12 — they had
   // drifted: badge counted every pending item regardless of area).
   const viewer = useMemo(
-    () => queueViewer({ isAdmin, isCommittee, approveAreas, uid: user?.uid, categoryAreaMap: schema.categoryAreaMap }),
-    [isAdmin, isCommittee, approveAreas, user?.uid, schema.categoryAreaMap],
+    () => queueViewer({ isAdmin, isCommittee, role: userRole, approveAreas, uid: user?.uid, categoryAreaMap: schema.categoryAreaMap }),
+    [isAdmin, isCommittee, userRole, approveAreas, user?.uid, schema.categoryAreaMap],
   );
 
   const visible = useMemo(() => visiblePending(pending, viewer), [pending, viewer]);
@@ -211,12 +205,12 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
   // Only requests whose agent this person may actually decide — same area
   // model as the other two queues, via canDecideRename (approver-of-area or
   // admin; deliberately NOT staff, and never the creator who filed it).
-  const visibleRenames = useMemo(() => renameReqs
-    .map((r) => ({ r, agent: agents.find((a) => a.id === r.agentId) }))
-    .filter(({ agent }) => !!agent)
-    .filter(({ agent }) => canDecideRename(userRole, isAdmin, approveAreas, resolveAreas(agent))),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [renameReqs, agents, userRole, isAdmin, approveAreas, schema.categoryAreaMap]);
+  // Shared with the badge via pendingQueue.js — the inline copy that used to
+  // live here is exactly why the badge and this list could disagree.
+  const visibleRenames = useMemo(
+    () => visibleRenameRequests(renameReqs, agents, viewer),
+    [renameReqs, agents, viewer],
+  );
 
   async function decideRename(reqId, verdict) {
     setBusyId(reqId);
@@ -547,43 +541,58 @@ export default function PendingApprovalModal({ pending, deployRequests = [], onC
             field edit: decideRenameRequest also rewrites matchingAgent on every
             paired sub-skill in the same batch, because pairing is by NAME and a
             bare rename would detach all of them. */}
-        {visibleRenames.length > 0 && (
-          <>
-            <div className="sec-title" style={{ marginTop: 16 }}>Rename Request</div>
-            <div className="msub">{visibleRenames.length} items · เปลี่ยนชื่อหลังเผยแพร่แล้ว ต้องอนุมัติก่อน</div>
-            {visibleRenames.map(({ r, agent }) => {
-              const kids = pairedSubSkills(agent, agents);
-              return (
-                <div className="queue-row" key={r.id}>
-                  <div className="queue-content">
-                    <div className="dup-name">
-                      <span style={{ color: 'var(--mu)', textDecoration: 'line-through' }}>{r.currentName || agent.agentName}</span>
-                      {'  →  '}
-                      <span>{r.requestedName}</span>
+        <div className="sec-title" style={{ marginTop: 16 }}>Rename Request</div>
+        <div className="msub">{visibleRenames.length} รายการ · เปลี่ยนชื่อหลังเผยแพร่แล้ว ต้องอนุมัติก่อน</div>
+
+        {visibleRenames.length === 0 ? (
+          <div className="empty-state">ไม่มีคำขอเปลี่ยนชื่อรออนุมัติ</div>
+        ) : (
+          visibleRenames.map(({ r, agent }) => {
+            const tier = getTier(agent);
+            const tierDef = TIER_DEF[tier];
+            const kids = pairedSubSkills(agent, agents);
+            return (
+              <div className="queue-row" key={r.id}>
+                <div className="queue-content">
+                  <div
+                    className="dup-name"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setDetailAgent(agent)}
+                    title="คลิกเพื่อดูรายละเอียด"
+                  >
+                    <span style={{ color: 'var(--mu)', textDecoration: 'line-through' }}>{r.currentName || agent.agentName}</span>
+                    {' → '}
+                    <span style={{ textDecoration: 'underline', textDecorationStyle: 'dotted' }}>{r.requestedName}</span>
+                  </div>
+                  <div className="queue-meta">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
+                      <span>Owner: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{agent.owner || '—'}</strong></span>
+                      <span>Requested by: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{r.createdByEmail || '—'}</strong></span>
                     </div>
-                    <div className="queue-meta">
-                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
-                        <span>Owner: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{agent.owner || '—'}</strong></span>
-                        <span>ผู้ขอ: {r.createdByEmail || '—'}</span>
-                        <AreaChips areas={resolveAreas(agent)} />
-                      </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                      <AreaChips areas={resolveAreas(agent)} />
+                      <span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                       {kids.length > 0 && (
-                        <div style={{ marginTop: 3, color: 'var(--msg-warn-fg)' }}>
+                        <span style={{ color: 'var(--msg-warn-fg)' }}>
                           จะอัปเดตการผูกของ Skill ลูก {kids.length} ตัวให้อัตโนมัติ
-                        </div>
+                        </span>
                       )}
                     </div>
                   </div>
-                  <div className="btn-row">
-                    <button className="btn-sm rej" disabled={busyId === r.id} onClick={() => decideRename(r.id, 'rejected')}>Reject</button>
-                    <button className="btn-sm appr" disabled={busyId === r.id} onClick={() => decideRename(r.id, 'approved')}>
-                      {busyId === r.id ? '…' : 'Approve'}
-                    </button>
-                  </div>
                 </div>
-              );
-            })}
-          </>
+                {/* .queue-actions, not .btn-row — the other two queues use it and
+                    it is the one with flex-shrink:0. .btn-row stretches its
+                    buttons to fill (flex:1) and has no shrink guard, which is
+                    why this row rendered cramped and misaligned next to them. */}
+                <div className="queue-actions">
+                  <button className="btn-sm rej" disabled={busyId === r.id} onClick={() => decideRename(r.id, 'rejected')}>Reject</button>
+                  <button className="btn-sm appr" disabled={busyId === r.id} onClick={() => decideRename(r.id, 'approved')}>
+                    {busyId === r.id ? '…' : 'Approve'}
+                  </button>
+                </div>
+              </div>
+            );
+          })
         )}
 
         {myRejected.length > 0 && (

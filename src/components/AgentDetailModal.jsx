@@ -3,7 +3,7 @@ import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
-import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
+import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { recordAgentEvent, submitRating } from '../lib/agentEvents';
@@ -36,6 +36,11 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
   const [editEndpoint, setEditEndpoint] = useState('');
   const [editFile, setEditFile] = useState(null);
+  // Which linked sub-skills this progress update should be shared with
+  // (2026-08-20). Holds ids; seeded to every eligible target on each open, so
+  // the default behaviour is exactly the previous cascade-everything and a
+  // user who ignores the picker sees no change.
+  const [cascadePick, setCascadePick] = useState(() => new Set());
   const readyFileRef = useRef(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -179,6 +184,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // Paired sub-skills that would be dragged along by archiving this Agent —
   // the user gets to tick any worth keeping (e.g. a genuinely reusable skill).
   const subSkills = pairedSubSkills(agent, allAgents || []);
+  // Eligible cascade targets for the progress picker below — same helper the
+  // save path uses, so the list shown and the list written can never diverge.
+  const cascadeShareTargets = cascadeTargets(agent, allAgents || []);
 
   // Rating/usage derived values. canRateAgent mirrors the server check in
   // submitRating so the control is never shown to someone it would reject —
@@ -195,6 +203,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
     setEditLaunch(toDateInputValue(agent.launchDate));
     setEditEndpoint('');
     setEditFile(null);
+    setCascadePick(new Set(cascadeTargets(agent, allAgents || []).map((sk) => sk.id)));
     if (readyFileRef.current) readyFileRef.current.value = '';
     setSaveError('');
     setEditing(true);
@@ -262,7 +271,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         //     back to the parent's resolved endpoint keeps the pair in lock-step,
         //     which is exactly what the sub-skill lock promises.
         const parentEndpoint = editEndpoint.trim() || parentRes?.endpoint || '';
-        for (const sk of cascadeTargets(agent, allAgents || [])) {
+        for (const sk of cascadeTargets(agent, allAgents || []).filter((x) => cascadePick.has(x.id))) {
           const skHasOwn = !!String(sk.endpoint || '').trim() || !!sk.endpointFile?.storagePath;
           await markAgentReady({
             agentId: sk.id,
@@ -294,7 +303,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // cascadeTargets, not pairedSubSkills: a child that is further along
       // than its parent (its own 100%, its own deploy approval) must not be
       // dragged backwards — 18 standalone skills sit at 100% today.
-      for (const sk of cascadeTargets(agent, allAgents || [])) {
+      // ...and then only the ones the user ticked in the picker above.
+      for (const sk of cascadeTargets(agent, allAgents || []).filter((x) => cascadePick.has(x.id))) {
         await updateDoc(doc(db, 'agents', sk.id), patch);
       }
       setEditing(false);
@@ -543,16 +553,18 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 </svg>
                 {endpointLabel(agent.endpoint)}
               </a>
-              {/* Requirement: the system must say WHICH of the two this is —
-                  a plain external URL, or a file uploaded to our own repo
-                  (which is SSO-gated on download). isLibraryFileUrl() is the
-                  existing single source of that distinction, reused not
-                  re-derived. */}
-              <span style={{ fontSize: 10, color: 'var(--mu)', marginLeft: 6, whiteSpace: 'nowrap' }}>
-                {endpointIsOurFile
-                  ? `ไฟล์ในระบบ${agent.endpointFile?.name ? ` · ${agent.endpointFile.name}` : ''}`
-                  : 'ลิงก์ภายนอก'}
-              </span>
+              {/* Only the EXTERNAL case is labelled now (2026-08-20, user
+                  request): the "ไฟล์ในระบบ · <filename>" tag on our own files
+                  was noise on the common case, sitting right after an already
+                  truncated URL. The §24/§25 requirement to distinguish the two
+                  still holds — it is now carried by the presence/absence of
+                  this tag, and the warning direction (you are leaving the
+                  system) is the half that actually needed words. */}
+              {!endpointIsOurFile && (
+                <span style={{ fontSize: 10, color: 'var(--mu)', marginLeft: 6, whiteSpace: 'nowrap' }}>
+                  ลิงก์ภายนอก
+                </span>
+              )}
             </div>
           )}
           <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
@@ -605,6 +617,53 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 </label>
                 <input type="date" value={editLaunch} onChange={(e) => setEditLaunch(e.target.value)} />
               </div>
+
+              {/* Share-with picker (2026-08-20). The cascade used to be silent
+                  and total: saving the parent rewrote every linked sub-skill's
+                  progress with no way to see it, let alone opt out. It now
+                  lists the eligible targets with everything pre-ticked, so the
+                  default is unchanged and the choice is merely visible.
+                  The list is cascadeTargets(), NOT pairedSubSkills() — a child
+                  already further along than its parent is excluded upstream and
+                  must not be offered here either, or ticking it would promise a
+                  write the guard is going to refuse. */}
+              {cascadeShareTargets.length > 0 && (
+                <div className="fg" style={{ marginTop: 8, marginBottom: 0 }}>
+                  <label>
+                    Share Progress With
+                    <span className="hint">Skill ที่ผูกไว้ · เลือกเฉพาะตัวที่ต้องการให้ปรับตาม</span>
+                  </label>
+                  <div style={{ border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-sm)', padding: '4px 2px', maxHeight: 148, overflowY: 'auto' }}>
+                    {cascadeShareTargets.map((sk) => (
+                      <label
+                        key={sk.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', fontSize: 11.5, cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={cascadePick.has(sk.id)}
+                          onChange={(e) => setCascadePick((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(sk.id); else next.delete(sk.id);
+                            return next;
+                          })}
+                        />
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {sk.agentName}
+                        </span>
+                        <span style={{ color: 'var(--mu)', fontFamily: "'IBM Plex Mono',monospace", flexShrink: 0 }}>
+                          {normalizeProgress(sk.devProgress)}%
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {cascadePick.size === 0 && (
+                    <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 5 }}>
+                      ไม่ได้เลือกไว้เลย — จะปรับเฉพาะ Agent ตัวนี้ ไม่แตะ Skill ลูก
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* The Ready-to-Use gate. Only rendered while actually crossing to
                   100% — an agent moving 40% -> 60% has nothing to publish yet,

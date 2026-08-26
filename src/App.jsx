@@ -161,6 +161,22 @@ export default function App() {
   const [sort, setSort] = useState('created'); // reset on reload, same as view — not persisted (locked 2026-08-20)
   const [owner, setOwner] = useState(new Set());
   const [role_, setRole_] = useState(new Set());
+  // Grouping follows the filter (2026-08-20). Picking an Owner or Role — or a
+  // Category in the sidebar — while the grid is grouped By Category produces a
+  // view whose headers no longer answer the question just asked: filter by one
+  // category and every card lands under a single header; filter by owner and
+  // the owner you chose is nowhere in the headings. Switching to By Owner puts
+  // the useful axis back. Done at the setter (not in an effect) so it fires
+  // only on a real user action and never fights a manual VIEW change
+  // afterwards — same pattern as the sidebar group-exclusivity below.
+  function handleSetOwner(next) {
+    setOwner(next);
+    if (next.size > 0) setView('by-owner');
+  }
+  function handleSetRole(next) {
+    setRole_(next);
+    if (next.size > 0) setView('by-owner');
+  }
   const [tier, setTier] = useState(new Set());
   const [type, setType] = useState('all');
   const [reusable, setReusable] = useState(new Set());
@@ -178,7 +194,7 @@ export default function App() {
   const [platformTools, setPlatformTools] = useState(false);
   function handleSetCategory(next) {
     setCategory(next);
-    if (next.size > 0) { setStage(new Set()); setPlatformTools(false); }
+    if (next.size > 0) { setStage(new Set()); setPlatformTools(false); setView('by-owner'); }
   }
   function handleSetStage(next) {
     setStage(next);
@@ -249,12 +265,28 @@ export default function App() {
   // the badge was counting other areas' work (2026-08-12). Both now derive
   // from src/lib/pendingQueue.js rather than each filtering on their own.
   const queueViewerCtx = useMemo(
-    () => queueViewer({ isAdmin, isCommittee, approveAreas, uid: user?.uid, categoryAreaMap: schema.categoryAreaMap }),
-    [isAdmin, isCommittee, approveAreas, user?.uid, schema.categoryAreaMap]
+    () => queueViewer({ isAdmin, isCommittee, role, approveAreas, uid: user?.uid, categoryAreaMap: schema.categoryAreaMap }),
+    [isAdmin, isCommittee, role, approveAreas, user?.uid, schema.categoryAreaMap]
   );
+  // Rename requests are the third queue and were missing from this count
+  // entirely (2026-08-20) — a request appeared inside the modal with no badge
+  // to lead anyone there. Subscribed here, not only in the modal, precisely so
+  // the badge can see it; PendingApprovalModal takes it as a prop rather than
+  // opening a second identical listener.
+  const [renameReqs, setRenameReqs] = useState([]);
+  useEffect(() => {
+    if (!role) return undefined;
+    const q = query(collection(db, 'renameRequests'), where('status', '==', 'pending'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => setRenameReqs(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      () => setRenameReqs([]),
+    );
+    return unsub;
+  }, [role]);
   const pendingCount = useMemo(
-    () => pendingBadgeCount(pending, deployRequests, agents, queueViewerCtx),
-    [pending, deployRequests, agents, queueViewerCtx]
+    () => pendingBadgeCount(pending, deployRequests, renameReqs, agents, queueViewerCtx),
+    [pending, deployRequests, renameReqs, agents, queueViewerCtx]
   );
 
   const filtered = useMemo(() => {
@@ -426,8 +458,8 @@ export default function App() {
           <ControlBar
             view={view} setView={setView}
             sort={sort} setSort={setSort}
-            ownerOptions={ownerOptions} owner={owner} setOwner={setOwner}
-            roleOptions={roleOptions} role={role_} setRole={setRole_}
+            ownerOptions={ownerOptions} owner={owner} setOwner={handleSetOwner}
+            roleOptions={roleOptions} role={role_} setRole={handleSetRole}
             tier={tier} setTier={setTier}
             type={type} setType={setType}
             reusableOptions={reusableOptions} reusable={reusable} setReusable={setReusable}
@@ -525,6 +557,7 @@ export default function App() {
         <PendingApprovalModal
           pending={pending}
           deployRequests={parentDeployRequests}
+          renameReqs={renameReqs}
           onClose={() => setShowPending(false)}
           user={user}
           userRole={role}

@@ -12,7 +12,7 @@
 // anti-drift discipline as normalizeProgress / agentApproveAreas /
 // isInternalToolName.
 import { agentApproveAreas } from './approveAreas';
-import { isPairedSubSkill } from './agentUtils';
+import { isPairedSubSkill, canDecideRename } from './agentUtils';
 
 /**
  * Build the viewer context both filters need.
@@ -23,12 +23,19 @@ import { isPairedSubSkill } from './agentUtils';
  *                  brand-new category routes correctly before approveAreas.js's
  *                  code-level table is updated.
  */
-export function queueViewer({ isAdmin, isCommittee, approveAreas = [], uid, categoryAreaMap }) {
+export function queueViewer({ isAdmin, isCommittee, role, approveAreas = [], uid, categoryAreaMap }) {
   return {
     fullAccess: !!(isAdmin || isCommittee),
     areas: new Set(approveAreas || []),
     uid: uid || null,
     categoryAreaMap,
+    // Rename decisions use a NARROWER set than fullAccess — admin or an
+    // approver of the area, never committee and never staff (canDecideRename,
+    // mirroring the server's RENAME_DECIDER_ROLES). So the raw role and the
+    // raw area list are carried through rather than collapsed into fullAccess.
+    role: role || null,
+    isAdmin: !!isAdmin,
+    areaList: Array.isArray(approveAreas) ? approveAreas : [],
   };
 }
 
@@ -73,7 +80,30 @@ export function queueAreaEmptyForApprover(pending, v) {
   return !v.fullAccess && v.areas.size > 0 && !pending.some((a) => inMyAreas(a, v));
 }
 
+/**
+ * Rename-request queue (2026-08-20). Lives here for the same reason the other
+ * two do: it was written inline in PendingApprovalModal and therefore invisible
+ * to the badge, so a rename request sat in the queue with no counter — the
+ * exact drift this module was created to stop, repeated for a third queue.
+ *
+ * Requests whose agent no longer resolves are dropped: the row cannot render
+ * an owner/area without it, and it cannot be counted either or the badge would
+ * promise an item the modal will not show.
+ *
+ * Returns [{ r, agent }] so the modal renders straight from it.
+ */
+export function visibleRenameRequests(renameReqs, agents, v) {
+  return (renameReqs || [])
+    .map((r) => ({ r, agent: agents.find((a) => a.id === r.agentId) }))
+    .filter(({ agent }) => !!agent)
+    .filter(({ agent }) => canDecideRename(
+      v.role, v.isAdmin, v.areaList, agentApproveAreas(agent, v.categoryAreaMap),
+    ));
+}
+
 /** The number the Pending badge shows — exactly what the modal will list. */
-export function pendingBadgeCount(pending, deployRequests, agents, v) {
-  return visiblePending(pending, v).length + visibleDeployRequests(deployRequests, agents, v).length;
+export function pendingBadgeCount(pending, deployRequests, renameReqs, agents, v) {
+  return visiblePending(pending, v).length
+    + visibleDeployRequests(deployRequests, agents, v).length
+    + visibleRenameRequests(renameReqs, agents, v).length;
 }

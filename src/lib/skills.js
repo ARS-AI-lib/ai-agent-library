@@ -409,6 +409,7 @@ export const SKILLS = {
         scope: '"Internal" | "External" (optional)',
         sdlcStage: 'array of SDLC stage names (optional, requires ctx.processes)',
         sdlcProcessMapping: 'array of process ids e.g. "2.2" (optional)',
+        sdlcMapped: '"mapped" | "unmapped" (optional) — unmapped = เอาเฉพาะตัวที่ยังไม่ได้ผูกกับ SDLC process ใดเลย, mapped = เฉพาะตัวที่ผูกแล้ว ใช้ตอบ "Agent/Skill ตัวไหนยังไม่ได้ผูก process" และใช้คู่กับ query_sdlc(onlyGaps) เพื่อหาว่าของที่มีอยู่แล้วเอาไปปิด gap ไหนได้',
         category: 'array of category names (optional) — หมวดโดเมนงาน เช่น "Investment", "Design & UI" — matches if the agent has ANY of these',
         useCase: 'array of use case name strings (optional) — matches if the agent has ANY of these',
         keyword: 'string — free-text search across name/owner/description/ability/role (optional)',
@@ -418,7 +419,7 @@ export const SKILLS = {
     run: (args, ctx) => {
       const {
         type = 'all', tier, owner, creator, relatedRole, coreAbility, reusable, status,
-        scope, sdlcStage, sdlcProcessMapping, useCase, category, keyword, groupBy,
+        scope, sdlcStage, sdlcProcessMapping, sdlcMapped, useCase, category, keyword, groupBy,
       } = args || {};
 
       // Resolve stage→processId set once (sdlcUseCases/sdlcProcesses don't
@@ -478,6 +479,14 @@ export const SKILLS = {
           const ids = agentProcessIds(a);
           if (!ids.some((id) => sdlcProcessMapping.includes(id))) return false;
         }
+        // "Has it been placed in the SDLC at all?" — the axis that was missing
+        // (2026-08-20). Without it the assistant could list gap processes and
+        // list the library, but could not answer the obvious follow-up: which
+        // of the things we ALREADY own are floating unattached and might cover
+        // one of those gaps. Measured at the time: 116 of 243 live entries
+        // carry no process mapping, against 29 of 58 processes with no agent.
+        if (sdlcMapped === 'unmapped' && agentProcessIds(a).length > 0) return false;
+        if (sdlcMapped === 'mapped' && agentProcessIds(a).length === 0) return false;
         if (stageProcessIds) {
           const ids = agentProcessIds(a);
           if (!ids.some((id) => stageProcessIds.has(id))) return false;
