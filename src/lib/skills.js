@@ -20,6 +20,7 @@ import { rankCandidates, findDuplicates, scoreDraftAgainst } from './similarity'
 import { findConnectionSuggestions } from './connections';
 import { getType, getTier, isInternalOrExternal } from './tier';
 import { agentStatus, ST_DEF } from './status';
+import { agentApproveAreas, PROCESS_AREA } from './approveAreas';
 import { splitRoles, agentProcessIds, agentUseCaseNames, agentCategories } from './agentUtils';
 
 function norm(s) {
@@ -602,6 +603,125 @@ export const SKILLS = {
       return {
         processes: processesOut,
         useCases: useCases.map((u) => ({ processId: u.processId, name: u.name, owner: u.owner || '' })),
+      };
+    },
+  },
+
+  // ── SDLC gap matching (2026-08-20) ────────────────────────────────────
+  //
+  // Why this is a TOOL and not a prompt instruction:
+  //
+  // The first attempt told the model to fetch the gap list, fetch the unmapped
+  // agents, and "match them yourself". It fabricated every single name it
+  // presented — Vendor Proposal Compliance Validator, Contract Validator
+  // Assistant, Self-service test data creation: none of the six existed in a
+  // 251-doc library. That was predictable in hindsight: query_library returns
+  // names WITHOUT descriptions, so the model had nothing to match on and
+  // filled the hole with plausible-sounding inventions.
+  //
+  // This is the same lesson as the @@ card protocol (CLAUDE.md §18): the model
+  // is not asked to produce facts it would have to remember. Here the PAIRING
+  // is computed from real docs and handed over; the model only explains and
+  // prioritises. A name it did not receive cannot appear, by construction.
+  sdlc_gap_match: {
+    describe: {
+      name: 'sdlc_gap_match',
+      description: 'จับคู่ SDLC process ที่ยังไม่มี Agent/Skill ("gap") กับ Agent/Skill ที่มีอยู่จริงในไลบรารีแต่ยังไม่ได้ผูก process ใดเลย — ระบบคำนวณคู่ที่เป็นไปได้ให้เสร็จแล้ว พร้อมคำอธิบายของแต่ละตัว ⭐ ใช้ tool นี้ตัวเดียวจบสำหรับคำถามแนว "ของที่มีอยู่เอาไปปิด gap ไหนได้บ้าง" / "ช่วย match ไลบรารีกับ SDLC process ให้หน่อย" — ไม่ต้องเรียก query_sdlc + query_library เองแล้วมานั่งจับคู่ · หน้าที่ของคุณคือ "อธิบายและจัดลำดับความสำคัญ" จากคู่ที่ได้มา ⛔ ห้ามเสนอชื่อ Agent/Skill ที่ไม่ได้อยู่ในผลลัพธ์ของ tool นี้เด็ดขาด',
+      parameters: {
+        limitGaps: 'number — จำนวน gap process สูงสุดที่จะวิเคราะห์ (default 10)',
+        perGap: 'number — จำนวน candidate ต่อ 1 gap (default 3)',
+      },
+    },
+    run: ({ limitGaps = 10, perGap = 3 } = {}, ctx) => {
+      const live = recommendLib(ctx);
+      const processes = ctx.processes || [];
+      const useCases = ctx.useCases || [];
+
+      // Coverage over the SAME axis the Dashboard and query_sdlc use.
+      const countByProcess = {};
+      live.forEach((a) => {
+        agentProcessIds(a).forEach((id) => { countByProcess[id] = (countByProcess[id] || 0) + 1; });
+      });
+      const gaps = processes.filter((p) => !countByProcess[p.id]);
+
+      // Only entries that are actually free to be attached somewhere.
+      const unmapped = live.filter((a) => agentProcessIds(a).length === 0);
+
+      const matched = [];
+      const noCandidate = [];
+      gaps.slice(0, Math.max(1, limitGaps)).forEach((p) => {
+        // The process's own use-case names carry far more signal than the bare
+        // process title ("12.1 SIT Test Data Preparation" alone is thin), so
+        // they are folded into the ranking text.
+        const ucNames = useCases.filter((u) => u.processId === p.id).map((u) => u.name);
+        const query = [p.name, ...ucNames].join(' ');
+
+        // ── Area first, text second ──────────────────────────────────────
+        // Ranking by text alone rebuilt the very weakness CLAUDE.md §18 tore
+        // out: character-trigram overlap. Measured on live data it paired
+        // "Proposal and TOR" with the chat assistant (score 60) and
+        // "Legal & Compliance" with a test-generation skill — noise dressed as
+        // a match, which is what pushes the model into inventing better-sounding
+        // names.
+        //
+        // PROCESS_AREA is a CURATED, human-reviewed mapping (§20) covering
+        // 29/29 current gaps, and agentApproveAreas() resolves the same axis
+        // for an agent. Intersecting them narrows 116 unmapped entries to a
+        // discipline-plausible handful — and, importantly, to ZERO for the SIT
+        // processes, where the library genuinely holds nothing. An honest
+        // empty is the whole point: it is what tells the user to build.
+        const processArea = PROCESS_AREA[p.id] || null;
+        const pool = processArea
+          ? unmapped.filter((a) => agentApproveAreas(a, ctx.categoryAreaMap).includes(processArea))
+          : [];
+
+        const scored = pool
+          .map((a) => {
+            const hay = norm([
+              a.agentName, a.description, a.input, a.output, a.businessValue,
+              a.coreAbility, a.relatedRole,
+            ].join(' '));
+            // Text score orders WITHIN the area pool; it no longer decides
+            // membership, so a 0 here is not a rejection.
+            return { a, score: scoreText(hay, query) };
+          })
+          .sort((x, y) => y.score - x.score)
+          .slice(0, Math.max(1, perGap));
+
+        const row = {
+          processId: p.id,
+          processName: p.name,
+          stage: p.stage || '',
+          owner: p.owner || '',
+          approveArea: processArea,
+          useCases: ucNames,
+          candidates: scored.map(({ a, score }) => ({
+            agentName: a.agentName,
+            type: getType(a),
+            tier: getTier(a),
+            owner: a.owner || '',
+            // The field whose absence caused the fabrication — without it the
+            // model cannot judge fit and starts inventing.
+            description: a.description || '',
+            coreAbility: Array.isArray(a.coreAbility) ? a.coreAbility : [a.coreAbility].filter(Boolean),
+            ...readinessOf(a),
+            score,
+          })),
+        };
+        if (row.candidates.length) matched.push(row); else noCandidate.push(row);
+      });
+
+      return {
+        totalGaps: gaps.length,
+        totalUnmapped: unmapped.length,
+        analysed: Math.min(gaps.length, Math.max(1, limitGaps)),
+        // Gaps WITH a real candidate to consider.
+        matched,
+        // Gaps where nothing in the library scored at all — the honest answer
+        // is "build something new", and saying so is the point.
+        noCandidate: noCandidate.map((r) => ({ processId: r.processId, processName: r.processName, stage: r.stage })),
+        // Stated so the model does not present a lexical shortlist as a verdict.
+        method: 'candidates are unmapped entries whose Approve Area matches the process\'s Approve Area (a curated mapping), ordered within that pool by keyword overlap with the process name and its use cases. It is a SHORTLIST to reason over, not a verdict — judge each one against its description and drop the ones that do not fit.',
       };
     },
   },
