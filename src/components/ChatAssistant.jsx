@@ -17,7 +17,48 @@ import '../styles/ChatAssistant.css';
 // conversational composition (see chatLibrary's system prompt).
 const TEMPLATE_TOOLS = new Set(['query_library', 'query_sdlc', 'get_agent_detail', 'connection_suggest']);
 
-const MAX_LOOP = 3;
+/**
+ * Is this tool call an ANALYSIS input (its result must go BACK to the model to
+ * be reasoned over) rather than a browse result the client renders directly?
+ *
+ * 2026-08-20 — this is why the SDLC gap-matching workflow could never finish.
+ * `query_library` is in TEMPLATE_TOOLS, so a call to it renders a card list
+ * and BREAKS the loop. The gap workflow's second step is exactly
+ * query_library({ sdlcMapped: 'unmapped' }), so the model asked for the 116
+ * unmapped entries, the client printed them as 8 cards + "download CSV", and
+ * the turn ended before any matching could happen. The user saw a raw list
+ * where they had asked for an analysis, every single time.
+ *
+ * The distinction is the ARGUMENTS, not the tool: `query_library({owner})` is
+ * a browse, `query_library({sdlcMapped})` is an input to reasoning. Same shape
+ * as the existing query_sdlc({withAgentCounts}) exception, now generalised so
+ * the next analysis argument does not have to rediscover this.
+ */
+function isAnalysisCall(name, args) {
+  if (name === 'query_sdlc' && args?.withAgentCounts) return true;
+  if (name === 'query_library' && args?.sdlcMapped) return true;
+  return false;
+}
+
+// Phrases the model emits INSTEAD of doing the work — "let me check that for
+// you", "please wait a moment". CLAUDE.md §15 records this as a known failure
+// that a prompt rule was supposed to stop; it did not, twice. Detecting it on
+// the client and looping again is enforcement rather than instruction.
+const STALL_RE = /(ขอตรวจสอบ|กำลังตรวจสอบ|กำลังค้นหา|กำลังรวบรวม|กำลังประมวลผล|กำลังดำเนินการ|จะดำเนินการ|จะรีบดำเนินการ|โปรดรอ|กรุณารอ|รอสักครู่|สักครู่นะ|เดี๋ยวผม|อีกสักครู่)/;
+
+/** A "stall" is a short holding reply with no actual result in it. */
+function isStallAnswer(text) {
+  const t = String(text || '');
+  if (!STALL_RE.test(t)) return false;
+  if (t.includes('@@')) return false;      // it already carries agent cards
+  return t.length < 500;                   // a long reply is a real answer that merely says "wait"
+}
+
+// Raised from 3 (2026-08-20). The gap-matching workflow legitimately needs
+// query_sdlc → query_library → capability_search → compose = 4 round trips,
+// so at 3 it could not finish even once the template short-circuit above was
+// fixed: the loop simply ran out and fell through to "ลองถามใหม่อีกครั้ง".
+const MAX_LOOP = 6;
 const HISTORY_WINDOW = 6;
 // Max characters of a PREVIOUS assistant answer replayed as history — see the
 // comment where historyForCall is built.
@@ -680,6 +721,7 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
       let toolResults = [];
       let message = text;
       let finalText = null;
+      let stallRetries = 0;
 
       for (let i = 0; i < MAX_LOOP && finalText === null; i++) {
         // `message` is re-sent on EVERY iteration, not just the first.
@@ -702,17 +744,25 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
         const { data } = await fn({ history: historyForCall, message, toolResults });
 
         if (data.type === 'answer') {
+          // Refuse a holding reply while there is still budget to actually do
+          // the work. Without this the model "answers" with ผมกำลังตรวจสอบ…,
+          // the turn ends, and the user has to prod it again — which is what
+          // they reported, and which also loses the tool results gathered so
+          // far because toolResults is per-turn. Retried at most twice so a
+          // genuinely stall-shaped real answer still gets through.
+          if (isStallAnswer(data.text) && stallRetries < 2 && i < MAX_LOOP - 1) {
+            stallRetries += 1;
+            message = `${text}\n\n[ระบบ] ห้ามตอบว่ากำลังตรวจสอบ/ให้รอ — เรียก tool ที่ยังขาดทันที แล้วตอบให้จบในเทิร์นนี้`;
+            continue;
+          }
           finalText = data.text;
           break;
         }
         if (data.type === 'tool_call') {
           const result = await runTool(data.name, data.args || {}, ctx);
-          // query_sdlc with withAgentCounts is an ANALYSIS request (coverage/
-          // gap reasoning), not a plain lookup — it must go back to Gemini to
-          // be interpreted, same as capability_search. Plain query_sdlc calls
-          // (no withAgentCounts) stay on the fast, free template path.
-          const isAnalysis = data.name === 'query_sdlc' && data.args?.withAgentCounts;
-          const isTemplate = TEMPLATE_TOOLS.has(data.name) && !isAnalysis;
+          // An analysis call's result must go back to the model instead of
+          // being rendered as a list — see isAnalysisCall().
+          const isTemplate = TEMPLATE_TOOLS.has(data.name) && !isAnalysisCall(data.name, data.args || {});
           if (isTemplate) {
             const { text: t, csv } = templateAnswer(data.name, data.args || {}, result);
             setTranscript((prev) => [...prev, { role: 'assistant', text: t, csv, registerCta: wantsRegister }]);
