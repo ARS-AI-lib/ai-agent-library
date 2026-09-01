@@ -573,18 +573,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 </svg>
                 {endpointLabel(agent.endpoint)}
               </a>
-              {/* Only the EXTERNAL case is labelled now (2026-08-20, user
-                  request): the "ไฟล์ในระบบ · <filename>" tag on our own files
-                  was noise on the common case, sitting right after an already
-                  truncated URL. The §24/§25 requirement to distinguish the two
-                  still holds — it is now carried by the presence/absence of
-                  this tag, and the warning direction (you are leaving the
-                  system) is the half that actually needed words. */}
-              {!endpointIsOurFile && (
-                <span style={{ fontSize: 10, color: 'var(--mu)', marginLeft: 6, whiteSpace: 'nowrap' }}>
-                  ลิงก์ภายนอก
-                </span>
-              )}
+              {/* "ลิงก์ภายนอก" tag removed entirely (2026-08-26, user
+                  request) — the §24/§25 requirement to distinguish our own
+                  files from external links stays met by File History existing
+                  only on our own uploads; no inline tag needed here anymore. */}
             </div>
           )}
           <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
@@ -843,11 +835,16 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                     <span style={{ display: 'block', color: 'var(--tx2)', fontSize: 11 }}>
                       {v.name} · {formatBytes(v.size)}
                     </span>
+                    {/* 2026-08-26: dropped the raw uid fallback here — a
+                        Firestore Timestamp also does not survive the callable's
+                        JSON transport as a Date, so this line was literally
+                        rendering "[object Object] · <uid>" for every legacy
+                        row. uploadedAt now arrives pre-converted to millis
+                        (see toMillis() in listEndpointVersions); when a real
+                        name/email exists it is shown, otherwise just the date. */}
                     <span style={{ display: 'block', color: 'var(--mu)', fontSize: 10.5, marginTop: 2 }}>
-                      {v.uploadedAt ? fmtDate(v.uploadedAt) : '—'}
-                      {' · '}
-                      {v.uploadedByName || v.uploadedByEmail
-                        || (v.uploadedBy === 'migration' ? 'ย้ายข้อมูลเข้าระบบ' : v.uploadedBy || '—')}
+                      Uploaded {v.uploadedAt ? fmtDate(v.uploadedAt) : '—'}
+                      {(v.uploadedByName || v.uploadedByEmail) && ` · ${v.uploadedByName || v.uploadedByEmail}`}
                       {v.fileDeleted && ' · ไฟล์ถูกลบแล้ว (เก็บเฉพาะ 2 เวอร์ชันล่าสุด)'}
                     </span>
                     {v.canDownload && !v.isCurrent && (

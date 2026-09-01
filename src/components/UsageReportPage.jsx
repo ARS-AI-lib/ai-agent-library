@@ -163,10 +163,11 @@ export default function UsageReportPage() {
         <div className="usage-head">
           <div>
             <h2>Agent/Skill Usage</h2>
-            <p>
-              1 แถว = 1 คนที่เริ่มใช้ Agent/Skill นั้น · Adopted date คือวันที่คลิกใช้งานครั้งแรก
-              {scoped && ' · แสดงเฉพาะ Agent/Skill ที่อยู่ใน Approve Area ของคุณ'}
-            </p>
+            {/* Explanatory subtitle removed 2026-08-26 (user request) — the
+                column headers already say what each field is. `scoped` is
+                still tracked in state in case a scoping note is wanted again
+                later, it just isn't rendered here now. */}
+            {scoped && <p>แสดงเฉพาะ Agent/Skill ที่อยู่ใน Approve Area ของคุณ</p>}
           </div>
           <button className="btn btn-secondary" onClick={exportCsv} disabled={!filtered.length}>
             ↓ Download CSV

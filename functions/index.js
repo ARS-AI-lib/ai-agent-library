@@ -1412,6 +1412,13 @@ exports.listEndpointVersions = onCall(
     const vSnap = await db.collection('agents').doc(agentId)
       .collection('endpointVersions').orderBy('version', 'desc').get();
 
+    // Firestore Timestamp does NOT survive an onCall JSON transport as
+    // something the client can call .toDate() on — it arrives as a plain
+    // {_seconds,_nanoseconds} object, which is exactly what rendered as the
+    // literal string "[object Object]" in the History section. Convert to
+    // epoch millis here, once, for every row this callable returns.
+    const toMillis = (v) => (v?.toMillis ? v.toMillis() : (v?._seconds ? v._seconds * 1000 : null));
+
     const currentPath = agent.endpointFile?.storagePath || null;
 
     // A pre-versioning file has no rows yet — its v1 is written lazily on the
@@ -1427,7 +1434,7 @@ exports.listEndpointVersions = onCall(
           version: 1,
           name: f.name || '',
           size: f.size || 0,
-          uploadedAt: f.uploadedAt || null,
+          uploadedAt: toMillis(f.uploadedAt),
           uploadedBy: f.uploadedBy || '',
           uploadedByEmail: null,
           uploadedByName: null,
@@ -1450,7 +1457,7 @@ exports.listEndpointVersions = onCall(
           version: v.version,
           name: v.name || '',
           size: v.size || 0,
-          uploadedAt: v.uploadedAt || null,
+          uploadedAt: toMillis(v.uploadedAt),
           // 24 of 28 legacy rows read 'migration' and have no email/name —
           // the UI renders that literally, it is not a uid to resolve.
           uploadedBy: v.uploadedBy || '',
