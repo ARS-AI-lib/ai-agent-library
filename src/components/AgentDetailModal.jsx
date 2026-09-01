@@ -7,7 +7,7 @@ import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetail
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { recordAgentEvent, submitRating } from '../lib/agentEvents';
-import { handleEndpointClick, isLibraryFileUrl, markAgentReady, attachEndpointFile, validateUploadFile, formatBytes, ACCEPT_ATTR, ALLOWED_EXT, MAX_UPLOAD_BYTES } from '../lib/endpointFiles';
+import { handleEndpointClick, isLibraryFileUrl, markAgentReady, attachEndpointFile, validateUploadFile, formatBytes, listEndpointVersions, downloadEndpointFile, ACCEPT_ATTR, ALLOWED_EXT, MAX_UPLOAD_BYTES } from '../lib/endpointFiles';
 import { notifyEvent } from '../lib/notify';
 import { readStats, ratingDisplay, canRateAgent, STAR_LEVELS } from '../lib/agentStats';
 
@@ -41,6 +41,12 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // the default behaviour is exactly the previous cascade-everything and a
   // user who ignores the picker sees no change.
   const [cascadePick, setCascadePick] = useState(() => new Set());
+  // Endpoint-file version history (2026-08-26). Loaded lazily on open and only
+  // when a file actually exists — the callable enforces the viewer set
+  // (admin/committee/area-staff/area-approver/creator), so a permission-denied
+  // here simply means "not for you" and renders nothing rather than an error.
+  const [versions, setVersions] = useState(null);   // null = not loaded / not permitted
+  const [versionBusy, setVersionBusy] = useState('');
   const readyFileRef = useRef(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
@@ -69,6 +75,20 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   useEffect(() => {
     if (viewedId) recordAgentEvent(viewedId, 'detail');
   }, [viewedId]);
+
+  // File version history. Only fetched when a file exists at all, and a
+  // rejection is swallowed on purpose: the callable is the permission
+  // boundary, so "not permitted" must render as an absent section rather than
+  // an error the viewer can do nothing about.
+  const hasFileForHistory = !!agent?.endpointFile?.storagePath;
+  useEffect(() => {
+    if (!viewedId || !hasFileForHistory) { setVersions(null); return undefined; }
+    let alive = true;
+    listEndpointVersions(viewedId)
+      .then((d) => { if (alive) setVersions(d?.rows || []); })
+      .catch(() => { if (alive) setVersions(null); });
+    return () => { alive = false; };
+  }, [viewedId, hasFileForHistory]);
 
   // Live stats + the peer-visible (uid-free) reviews for THIS agent. Scoped to
   // the open modal rather than subscribed globally: reviews are a subcollection
@@ -804,6 +824,54 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               Comments are peer-ANONYMOUS by data shape — the /reviews docs
               carry no uid at all (the identified copy lives in /agentRatings,
               readable only by its author and admin). */}
+          {/* ── File history (2026-08-26) ────────────────────────────────
+              The log is COMPLETE even though only the newest two versions keep
+              their bytes; an evicted row still says who replaced what and when.
+              `canDownload` comes from the server per row and folds in the
+              narrower admin-or-creator rule for anything that is not current —
+              the UI never decides this for itself. */}
+          {versions && versions.length > 0 && (
+            <>
+              <div className="msec">File History</div>
+              {versions.map((v) => (
+                <div className="mrow" key={v.version} style={{ alignItems: 'flex-start' }}>
+                  <span className="mk">v{v.version}{v.isCurrent ? ' · current' : ''}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    {/* Keyed on version + date + size, never filename: two
+                        versions may legitimately share a name now that a
+                        same-name re-upload no longer overwrites. */}
+                    <span style={{ display: 'block', color: 'var(--tx2)', fontSize: 11 }}>
+                      {v.name} · {formatBytes(v.size)}
+                    </span>
+                    <span style={{ display: 'block', color: 'var(--mu)', fontSize: 10.5, marginTop: 2 }}>
+                      {v.uploadedAt ? fmtDate(v.uploadedAt) : '—'}
+                      {' · '}
+                      {v.uploadedByName || v.uploadedByEmail
+                        || (v.uploadedBy === 'migration' ? 'ย้ายข้อมูลเข้าระบบ' : v.uploadedBy || '—')}
+                      {v.fileDeleted && ' · ไฟล์ถูกลบแล้ว (เก็บเฉพาะ 2 เวอร์ชันล่าสุด)'}
+                    </span>
+                    {v.canDownload && !v.isCurrent && (
+                      <button
+                        type="button"
+                        className="btn-sm"
+                        style={{ marginTop: 5 }}
+                        disabled={versionBusy === v.version}
+                        onClick={async () => {
+                          setVersionBusy(v.version);
+                          try { await downloadEndpointFile(agent.id, v.version); } catch (e) {
+                            setSaveError(e?.message || 'ดาวน์โหลดไม่สำเร็จ');
+                          } finally { setVersionBusy(''); }
+                        }}
+                      >
+                        {versionBusy === v.version ? 'กำลังดาวน์โหลด…' : '↓ Download'}
+                      </button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+
           <div className="msec">Feedback</div>
           <div className="mrow" style={{ alignItems: 'flex-start' }}>
             <span className="mk">Rating</span>

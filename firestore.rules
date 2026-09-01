@@ -249,6 +249,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Endpoint file version history (2026-08-26) ────────────────────
+    // Closed to clients in BOTH directions, like /agentEvents and /rateLimits.
+    // Reads go through the listEndpointVersions callable because the audience
+    // includes "approver/staff of this agent's Approve Area", and rules cannot
+    // evaluate agentApproveAreas() (a 7-layer resolver in src/lib).
+    //
+    // Note rules do NOT cascade from /agents/{id} into subcollections and there
+    // is no {document=**} anywhere in this file, so this path is already
+    // default-denied — this block is documentation plus a guard against anyone
+    // later adding a recursive match.
+    match /agents/{agentId}/endpointVersions/{versionId} {
+      allow read, write: if false;
+    }
+
     // ── Mail log (2026-08-20) ─────────────────────────────────────────
     // Audit trail for every notification attempt — sent, dry-run, held and
     // failed alike. Function-only writes (admin SDK bypasses these rules),

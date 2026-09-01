@@ -18,6 +18,7 @@ const { GoogleGenAI } = require('@google/genai');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
+const { createHash } = require('crypto');
 
 setGlobalOptions({ region: 'asia-southeast1', maxInstances: 5 });
 
@@ -760,6 +761,10 @@ const RATE_LIMITS = {
   embedQuery: 20, recordAgentEvent: 120, submitRating: 20,
   attachEndpointFile: 10, getEndpointFile: 60,
   markAgentReady: 30, decideRenameRequest: 20,
+  // Version history browsing and the usage report are read-only and cheap;
+  // note getEndpointFile's 60/min is now SHARED between ordinary downloads and
+  // historical ones, which is accepted deliberately rather than discovered.
+  listEndpointVersions: 60, usageReport: 30,
   // Notifications ride along with ordinary UI actions, so the cap is a
   // runaway guard rather than a usage budget. Real volume is ~7 events/WEEK.
   notifyEvent: 60,
@@ -894,8 +899,12 @@ exports.recordAgentEvent = onCall(
       await markerRef.create({
         agentId, uid, kind, period,
         createdAt: FieldValue.serverTimestamp(),
-        // For a future TTL policy, same as /rateLimits. Nothing reads it today.
-        expireAt: new Date(Date.now() + 90 * 864e5),
+        // For a future TTL policy, same as /rateLimits — but NOT for 'endpoint'
+        // (2026-08-26). Those markers are the source of the Agent/Skill Usage
+        // adoption report, so an "adopted date" must not quietly evaporate at
+        // 90 days if someone ever enables the TTL policy. detail/search stay
+        // expiring: they are telemetry, not a record.
+        ...(kind === 'endpoint' ? {} : { expireAt: new Date(Date.now() + 90 * 864e5) }),
       });
     } catch (e) {
       if (e?.code === 6 || /already exists/i.test(e?.message || '')) return { counted: false, reason: 'duplicate' };
@@ -1039,7 +1048,12 @@ const {
 } = require('./endpointFileRules');
 const {
   checkAgentActor, checkMarkReady, checkRenameDecider, checkRenameValue,
+  checkVersionHistoryViewer, checkVersionDownload,
 } = require('./agentReadyRules');
+
+// Who may open the Agent/Skill Usage report. Deliberately its own set: it is
+// broader than checkAgentActor (committee included) and unrelated to upload.
+const USAGE_REPORT_ROLES = new Set(['admin', 'committee', 'staff', 'approver']);
 
 const BUCKET = 'wolfy-481609.appspot.com';
 const ENDPOINT_FILE_PREFIX = 'endpointFiles';
@@ -1088,6 +1102,59 @@ function raise(refusal) {
  * two agree today. If an agent somehow has no stored area, this degrades to
  * admin-only rather than guessing — a safe direction to fail in.
  */
+/**
+ * Keep the latest and ONE previous file; delete the bytes of everything older
+ * and null out its path, leaving the metadata row as a permanent audit entry.
+ *
+ * A sweep over "every row with a path and version < n-1", NOT "delete v(n-2)".
+ * A targeted delete never revisits a failure, so one transient error would
+ * orphan an object forever — losing the zero-orphan property the bucket has
+ * today. This shape is idempotent and self-heals a previous failed run.
+ *
+ * ⚠️ Deletion is final once the bucket's 7-day soft-delete window passes, so
+ * every call is guarded three ways and can never touch the live file.
+ */
+async function pruneEndpointVersions(agentId, currentVersion, currentPath) {
+  try {
+    const versionsRef = db.collection('agents').doc(agentId).collection('endpointVersions');
+    const snap = await versionsRef.where('version', '<', currentVersion - 1).get();
+    const bucket = getStorage(adminApp).bucket(BUCKET);
+    const prefix = `${ENDPOINT_FILE_PREFIX}/${agentId}/`;
+
+    for (const doc of snap.docs) {
+      const path = doc.data()?.storagePath;
+      if (!path) continue;                       // already pruned — idempotent
+      // Guard 1, the important one: a bug in version arithmetic must never be
+      // able to destroy the file the library is currently serving.
+      if (path === currentPath) continue;
+      // Guard 2: never delete outside this agent's own folder.
+      if (!path.startsWith(prefix)) {
+        console.error(`pruneEndpointVersions: refusing path outside ${prefix}:`, path);
+        continue;
+      }
+      try {
+        const file = bucket.file(path);
+        const [meta] = await file.getMetadata().catch(() => [null]);
+        // Guard 3: the object's own custom metadata must agree it belongs here.
+        // Legacy migrated objects carry it too (migrate-skill-files.cjs).
+        if (meta && meta.metadata?.agentId && meta.metadata.agentId !== agentId) {
+          console.error('pruneEndpointVersions: agentId metadata mismatch, skipping', path);
+          continue;
+        }
+        await file.delete({ ignoreNotFound: true });
+      } catch (e) {
+        // Logged, never swallowed — a silent catch is why a broken sweep would
+        // never be noticed. The row keeps its path so the next run retries it.
+        console.error('pruneEndpointVersions: delete failed', path, e?.message || e);
+        continue;
+      }
+      await doc.ref.update({ storagePath: null, fileDeleted: true });
+    }
+  } catch (e) {
+    console.error('pruneEndpointVersions: sweep failed for', agentId, e?.message || e);
+  }
+}
+
 exports.attachEndpointFile = onCall(
   { cors: true, timeoutSeconds: 60, memory: '512MiB' },
   async (request) => {
@@ -1125,9 +1192,85 @@ exports.attachEndpointFile = onCall(
     raise(checkUploadFile({ filename, buf }));
 
     const name = safeName(filename);
-    const storagePath = `${ENDPOINT_FILE_PREFIX}/${agentId}/${name}`;
     const bucket = getStorage(adminApp).bucket(BUCKET);
-    await bucket.file(storagePath).save(buf, {
+    const sha256 = createHash('sha256').update(buf).digest('hex');
+    const versionsRef = agentRef.collection('endpointVersions');
+
+    // ── Double-submit guard ──────────────────────────────────────────────
+    // Nothing deduped this before: UploadEndpointFileModal has a busy flag but
+    // AgentDetailModal uploads on a separate path, and two tabs bypass both.
+    // Without this, an accidental double-click burns the single "previous"
+    // slot with a duplicate and evicts the file the user actually wanted kept
+    // — which, past the bucket's 7-day soft-delete window, is unrecoverable.
+    if (agent.endpointFile?.sha256 && agent.endpointFile.sha256 === sha256) {
+      return {
+        ok: true, endpoint: agent.endpoint || '', replacedEndpoint: agent.endpoint || '',
+        name: agent.endpointFile.name, size: agent.endpointFile.size,
+        version: agent.endpointFileVersion || null, unchanged: true,
+      };
+    }
+
+    // ── Step 1: reserve the version number, in a transaction on the agent ──
+    // The agent doc is the natural contention point. A read-then-write on
+    // max(version) would let two tabs both claim v4 and clobber each other's
+    // bytes at the same path; a transaction plus a `v{n}` doc id created with
+    // .create() (which fails ALREADY_EXISTS) makes that impossible.
+    const reserved = await db.runTransaction(async (tx) => {
+      const fresh = (await tx.get(agentRef)).data() || {};
+      const current = fresh.endpointFile;
+      let counter = Number(fresh.endpointFileVersion || 0);
+
+      // Lazy v1 backfill for the 28 pre-versioning files. Without this the
+      // first new upload would be numbered 1 while the REAL version 1 sits at
+      // an unversioned path with no row pointing at it — so the prune sweep
+      // would never reach it and the legacy bytes would live forever,
+      // breaking the "keep only latest + previous" rule permanently.
+      if (counter === 0 && current?.storagePath) {
+        tx.set(versionsRef.doc('v1'), {
+          version: 1,
+          name: current.name || '',
+          size: current.size || 0,
+          contentType: current.contentType || 'application/octet-stream',
+          sha256: current.sha256 || null,
+          storagePath: current.storagePath,
+          uploadedAt: current.uploadedAt || FieldValue.serverTimestamp(),
+          uploadedBy: current.uploadedBy || 'migration',
+          uploadedByEmail: null,
+          uploadedByName: null,
+          state: 'complete',
+          fileDeleted: false,
+        }, { merge: true });
+        counter = 1;
+      }
+
+      const version = counter + 1;
+      const path = `${ENDPOINT_FILE_PREFIX}/${agentId}/v${version}/${name}`;
+      tx.create(versionsRef.doc(`v${version}`), {
+        version,
+        name,
+        size: buf.length,
+        contentType: contentType || 'application/octet-stream',
+        sha256,
+        storagePath: path,
+        uploadedAt: FieldValue.serverTimestamp(),
+        uploadedBy: uid,
+        // Captured at write time: uploadedBy is a uid and uids are unreliable
+        // on 157/239 agents, so the log must carry a resolvable identity.
+        uploadedByEmail: request.auth.token?.email || null,
+        uploadedByName: request.auth.token?.name || userDoc.displayName || null,
+        state: 'pending',
+        fileDeleted: false,
+      });
+      tx.update(agentRef, { endpointFileVersion: version });
+      return { version, path };
+    });
+
+    // ── Step 2: the bytes ────────────────────────────────────────────────
+    // A failure here leaves a `pending` row and no object; agent.endpointFile
+    // still points at the previous version, so every existing reader and
+    // checkMarkReady's endpoint gate are unaffected. The burnt version number
+    // is fine — contiguity is not required and the prune sweep tolerates gaps.
+    await bucket.file(reserved.path).save(buf, {
       contentType: contentType || 'application/octet-stream',
       resumable: false,
       // No public ACL and no download token: the ONLY way to these bytes is
@@ -1135,31 +1278,31 @@ exports.attachEndpointFile = onCall(
       metadata: { cacheControl: 'private, max-age=0', metadata: { agentId, uploadedBy: uid } },
     });
 
-    // A re-upload under a different filename would otherwise orphan the old
-    // object in the bucket forever.
-    const prevPath = agent.endpointFile?.storagePath;
-    if (prevPath && prevPath !== storagePath) {
-      await bucket.file(prevPath).delete().catch(() => {});
-    }
-
+    // ── Step 3: publish ──────────────────────────────────────────────────
     const base = LIBRARY_ORIGINS.has(String(origin || '')) ? origin : CANONICAL_ORIGIN;
     const endpoint = `${base}/f/${encodeURIComponent(agentId)}`;
     const replacedEndpoint = String(agent.endpoint || '').trim();
-
-    await agentRef.update({
+    const batch = db.batch();
+    batch.update(agentRef, {
       endpoint,
       endpointFile: {
         name,
         size: buf.length,
         contentType: contentType || 'application/octet-stream',
-        storagePath,
+        sha256,
+        storagePath: reserved.path,
         uploadedAt: FieldValue.serverTimestamp(),
         uploadedBy: uid,
       },
       updatedAt: FieldValue.serverTimestamp(),
     });
+    batch.update(versionsRef.doc(`v${reserved.version}`), { state: 'complete' });
+    await batch.commit();
 
-    return { ok: true, endpoint, replacedEndpoint, name, size: buf.length };
+    // ── Step 4: prune, best-effort, never fails the call ─────────────────
+    await pruneEndpointVersions(agentId, reserved.version, reserved.path);
+
+    return { ok: true, endpoint, replacedEndpoint, name, size: buf.length, version: reserved.version };
   },
 );
 
@@ -1179,14 +1322,41 @@ exports.getEndpointFile = onCall(
     assertOrgEmail(request);
     await enforceRateLimit(request.auth.uid, 'getEndpointFile');
 
-    const { agentId } = request.data || {};
+    const { agentId, version } = request.data || {};
     if (!agentId || typeof agentId !== 'string') {
       throw new HttpsError('invalid-argument', 'agentId is required.');
     }
 
     const snap = await db.collection('agents').doc(agentId).get();
     if (!snap.exists) throw new HttpsError('not-found', 'Agent not found.');
-    const file = snap.data()?.endpointFile;
+    const agent = snap.data() || {};
+
+    // ── Historical version (2026-08-26) ──────────────────────────────────
+    // Opt-in ONLY. Omitting `version` keeps this callable byte-identical to
+    // its pre-versioning behaviour — signed-in org user, current file — so
+    // all four existing call sites (AgentCard, AgentDetailModal,
+    // ChatAssistant, FileDownloadPage) are untouched. The version branch adds
+    // the first real per-agent authorization this path has ever had, and it is
+    // the NARROWEST set in the codebase: admin or creator, nobody else.
+    let file = agent.endpointFile;
+    if (version !== undefined && version !== null && version !== '') {
+      const n = Number(version);
+      if (!Number.isInteger(n) || n < 1) throw new HttpsError('invalid-argument', 'version must be a positive integer.');
+      const userDoc = (await db.collection('users').doc(request.auth.uid).get()).data() || {};
+      raise(checkVersionDownload({
+        agent,
+        role: userDoc.role,
+        userEmail: request.auth.token?.email,
+        userUid: request.auth.uid,
+      }));
+      const vSnap = await db.collection('agents').doc(agentId)
+        .collection('endpointVersions').doc(`v${n}`).get();
+      const v = vSnap.exists ? vSnap.data() : null;
+      if (!v || v.state !== 'complete') throw new HttpsError('not-found', 'That version does not exist.');
+      if (!v.storagePath) throw new HttpsError('not-found', 'That version\'s file has been deleted (only the latest two are kept).');
+      file = v;
+    }
+
     if (!file?.storagePath) throw new HttpsError('not-found', 'No file is attached to this agent.');
 
     const [buf] = await getStorage(adminApp).bucket(BUCKET).file(file.storagePath).download();
@@ -1196,6 +1366,155 @@ exports.getEndpointFile = onCall(
       size: buf.length,
       dataBase64: buf.toString('base64'),
     };
+  },
+);
+
+/**
+ * The endpoint-file update history for one agent (2026-08-26).
+ *
+ * A callable rather than a Firestore read because the audience includes
+ * "approver/staff OF THIS AGENT'S AREA", and security rules cannot evaluate
+ * agentApproveAreas() — the same constraint that already forced markAgentReady
+ * and attachEndpointFile server-side.
+ *
+ * Returns the COMPLETE log, including rows whose bytes were pruned. Only the
+ * two newest rows can actually be fetched; each row says so via canDownload,
+ * which also folds in the narrower admin/creator rule for previous versions.
+ */
+exports.listEndpointVersions = onCall(
+  { cors: true, timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    assertOrgEmail(request);
+    await enforceRateLimit(request.auth.uid, 'listEndpointVersions');
+
+    const { agentId } = request.data || {};
+    if (!agentId || typeof agentId !== 'string') {
+      throw new HttpsError('invalid-argument', 'agentId is required.');
+    }
+    const snap = await db.collection('agents').doc(agentId).get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Agent not found.');
+    const agent = snap.data() || {};
+
+    const userDoc = (await db.collection('users').doc(request.auth.uid).get()).data() || {};
+    const actor = {
+      agent,
+      role: userDoc.role,
+      userEmail: request.auth.token?.email,
+      userUid: request.auth.uid,
+      userApproveAreas: userDoc.approveAreas,
+    };
+    raise(checkVersionHistoryViewer(actor));
+    // Downloading an evicted version is a strictly narrower right than seeing
+    // that it existed, so it is decided once here and reported per row.
+    const mayDownloadOld = checkVersionDownload(actor) === null;
+
+    const vSnap = await db.collection('agents').doc(agentId)
+      .collection('endpointVersions').orderBy('version', 'desc').get();
+
+    const currentPath = agent.endpointFile?.storagePath || null;
+    const rows = vSnap.docs
+      .map((d) => d.data())
+      // A failed upload leaves a `pending` row with no bytes; showing it would
+      // put a version in the audit log that never actually existed.
+      .filter((v) => v.state === 'complete')
+      .map((v) => {
+        const isCurrent = !!currentPath && v.storagePath === currentPath;
+        return {
+          version: v.version,
+          name: v.name || '',
+          size: v.size || 0,
+          uploadedAt: v.uploadedAt || null,
+          // 24 of 28 legacy rows read 'migration' and have no email/name —
+          // the UI renders that literally, it is not a uid to resolve.
+          uploadedBy: v.uploadedBy || '',
+          uploadedByEmail: v.uploadedByEmail || null,
+          uploadedByName: v.uploadedByName || null,
+          isCurrent,
+          fileDeleted: !!v.fileDeleted || !v.storagePath,
+          canDownload: !!v.storagePath && (isCurrent || mayDownloadOld),
+        };
+      });
+
+    return { rows, canDownloadPrevious: mayDownloadOld };
+  },
+);
+
+// ── Agent/Skill Usage report (2026-08-26) ────────────────────────────
+//
+// WHY A CALLABLE. Three separate constraints leave no client-side path:
+//   1. /agentEvents is `allow read, write: if false` — no client can read it.
+//   2. /users `list` is admin-only, so a committee/staff/approver viewer
+//      cannot resolve uid -> name in the browser.
+//   3. Rules cannot evaluate Approve Area (the 7-layer resolver lives in
+//      src/lib and is not deployed with functions).
+//
+// One row per (agent, person), dated by their FIRST ever endpoint click —
+// an adoption record, not a click counter. The weekly dedup in
+// recordAgentEvent means a person contributes at most one marker per agent
+// per week, so min(createdAt) across their markers is the true first use.
+exports.usageReport = onCall(
+  { cors: true, timeoutSeconds: 60, memory: '512MiB' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    assertOrgEmail(request);
+    await enforceRateLimit(request.auth.uid, 'usageReport');
+
+    const userDoc = (await db.collection('users').doc(request.auth.uid).get()).data() || {};
+    const role = userDoc.role;
+    if (!USAGE_REPORT_ROLES.has(role)) {
+      throw new HttpsError('permission-denied', 'Only admin, committee, staff or approver can view the usage report.');
+    }
+    // admin + committee see everything; staff/approver are scoped to their own
+    // areas, mirroring visiblePending()'s fullAccess split.
+    const fullAccess = role === 'admin' || role === 'committee';
+    const myAreas = new Set(Array.isArray(userDoc.approveAreas) ? userDoc.approveAreas : []);
+
+    const [evSnap, agentSnap, userSnap] = await Promise.all([
+      db.collection('agentEvents').where('kind', '==', 'endpoint').get(),
+      db.collection('agents').get(),
+      db.collection('users').get(),
+    ]);
+
+    const agents = new Map();
+    agentSnap.docs.forEach((d) => agents.set(d.id, d.data() || {}));
+    const users = new Map();
+    userSnap.docs.forEach((d) => users.set(d.id, d.data() || {}));
+
+    // Group to one row per (agent, person), keeping the earliest click.
+    const byPair = new Map();
+    evSnap.docs.forEach((d) => {
+      const e = d.data() || {};
+      const key = `${e.agentId}__${e.uid}`;
+      const at = e.createdAt?.toMillis ? e.createdAt.toMillis() : 0;
+      const prev = byPair.get(key);
+      if (!prev || at < prev.at) byPair.set(key, { agentId: e.agentId, uid: e.uid, at });
+    });
+
+    const rows = [];
+    for (const { agentId, uid, at } of byPair.values()) {
+      const a = agents.get(agentId);
+      if (!a) continue;   // agent deleted — nothing to report against
+      // Server-side scoping reads the STORED approveArea only: the resolver is
+      // not available here (CLAUDE.md §24). An agent with no stored area is
+      // visible to admin/committee only, which fails safe.
+      const areas = Array.isArray(a.approveArea) ? a.approveArea : [];
+      if (!fullAccess && !areas.some((x) => myAreas.has(x))) continue;
+      const u = users.get(uid) || {};
+      rows.push({
+        agentId,
+        agentName: a.agentName || '',
+        owner: a.owner || '',
+        area: areas.join(', '),
+        category: (Array.isArray(a.category) ? a.category : []).join(', '),
+        adopterName: u.displayName || '',
+        adopterEmail: u.email || '',
+        adoptedAt: at || null,
+      });
+    }
+
+    rows.sort((x, y) => (y.adoptedAt || 0) - (x.adoptedAt || 0));
+    return { rows, scoped: !fullAccess };
   },
 );
 

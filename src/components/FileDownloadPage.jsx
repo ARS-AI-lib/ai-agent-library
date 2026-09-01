@@ -3,6 +3,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { fetchEndpointFile, triggerDownload, formatBytes } from '../lib/endpointFiles';
+import { recordAgentEvent } from '../lib/agentEvents';
 
 /**
  * `/f/{agentId}` — the SSO gate for library-hosted files.
@@ -58,7 +59,15 @@ export default function FileDownloadPage() {
   // download link; making them click a second button to confirm the thing they
   // just clicked would be pure ceremony.
   useEffect(() => {
-    if (user && agentId && status === 'idle') download();
+    if (user && agentId && status === 'idle') {
+      // Count the adoption (2026-08-26). Until now this page recorded nothing,
+      // so anyone who opened a shared /f/ link from Teams was invisible to the
+      // usage report even though they demonstrably used the thing. The weekly
+      // dedup in recordAgentEvent makes this idempotent against the in-library
+      // click that produced the link, so no double counting.
+      recordAgentEvent(agentId, 'endpoint');
+      download();
+    }
   }, [user, agentId, status, download]);
 
   const wrap = (children) => (

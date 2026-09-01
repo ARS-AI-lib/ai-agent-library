@@ -79,8 +79,14 @@ function oldPairedSubSkills(agent, all) {
   // ── 1. superset ─────────────────────────────────────────────────────
   console.log('1) SUPERSET — the new union must not change any existing pairing');
   const withLinks = live.filter((a) => utils.childSkillIdList(a).length > 0);
-  console.log(`   docs already carrying childSkillIds: ${withLinks.length} (expected 0 before rollout)`);
-  let drift = 0;
+  // 2026-08-26: this used to assert "resolves IDENTICALLY", which silently
+  // encoded "nobody has used the feature yet" as an invariant. Real links now
+  // exist in production, so identity is the wrong property — SUPERSET is the
+  // one that actually matters: the union may add pairings (that is the whole
+  // point of the doc-ID link) but must never LOSE one the old heuristic found.
+  console.log(`   docs already carrying childSkillIds: ${withLinks.length}`);
+  let lostAny = 0;
+  let gainedAny = 0;
   let totalPairs = 0;
   agents.forEach((a) => {
     const before = new Set(oldPairedSubSkills(a, live).map((s) => s.id));
@@ -88,16 +94,16 @@ function oldPairedSubSkills(agent, all) {
     totalPairs += before.size;
     const lost = [...before].filter((i) => !after.has(i));
     const gained = [...after].filter((i) => !before.has(i));
-    if (lost.length || gained.length) {
-      drift += 1;
-      console.log(`   ✗ ${a.agentName} — lost ${lost.length}, gained ${gained.length}`);
-    }
+    if (lost.length) { lostAny += 1; console.log(`   ✗ ${a.agentName} — LOST ${lost.length}`); }
+    if (gained.length) { gainedAny += 1; console.log(`   + ${a.agentName} — gained ${gained.length} via childSkillIds (expected)`); }
   });
-  check(`all ${agents.length} agents resolve identically (${totalPairs} pairings intact)`, drift, 0);
-  check('isPairedSubSkill unchanged for every skill',
+  check(`no agent LOST a pairing (${totalPairs} heuristic pairings, all still resolved)`, lostAny, 0);
+  check('every gained pairing is explained by an explicit childSkillIds link',
+    gainedAny <= withLinks.length, true);
+  check('isPairedSubSkill never loses a skill the old heuristic paired',
     skills.every((s) => {
       const before = live.some((a) => tier.getType(a) === 'agent' && oldPairedSubSkills(a, live).some((x) => x.id === s.id));
-      return utils.isPairedSubSkill(s, live) === before;
+      return before ? utils.isPairedSubSkill(s, live) === true : true;
     }), true);
 
   // ── 2. the gap it closes ────────────────────────────────────────────

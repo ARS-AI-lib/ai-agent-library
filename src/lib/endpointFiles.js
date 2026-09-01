@@ -170,8 +170,21 @@ export async function attachEndpointFile({ agentId, file }) {
  * without an org login no matter how the URL was obtained.
  * Returns { name, contentType, dataBase64 }.
  */
-export async function fetchEndpointFile(agentId) {
-  const { data } = await fn('getEndpointFile')({ agentId });
+export async function fetchEndpointFile(agentId, version) {
+  // `version` is opt-in (2026-08-26): omitted, this is byte-for-byte the
+  // pre-versioning call, so every existing caller is unaffected. Supplied, the
+  // server applies the narrower admin-or-creator rule for old versions.
+  const { data } = await fn('getEndpointFile')(version ? { agentId, version } : { agentId });
+  return data;
+}
+
+/**
+ * The endpoint-file update history for one agent (2026-08-26). Server-gated —
+ * see listEndpointVersions in functions/index.js for why this cannot be a
+ * plain Firestore read.
+ */
+export async function listEndpointVersions(agentId) {
+  const { data } = await fn('listEndpointVersions')({ agentId });
   return data;
 }
 
@@ -215,8 +228,8 @@ export function triggerDownload({ name, contentType, dataBase64 }) {
 }
 
 /** Fetch + save in one call, for the card/modal/chat click handlers. */
-export async function downloadEndpointFile(agentId) {
-  triggerDownload(await fetchEndpointFile(agentId));
+export async function downloadEndpointFile(agentId, version) {
+  triggerDownload(await fetchEndpointFile(agentId, version));
 }
 
 /**

@@ -7,7 +7,7 @@ export default function Nav({
   agentCount, skillCount,
   user, onSignOut,
   activeTab, setActiveTab,
-  onOpenExport, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeDashboard, isAdmin,
+  onOpenExport, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeDashboard, isAdmin,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -165,6 +165,11 @@ export default function Nav({
                   SDLC Timeline
                 </button>
               )}
+          {canSeeUsage && (
+            <button type="button" onClick={() => { window.location.href = '/usage'; setMenuOpen(false); }}>
+              Agent/Skill Usage
+            </button>
+          )}
               <button
                 type="button"
                 className="danger"

@@ -150,6 +150,22 @@ function zipFolder(dir, outName, tmp) {
     return;
   }
 
+  // ⛔ Hard abort (2026-08-26). This script writes an UNVERSIONED storagePath
+  // and stamps endpointFile directly, bypassing attachEndpointFile's version
+  // reservation entirely. Re-running it against an agent that already has a
+  // version history would silently desync the audit log from Storage and
+  // strand the object it overwrites. It was a one-shot migration; treat it
+  // as frozen.
+  for (const { a } of planned) {
+    const existing = await db.collection('agents').doc(a.id)
+      .collection('endpointVersions').limit(1).get();
+    if (!existing.empty) {
+      console.error(`\n✗ ABORT: "${a.agentName}" already has an endpointVersions history.`);
+      console.error('  This script predates file versioning and would corrupt it. Use the app\'s upload instead.');
+      process.exit(1);
+    }
+  }
+
   console.log('\n── uploading ──');
   let ok = 0;
   for (const { a, plan } of planned) {

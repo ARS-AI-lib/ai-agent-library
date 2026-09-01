@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import { downloadCsv as writeCsv } from '../lib/csv';
 import { db } from '../lib/firebase';
 import { getType, getTier } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
@@ -50,12 +51,6 @@ const ALL_COLUMNS = [
   'endpoint', 'archived', 'archiveReason',
   'ratingScore',
 ];
-
-function csvCell(v) {
-  const s = v == null ? '' : String(v);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
 
 // resolveAreas is passed in rather than imported+called directly because it
 // needs the live /config/schema.categoryAreaMap override (see the component
@@ -113,23 +108,14 @@ function toFullRow(agent, resolveAreas, statsById) {
   return row;
 }
 
+// Sorting stays here, not in the shared helper: this export is an audit trail
+// read by owner, while the usage report is read newest-first. One helper, two
+// orders, decided by the caller.
 function downloadCsv(rows, filename, columns = COLUMNS) {
-  const lines = [columns.join(',')];
-  rows
+  const ordered = rows
     .slice()
-    .sort((a, b) => (a.owner || '').localeCompare(b.owner || '') || a.agentName.localeCompare(b.agentName))
-    .forEach((r) => lines.push(columns.map((c) => csvCell(r[c])).join(',')));
-  // Excel (Windows especially) doesn't auto-detect UTF-8 without a BOM — Thai
-  // text renders as mojibake ("ต่างดาว") even though the bytes are correct
-  // UTF-8. Numbers on Mac sniffs the encoding anyway, which is why the same
-  // file looked fine there. The BOM is a no-op for every other CSV reader.
-  const blob = new Blob(['\uFEFF', lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+    .sort((a, b) => (a.owner || '').localeCompare(b.owner || '') || a.agentName.localeCompare(b.agentName));
+  writeCsv(ordered, filename, columns);
 }
 
 /**

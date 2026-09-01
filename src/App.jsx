@@ -144,6 +144,11 @@ export default function App() {
   // a deploy-approved agent). The modal's own list, and checkAgentActor()
   // server-side, decide which agents they actually see.
   const canUploadFiles = !!user && !!role;
+  // Agent/Skill Usage (2026-08-26). Plain role gating — the roles were named
+  // exactly, so unlike Timeline/Dashboard there is no /config allowlist. The
+  // callable re-checks this and additionally scopes staff/approver to their
+  // own Approve Areas; hiding the menu is presentation, never enforcement.
+  const canSeeUsage = !!user && ['admin', 'committee', 'staff', 'approver'].includes(role);
 
   // Pending Category proposals (2026-08) — admin-only badge/panel; the query
   // itself is fine for isKnownUser() per rules, but there's no reason for a
@@ -445,6 +450,7 @@ export default function App() {
         onOpenUpload={() => setShowUpload(true)}
         canUploadFiles={canUploadFiles}
         canSeeTimeline={canSeeTimeline}
+        canSeeUsage={canSeeUsage}
         isAdmin={isAdmin}
         canSeeDashboard={canSeeDashboard}
       />

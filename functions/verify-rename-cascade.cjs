@@ -73,9 +73,18 @@ let fail = 0;
 
   console.log(`live agents ${live.length} · parents with paired sub-skills ${parents.length}\n`);
   console.log('1) PARITY — server child query vs client pairedSubSkills()');
+  // The server query rewrites `matchingAgent`, which only NAME-paired children
+  // rely on. A child linked by childSkillIds (2026-08-20) is deliberately out
+  // of scope: a doc-ID link already survives a rename, which is the reason it
+  // exists. So parity is asserted over the name-paired set only — comparing
+  // against the full client set made this fail the moment the first real
+  // explicit link appeared in production, which is a stale assertion, not a bug.
   let mismatch = 0;
   parents.forEach((p) => {
-    const clientIds = new Set(utils.pairedSubSkills(p, live).map((x) => x.id));
+    const linked = new Set(utils.childSkillIdList(p));
+    const clientIds = new Set(
+      utils.pairedSubSkills(p, live).map((x) => x.id).filter((id) => !linked.has(id)),
+    );
     const serverIds = new Set(serverChildren(live, p).map((x) => x.id));
     const missed = [...clientIds].filter((i) => !serverIds.has(i));
     const extra = [...serverIds].filter((i) => !clientIds.has(i));
@@ -84,7 +93,7 @@ let fail = 0;
       console.log(`   ✗ ${p.agentName} — client ${clientIds.size}, server ${serverIds.size} (missed ${missed.length}, extra ${extra.length})`);
     }
   });
-  if (mismatch === 0) console.log(`   ✓ identical on all ${parents.length} parents`);
+  if (mismatch === 0) console.log(`   ✓ identical on all ${parents.length} parents (name-paired children)`);
   else fail += 1;
 
   console.log('\n2) SIMULATION — rename with the fix vs without');

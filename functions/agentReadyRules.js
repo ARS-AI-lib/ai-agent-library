@@ -181,9 +181,59 @@ function checkRenameValue({ agent, requestedName }) {
   return null;
 }
 
+/**
+ * ── Endpoint-file version history (2026-08-26) ────────────────────────────
+ *
+ * Two predicates, deliberately NOT folded into checkAgentActor.
+ *
+ * ⛔ Do not "just add committee to AREA_ROLES / checkAgentActor" to satisfy the
+ * history audience. checkAgentActor also gates UPLOAD and the 100% mark-ready
+ * transition, and verify-endpoint-files.cjs asserts committee is blocked there.
+ * Measured: the committee member tanyarat.r@infinitaskt.com holds ALL 16 areas,
+ * so widening that helper would hand them upload + mark-ready on effectively
+ * every agent in the library. Separate audiences get separate functions.
+ */
+
+/**
+ * Who may SEE the update history of an agent's endpoint file.
+ * admin · committee · creator · approver/staff whose area matches.
+ * Returns null when allowed, or { code, message }.
+ */
+function checkVersionHistoryViewer({ agent, role, userEmail, userUid, userApproveAreas }) {
+  if (!agent) return { code: 'not-found', message: 'Agent not found.' };
+  // Committee is an oversight tier: it may read the log everywhere, and may
+  // still not upload or download an evicted version.
+  if (role === 'committee') return null;
+  if (checkAgentActor({ agent, role, userEmail, userUid, userApproveAreas }) === null) return null;
+  return {
+    code: 'permission-denied',
+    message: 'Only the creator, an approver/staff of this agent\'s Approve Area, committee, or an admin can view file history.',
+  };
+}
+
+/**
+ * Who may DOWNLOAD a previous (non-current) version. Narrower than every other
+ * set in this file: admin and the creator only — not committee, not the area
+ * approver/staff who may upload.
+ *
+ * Uses isAgentCreator (email-primary) and NEVER `endpointFile.uploadedBy`:
+ * 24 of the 28 live files record uploadedBy 'migration', and uids are
+ * unreliable on 157/239 agents (see the header note).
+ */
+function checkVersionDownload({ agent, role, userEmail, userUid }) {
+  if (!agent) return { code: 'not-found', message: 'Agent not found.' };
+  if (role === 'admin') return null;
+  if (isAgentCreator(agent, { userEmail, userUid })) return null;
+  return {
+    code: 'permission-denied',
+    message: 'Only the creator or an admin can download a previous version.',
+  };
+}
+
 module.exports = {
   AREA_ROLES, RENAME_DECIDER_ROLES,
   isAgentCreator, sharesApproveArea,
   checkAgentActor, checkAgentLive, safeEndpointUrl,
   checkMarkReady, checkRenameDecider, checkRenameValue,
+  checkVersionHistoryViewer, checkVersionDownload,
 };

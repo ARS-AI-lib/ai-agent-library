@@ -1,0 +1,49 @@
+/* Agent/Skill Usage report (2026-08-26).
+   Prefix `.usage-` per CLAUDE.md §6. This is the first <table> in the app, so
+   every rule here is new — nothing in theme.css is redefined. `.tl-center`,
+   `.nav*`, `.msg`, `.empty-state`, `.btn*` and `.spin` are reused as-is. */
+
+.usage-page { padding: 20px 24px 60px; max-width: 1400px; margin: 0 auto; }
+
+.usage-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.usage-head h2 { font-size: 18px; font-weight: 700; color: var(--tx); }
+.usage-head p { font-size: 11.5px; color: var(--mu); margin-top: 4px; line-height: 1.6; max-width: 640px; }
+
+.usage-filters { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 12px 14px; background: var(--sf2); border: 1px solid var(--bd-soft); border-radius: var(--r-md); margin-bottom: 14px; }
+.usage-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mu); }
+.usage-filters select,
+.usage-filters input { height: 32px; padding: 0 8px; font-family: inherit; font-size: 12px; color: var(--tx2); background: var(--sf); border: 1px solid var(--bd-soft); border-radius: var(--r-sm); outline: none; min-width: 150px; }
+.usage-filters select:focus-visible,
+.usage-filters input:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.usage-toggle,
+.usage-clear { height: 32px; padding: 0 12px; font-family: inherit; font-size: 11.5px; font-weight: 600; border-radius: var(--r-sm); border: 1px solid var(--bd-soft); background: var(--sf); color: var(--tx2); cursor: pointer; }
+.usage-toggle:hover,
+.usage-clear:hover { border-color: var(--accent); }
+.usage-toggle.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.usage-clear { color: var(--mu); }
+
+.usage-count { font-size: 11.5px; color: var(--mu); margin-bottom: 8px; }
+
+/* The table is the one thing that may exceed the viewport — it scrolls inside
+   its own container so the page body never scrolls sideways. */
+.usage-scroll { overflow-x: auto; border: 1px solid var(--bd-soft); border-radius: var(--r-md); background: var(--sf); }
+
+.usage-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.usage-table th { position: sticky; top: 0; z-index: 1; text-align: left; padding: 10px 12px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mu); background: var(--sf2); border-bottom: 1px solid var(--bd-soft); white-space: nowrap; }
+.usage-table td { padding: 9px 12px; border-bottom: 1px solid var(--bd-soft); color: var(--tx2); vertical-align: top; }
+.usage-table tbody tr:last-child td { border-bottom: none; }
+.usage-table tbody tr:hover td { background: var(--sf2); }
+
+.usage-strong { color: var(--tx); font-weight: 600; }
+.usage-dim { color: var(--mu); font-size: 11px; }
+.usage-mono { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+
+.usage-group td { background: var(--sf2); font-weight: 700; color: var(--tx); font-size: 11.5px; }
+.usage-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; margin-left: 8px; padding: 0 6px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 700; }
+
+@media (max-width: 720px) {
+  .usage-page { padding: 16px 12px 48px; }
+  .usage-filters select,
+  .usage-filters input { min-width: 120px; }
+}
