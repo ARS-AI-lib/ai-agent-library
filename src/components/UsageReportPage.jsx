@@ -23,7 +23,7 @@ import '../styles/UsageReport.css';
 const USAGE_ROLES = ['admin', 'committee', 'staff', 'approver'];
 
 export default function UsageReportPage() {
-  const { user, role, loading, roleReady, signOut } = useAuth();
+  const { user, role, loading, roleReady } = useAuth();
   const [rows, setRows] = useState(null);   // null = not loaded yet
   const [scoped, setScoped] = useState(false);
   const [error, setError] = useState('');
@@ -145,12 +145,15 @@ export default function UsageReportPage() {
           <div className="menu" style={{ position: 'static', minWidth: 0, marginTop: 0 }}>
             <ThemeToggle />
           </div>
+          {/* No Sign out here (2026-08-26, user request): this is a report you
+              arrive at from the library and go back to, so the destructive
+              action does not belong in its top bar. Sign out stays on the
+              library's own ☰ menu. */}
           {user && (
             <div className="nav-user">
               {user.photoURL
                 ? <img src={user.photoURL} alt="" />
                 : <span className="nav-user-fallback">{(user.displayName || user.email || '?').trim().charAt(0).toUpperCase()}</span>}
-              <button className="nav-signout" onClick={signOut}>Sign out</button>
             </div>
           )}
         </div>

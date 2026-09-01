@@ -1413,6 +1413,32 @@ exports.listEndpointVersions = onCall(
       .collection('endpointVersions').orderBy('version', 'desc').get();
 
     const currentPath = agent.endpointFile?.storagePath || null;
+
+    // A pre-versioning file has no rows yet — its v1 is written lazily on the
+    // next upload (see attachEndpointFile). Synthesising it here, read-only,
+    // from endpointFile means History shows the file that is actually attached
+    // instead of looking broken for all 28 legacy entries. Same shape the lazy
+    // backfill will persist, so nothing changes visually when it does.
+    if (vSnap.empty) {
+      const f = agent.endpointFile;
+      if (!f?.storagePath) return { rows: [], canDownloadPrevious: mayDownloadOld };
+      return {
+        rows: [{
+          version: 1,
+          name: f.name || '',
+          size: f.size || 0,
+          uploadedAt: f.uploadedAt || null,
+          uploadedBy: f.uploadedBy || '',
+          uploadedByEmail: null,
+          uploadedByName: null,
+          isCurrent: true,
+          fileDeleted: false,
+          canDownload: true,
+        }],
+        canDownloadPrevious: mayDownloadOld,
+      };
+    }
+
     const rows = vSnap.docs
       .map((d) => d.data())
       // A failed upload leaves a `pending` row with no bytes; showing it would
