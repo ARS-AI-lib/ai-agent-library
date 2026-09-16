@@ -193,6 +193,13 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const hasUploadedFile = !!agent.endpointFile?.storagePath;
   const endpointIsOurFile = isLibraryFileUrl(agent.endpoint);
   const hasEndpoint = !!String(agent.endpoint || '').trim() || hasUploadedFile;
+  // Non-reusable = built for one specific purpose, never handed to anyone
+  // else — so the Ready-to-Use gate's whole reason (give the next user a way
+  // to reach it) does not apply. Locked 2026-09-16: skip the requirement
+  // entirely for this reusable tier, both here and in markAgentReady's own
+  // check (functions/agentReadyRules.js) — the server must not trust a value
+  // it did not itself verify.
+  const isNonReusable = agent.reusable === 'Non-reusable';
   // A creator may ask to rename only once the thing is actually live — before
   // that the ordinary Edit form still lets them rename outright, no approval
   // needed, so offering a request flow there would be pure friction.
@@ -248,7 +255,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       }
       // Either/or, and exactly one of them: a URL typed here, a file picked
       // here, or something already attached from an earlier session.
-      if (!hasEndpoint && !editEndpoint.trim() && !editFile) {
+      // Non-reusable agents/skills are exempt (see isNonReusable above) — a
+      // tool built for one specific purpose has no "next user" to hand a
+      // location to.
+      if (!isNonReusable && !hasEndpoint && !editEndpoint.trim() && !editFile) {
         setSaveError('ต้องระบุ Endpoint URL หรืออัปโหลดไฟล์อย่างใดอย่างหนึ่งก่อน จึงจะปรับเป็น 100% ได้');
         return;
       }
@@ -682,7 +692,14 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   so demanding a location there would be noise. Hidden entirely
                   once one exists (URL or uploaded file): this is a requirement
                   to HAVE an endpoint, not to retype it every time. */}
-              {Number(editProgress) === 100 && !hasEndpoint && (
+              {Number(editProgress) === 100 && !hasEndpoint && isNonReusable && (
+                <div className="msg info" style={{ marginTop: 8, fontSize: 11 }}>
+                  <span className="dot" style={{ background: '#4a6fa5' }} />
+                  Non-reusable — ไม่ต้องระบุ Endpoint หรืออัปโหลดไฟล์ก่อนปรับเป็น 100%
+                  (ถือเป็น Agent/Skill เฉพาะทาง ไม่ได้ให้ผู้อื่นนำไปใช้ต่อ)
+                </div>
+              )}
+              {Number(editProgress) === 100 && !hasEndpoint && !isNonReusable && (
                 <div className="fg" style={{ marginTop: 8, marginBottom: 0 }}>
                   <label>
                     Endpoint <span className="req">*</span>

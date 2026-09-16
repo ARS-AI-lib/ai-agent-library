@@ -143,7 +143,13 @@ function checkMarkReady({ agent, endpointUrl }) {
   const existing = String(agent.endpoint || '').trim();
   const hasFile = !!agent.endpointFile?.storagePath;
   const endpoint = supplied || existing;
-  if (!endpoint && !hasFile) {
+  // Non-reusable = built for one specific purpose, never handed to another
+  // user — the whole reason this gate exists (give the next person a way to
+  // reach the thing) does not apply. Checked server-side, not just hidden in
+  // the client form: this callable is reachable directly by anyone who knows
+  // its name, same reasoning as every other check in this file.
+  const isNonReusable = agent.reusable === 'Non-reusable';
+  if (!endpoint && !hasFile && !isNonReusable) {
     return {
       code: 'failed-precondition',
       message: 'An endpoint URL or an uploaded file is required before progress can reach 100%.',

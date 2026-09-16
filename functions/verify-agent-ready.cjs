@@ -137,6 +137,20 @@ function check(label, got, want) {
   check('archived agent rejected',
     checkMarkReady({ agent: { ...deployApproved[0], archived: true } }).code, 'failed-precondition');
 
+  // Non-reusable exemption (2026-09-16): a tool built for one specific
+  // purpose is never handed to a second user, so the whole reason this gate
+  // exists does not apply. Reuse noEp (deploy-approved, no endpoint, no
+  // file) rather than fabricating a fixture, and confirm the exemption is
+  // keyed on the VALUE, not just any truthy reusable field.
+  if (noEp) {
+    check('   Non-reusable agent with no endpoint/file PASSES (the new exemption)',
+      !checkMarkReady({ agent: { ...noEp, reusable: 'Non-reusable' } }).code, true);
+    check('   ...but "Reusable with Conditions" (a different value) is still REJECTED',
+      checkMarkReady({ agent: { ...noEp, reusable: 'Reusable with Conditions' } }).code, 'failed-precondition');
+    check('   ...and plain "Reusable" is still REJECTED',
+      checkMarkReady({ agent: { ...noEp, reusable: 'Reusable' } }).code, 'failed-precondition');
+  }
+
   console.log('\n   safeEndpointUrl:');
   check('   https passes', safeEndpointUrl('https://a.com/b'), 'https://a.com/b');
   check('   bare host gets https', safeEndpointUrl('a.com/b'), 'https://a.com/b');

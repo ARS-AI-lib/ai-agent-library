@@ -769,6 +769,20 @@ git** (มี version, diff, คนรีวิวตอน deploy) — ไฟ�
 - **ไม่ย้อนหลัง** — ทำงานเฉพาะตอน *เปลี่ยนเป็น* 100% ของเดิม 15 ตัวที่ 100% แล้วแต่ไม่มี endpoint
   ถูก grandfather ไว้ และไปโผล่ใน Data Quality Watchlist แทน
 
+### ⚠️ ข้อยกเว้น: Non-reusable ไม่ต้องมี endpoint/ไฟล์ (2026-09-16)
+Agent/Skill ที่ `reusable === 'Non-reusable'` = เครื่องมือเฉพาะทาง สร้างมาให้ใช้เองคนเดียว
+ไม่มีใครอื่นจะ "นำไปใช้ต่อ" ดังนั้นเหตุผลทั้งหมดที่ gate นี้มีอยู่ (ให้คนถัดไปมีทางเข้าถึง) ไม่ใช้กับกรณีนี้
+เช็คทั้ง 2 ฝั่ง — ต้องคู่กันเสมอ เพราะ callable เรียกตรงได้โดยไม่ผ่าน UI:
+- **client** — `AgentDetailModal.jsx`: `isNonReusable` ซ่อน field Endpoint/Upload ทิ้งไปเลย
+  (ไม่ใช่แค่ทำ optional) และข้าม validation ก่อน submit
+- **server** — `agentReadyRules.js` `checkMarkReady()`: ข้าม `!endpoint && !hasFile` check
+  เมื่อ `agent.reusable === 'Non-reusable'` เท่านั้น (ค่าอื่น เช่น "Reusable with Conditions"
+  ยังบังคับเหมือนเดิม)
+
+**วัดจริงตอนแก้:** live agent Non-reusable มี 6 ตัว, 4 ตัวไม่มี endpoint/file แต่**ไม่มีตัวไหน
+ค้างที่ 100% อยู่แล้ว** (deploymentStatus approved = 0) → เป็นการปลดล็อกไปข้างหน้าล้วนๆ
+ไม่ต้อง backfill/watchlist เพิ่ม
+
 ### สิทธิ์ — `functions/agentReadyRules.js` เป็น single source of truth
 `checkAgentActor()` = **Creator · Approver/Staff ประจำ Area · Admin**
 ใช้ร่วมกันทั้ง `markAgentReady` และ `attachEndpointFile` (ตามโจทย์ที่ว่าแก้ endpoint/ไฟล์
