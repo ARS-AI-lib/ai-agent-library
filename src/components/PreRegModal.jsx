@@ -111,9 +111,13 @@ function splitOptions(values) {
   return uniq(values.flatMap((v) => splitRoles(v))).sort();
 }
 
-export default function PreRegModal({ onClose, approvedAgents, allAgents = [], schema, user, onSubmitted, onAddRelatedRole, onAddTeam }) {
+export default function PreRegModal({ onClose, approvedAgents, allAgents = [], schema, user, onSubmitted, onAddRelatedRole, onAddTeam, prefill = null }) {
   const [tab, setTab] = useState('form');
-  const [form, setForm] = useState(EMPTY_FORM);
+  // Lazy initializer: `prefill` (e.g. from the Workshop "Register for AI
+  // Library" bridge — agentName/description/owner from a completed idea) is
+  // only ever read once, at mount, which is correct because this modal is
+  // always a fresh conditional-render instance per open.
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, ...(prefill || {}) }));
   const [validationMsg, setValidationMsg] = useState('');
   const [ranked, setRanked] = useState(null);   // rule-based top-N (for fallback display)
   const [connections, setConnections] = useState([]);  // rule-based directional connections

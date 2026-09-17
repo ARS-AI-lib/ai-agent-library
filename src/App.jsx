@@ -150,6 +150,11 @@ export default function App() {
   // own Approve Areas; hiding the menu is presentation, never enforcement.
   const canSeeUsage = !!user && ['admin', 'committee', 'staff', 'approver'].includes(role);
 
+  // Workshop board (2026-09) — a dedicated 'workshop' role (participants) plus
+  // staff+ (facilitators). 'workshop' otherwise behaves exactly like 'user'
+  // everywhere else in this file — this is the only gate that references it.
+  const canSeeWorkshop = !!user && ['admin', 'committee', 'staff', 'workshop'].includes(role);
+
   // Pending Category proposals (2026-08) — admin-only badge/panel; the query
   // itself is fine for isKnownUser() per rules, but there's no reason for a
   // non-admin client to subscribe to something it can't act on.
@@ -451,6 +456,7 @@ export default function App() {
         canUploadFiles={canUploadFiles}
         canSeeTimeline={canSeeTimeline}
         canSeeUsage={canSeeUsage}
+        canSeeWorkshop={canSeeWorkshop}
         isAdmin={isAdmin}
         canSeeDashboard={canSeeDashboard}
       />

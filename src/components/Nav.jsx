@@ -7,7 +7,7 @@ export default function Nav({
   agentCount, skillCount,
   user, onSignOut,
   activeTab, setActiveTab,
-  onOpenExport, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeDashboard, isAdmin,
+  onOpenExport, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -168,6 +168,11 @@ export default function Nav({
           {canSeeUsage && (
             <button type="button" onClick={() => { window.location.href = '/usage'; setMenuOpen(false); }}>
               Agent/Skill Usage
+            </button>
+          )}
+          {canSeeWorkshop && (
+            <button type="button" onClick={() => { window.location.href = '/workshop'; setMenuOpen(false); }}>
+              Workshop
             </button>
           )}
               <button

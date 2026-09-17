@@ -19,7 +19,7 @@ function fmtSyncTime(ts) {
   }
 }
 
-const ROLES = ['user', 'staff', 'approver', 'committee', 'admin'];
+const ROLES = ['user', 'workshop', 'staff', 'approver', 'committee', 'admin'];
 
 // Admin-only console for granting roles + approve areas. Security rules only
 // permit an admin to update /users docs, so this UI is gated on isAdmin too.

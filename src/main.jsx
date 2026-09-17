@@ -5,6 +5,7 @@ import App from './App.jsx'
 import TimelinePage from './components/TimelinePage.jsx'
 import FileDownloadPage from './components/FileDownloadPage.jsx'
 import UsageReportPage from './components/UsageReportPage.jsx'
+import WorkshopPage from './components/WorkshopPage.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 // Lightweight path routing (no router lib): the SPA serves every path via the
@@ -19,8 +20,9 @@ import ErrorBoundary from './components/ErrorBoundary.jsx'
 const path = window.location.pathname.replace(/\/+$/, '');
 const Root = path === '/timeline' ? TimelinePage
   : path === '/usage' ? UsageReportPage
-    : path.startsWith('/f/') ? FileDownloadPage
-      : App;
+    : path === '/workshop' ? WorkshopPage
+      : path.startsWith('/f/') ? FileDownloadPage
+        : App;
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

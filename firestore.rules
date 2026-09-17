@@ -46,8 +46,14 @@ service cloud.firestore {
     function isApproverOrAbove() {
       return isSignedIn() && userRole() in ['approver', 'committee', 'admin'];
     }
+    function isWorkshopOrAbove() {
+      return isSignedIn() && userRole() in ['workshop', 'staff', 'committee', 'admin'];
+    }
     function isKnownUser() {
-      return isSignedIn() && userRole() in ['user', 'staff', 'approver', 'committee', 'admin'];
+      return isSignedIn() && userRole() in ['user', 'workshop', 'staff', 'approver', 'committee', 'admin'];
+    }
+    function isStaffOrAbove() {
+      return isSignedIn() && userRole() in ['staff', 'committee', 'admin'];
     }
     function affectedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
@@ -455,6 +461,111 @@ service cloud.firestore {
         && affectedKeys().hasOnly(['team'])
         && request.resource.data.team is list
         && (!('team' in resource.data) || request.resource.data.team.hasAll(resource.data.team));
+    }
+
+    // ── Workshop (2026-09-16, revamped) ──────────────────────────────
+    // A live-workshop facilitation board layered on top of the SDLC catalog.
+    // Isolated from the main Library entirely: no rule here ever touches
+    // /agents, /sdlcProcesses, /sdlcUseCases, or /config/schema. Page
+    // visibility ('workshop' role + staff/committee/admin) is enforced
+    // client-side by the menu gate; these rules are the actual boundary.
+    //
+    // config/workshopSchema is superseded by workshopTeams below and no
+    // longer has any rule (the old doc is left in place in Firestore,
+    // unused, rather than deleted — out of scope to touch further).
+
+    // One doc per team. Any workshop+ role can create their own team.
+    // Rename/delete/membership (destructive/sensitive ops) are admin-only
+    // (2026-09-17 — tightened from staff+ since the UI entry point, the
+    // Team & User Management panel, is admin-only now).
+    match /workshopTeams/{id} {
+      allow read: if isKnownUser();
+      allow create: if isWorkshopOrAbove()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.name is string;
+      allow update: if isAdmin()
+        && request.resource.data.name is string;
+      allow delete: if isAdmin();
+    }
+
+    // Team-number assignment counter (2026-09-17). Lives under /config but
+    // needs its own literal match — the generic /config/{id} wildcard below
+    // requires isAdmin() for writes, which is wrong here: any workshop+
+    // participant runs this transaction when they create a team. A literal
+    // match here overrides the wildcard, same pattern as /config/schema.
+    match /config/workshopTeamCounter {
+      allow read: if isKnownUser();
+      allow write: if isWorkshopOrAbove();
+    }
+
+    // One doc per idea pinned to a process card ("sticker"), tracked through
+    // a status pipeline (2026-09-17 — replaces the old flat pain/improvement
+    // `kind` tag for this collection only; ideationStickers is untouched and
+    // keeps its own independent kind). create: any workshop+ role. Full-edit
+    // (team/description) update or delete: staff+ can act on any sticker, a
+    // workshop+ creator can only act on their own. Status transitions are a
+    // SEPARATE allow-update branch below with their own actor + sequencing
+    // rules, since "who can edit the text" and "who can advance status" are
+    // different audiences (team members who never created the idea can still
+    // advance it).
+    match /workshopIdeas/{ideaId} {
+      allow read: if isKnownUser();
+      allow create: if isWorkshopOrAbove()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.processId is string
+        && request.resource.data.team is string
+        && request.resource.data.teamId is string
+        && request.resource.data.ideaName is string
+        && request.resource.data.ideaName.size() <= 100
+        && request.resource.data.status == 'idea';
+
+      // Full-edit branch (rename team / edit short description). Explicitly
+      // forbidden from touching status/skillName so this path can never be
+      // used to spoof a status transition.
+      allow update: if (
+          isStaffOrAbove()
+          || (isWorkshopOrAbove() && resource.data.createdBy == request.auth.uid)
+        )
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'skillName']);
+
+      // Status-transition branch: staff+, the creator, or a member of the
+      // idea's team (looked up by teamId — guarded with .get() defaults so
+      // pre-this-round idea docs with no teamId, or team docs with no
+      // members yet, can never accidentally satisfy this). Strictly
+      // sequential, one step, no skip, no revert; the qa->done step also
+      // requires a non-empty skillName in the same write.
+      allow update: if isWorkshopOrAbove()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'skillName', 'updatedAt'])
+        && (
+          isStaffOrAbove()
+          || resource.data.createdBy == request.auth.uid
+          || (
+            resource.data.get('teamId', '') != ''
+            && request.auth.uid in get(/databases/$(database)/documents/workshopTeams/$(resource.data.get('teamId', 'x'))).data.get('members', [])
+          )
+        )
+        && (
+          (resource.data.status == 'idea' && request.resource.data.status == 'dev')
+          || (resource.data.status == 'dev' && request.resource.data.status == 'qa')
+          || (resource.data.status == 'qa' && request.resource.data.status == 'done'
+              && request.resource.data.skillName is string
+              && request.resource.data.skillName.size() > 0)
+        );
+
+      allow delete: if isStaffOrAbove()
+        || (isWorkshopOrAbove() && resource.data.createdBy == request.auth.uid);
+    }
+
+    // Anonymous Ideation-tab stickers: no team/name/use-case fields at all,
+    // uncapped, create/delete only (never edited). Delete: creator or staff+.
+    match /ideationStickers/{id} {
+      allow read: if isKnownUser();
+      allow create: if isWorkshopOrAbove()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.processId is string
+        && request.resource.data.kind in ['pain', 'improvement'];
+      allow delete: if isStaffOrAbove()
+        || (isWorkshopOrAbove() && resource.data.createdBy == request.auth.uid);
     }
 
     // ── /categoryProposals — AI-proposed new Category shortcuts ──────
