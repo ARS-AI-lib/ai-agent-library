@@ -272,7 +272,7 @@ function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
             admin-only now (Team & User Management panel's "+ Add team"), so
             handleSubmit() rejects any value that doesn't exactly match an
             existing team name. */}
-        <ComboInput value={team} onChange={setTeam} options={teamOptions} placeholder="Type to search for your team" />
+        <ComboInput value={team} onChange={setTeam} options={teamOptions} placeholder="Type to search for your team" hideAddHint />
 
         <label className="ws-flabel">Skill short description</label>
         <span className="ws-hint ws-hint-block">e.g. "Auto-generates test data from a schema so QA doesn't have to hand-write fixtures"</span>

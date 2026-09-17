@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from 'react';
 // an existing team name but the long tail of one-off teams shouldn't block.
 // readOnly=true: click-to-open list only (no free-text), used for fixed-choice
 // fields like Reusable where the valid set is known in advance.
-export default function ComboInput({ value, onChange, options = [], placeholder, readOnly = false }) {
+export default function ComboInput({ value, onChange, options = [], placeholder, readOnly = false, hideAddHint = false }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 
@@ -26,9 +26,12 @@ export default function ComboInput({ value, onChange, options = [], placeholder,
   // silently accepted here already (onChange fires on every keystroke), but
   // without this row nothing on screen told the user that was fine. Only
   // meaningful when free-typing is possible at all, so readOnly fields
-  // (Reusable) never show it.
+  // (Reusable) never show it. hideAddHint lets a caller keep free-typing
+  // (for filtering) while still not implying a new value can be added — used
+  // by Workshop's Team field, where creation is admin-only elsewhere and the
+  // caller itself rejects any non-matching value on submit.
   const exactMatch = !readOnly && options.some((o) => o.toLowerCase() === q);
-  const showAddHint = !readOnly && q && !exactMatch;
+  const showAddHint = !readOnly && !hideAddHint && q && !exactMatch;
 
   return (
     <div className="combo-wrap" ref={wrapRef}>
