@@ -844,7 +844,10 @@ export default function WorkshopPage() {
       .map((s) => ({ key: s, label: s, color: STAGE_COLOR[s] || '#7a85a3' }));
 
     const trimmedSearch = ucSearch.trim();
-    const searchPred = trimmedSearch ? buildAgentFilter({ search: trimmedSearch }) : null;
+    // buildAgentFilter's type-check is `type !== 'all' && ...` — omitting
+    // `type` entirely (undefined !== 'all') would fail every agent, so it
+    // must be passed explicitly even though this page never filters by type.
+    const searchPred = trimmedSearch ? buildAgentFilter({ type: 'all', search: trimmedSearch }) : null;
 
     return groups.map((g) => {
       const ucs = useCases
