@@ -244,10 +244,15 @@ function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
 
   async function handleSubmit() {
     if (!team.trim() || !ideaName.trim()) { setErr('Team and Skill short description are required.'); return; }
+    // Autocomplete lets the user type-to-filter, but team creation is
+    // admin-only now (Team & User Management panel) — so the typed value
+    // must resolve to an existing team, not just be non-empty.
+    const matchedTeam = teamOptions.find((t) => t.toLowerCase() === team.trim().toLowerCase());
+    if (!matchedTeam) { setErr('Please select an existing team from the list.'); return; }
     setSaving(true);
     setErr('');
     try {
-      await onSubmit({ team: team.trim(), ideaName: ideaName.trim().slice(0, 100) });
+      await onSubmit({ team: matchedTeam, ideaName: ideaName.trim().slice(0, 100) });
       onClose();
     } catch (e) {
       setErr(e?.message || 'Could not save.');
@@ -263,9 +268,11 @@ function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
         <div className="ws-mtitle">{proc.id} — {proc.name}</div>
 
         <label className="ws-flabel">Team</label>
-        {/* readOnly: pick-from-list only — team creation is admin-only now,
-            via the Team & User Management panel's "+ Add team" control. */}
-        <ComboInput value={team} onChange={setTeam} options={teamOptions} placeholder="Select a team" readOnly />
+        {/* Type-to-filter autocomplete, but NOT free-add — team creation is
+            admin-only now (Team & User Management panel's "+ Add team"), so
+            handleSubmit() rejects any value that doesn't exactly match an
+            existing team name. */}
+        <ComboInput value={team} onChange={setTeam} options={teamOptions} placeholder="Type to search for your team" />
 
         <label className="ws-flabel">Skill short description</label>
         <span className="ws-hint ws-hint-block">e.g. "Auto-generates test data from a schema so QA doesn't have to hand-write fixtures"</span>
