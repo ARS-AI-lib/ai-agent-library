@@ -238,7 +238,6 @@ function StickerDetailPopup({ idea, canEdit, canDelete, canAdvance, onClose, onE
 function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
   const [team, setTeam] = useState(initial?.team || '');
   const [ideaName, setIdeaName] = useState(initial?.ideaName || '');
-  const [showNewTeam, setShowNewTeam] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const isEdit = !!initial;
@@ -264,25 +263,9 @@ function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
         <div className="ws-mtitle">{proc.id} — {proc.name}</div>
 
         <label className="ws-flabel">Team</label>
-        <ComboInput value={team} onChange={setTeam} options={teamOptions} placeholder="Pick or type a new team name" />
-        <button type="button" className="ws-newteam-link" onClick={() => setShowNewTeam((v) => !v)}>
-          + Create new team
-        </button>
-        {showNewTeam && (
-          <div className="ws-newteam-row">
-            <input
-              type="text"
-              placeholder="New team name"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                  setTeam(e.currentTarget.value.trim());
-                  setShowNewTeam(false);
-                }
-              }}
-            />
-            <span className="ws-hint">Press Enter to use this name</span>
-          </div>
-        )}
+        {/* readOnly: pick-from-list only — team creation is admin-only now,
+            via the Team & User Management panel's "+ Add team" control. */}
+        <ComboInput value={team} onChange={setTeam} options={teamOptions} placeholder="Select a team" readOnly />
 
         <label className="ws-flabel">Skill short description</label>
         <span className="ws-hint ws-hint-block">e.g. "Auto-generates test data from a schema so QA doesn't have to hand-write fixtures"</span>

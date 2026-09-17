@@ -331,28 +331,6 @@
   background: var(--bg, #fff);
   color: var(--fg, #111);
 }
-.ws-newteam-link {
-  border: none;
-  background: none;
-  color: var(--accent, #3d5a8e);
-  font-size: 11px;
-  cursor: pointer;
-  padding: 4px 0 0;
-}
-.ws-newteam-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-.ws-newteam-row input {
-  flex: 1;
-  height: 32px;
-  border: 1px solid var(--bd, #d1d5db);
-  border-radius: 6px;
-  padding: 0 8px;
-  font-size: 12.5px;
-}
 .ws-hint { font-size: 10.5px; color: var(--mu2, #9ca3af); }
 .ws-hint-block { display: block; margin: 2px 0 4px; font-style: italic; }
 
