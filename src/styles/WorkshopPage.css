@@ -276,19 +276,16 @@
 }
 .ws-register-link:hover { text-decoration: underline; }
 
-/* Use Cases tab search box */
-.ws-uc-search-wrap { padding: 0 0 12px; }
-.ws-uc-search {
-  width: 100%;
-  max-width: 420px;
-  height: 36px;
-  border: 1px solid var(--bd, #d1d5db);
-  border-radius: 8px;
-  padding: 0 12px;
-  font-size: 13px;
-  background: var(--bg, #fff);
-  color: var(--fg, #111);
-}
+/* Use Cases tab search box — sits inline in the nav bar (mirrors .nav-search
+   in theme.css/Nav.jsx exactly, but under .ws- prefix per CLAUDE.md §6 since
+   Workshop-page nav classes must never redefine or reuse the main-app's
+   .nav-search* classes even though the visual recipe is identical). */
+.ws-search { flex: 1; display: flex; align-items: center; justify-content: center; padding: 0 12px; min-width: 0; }
+.ws-search-wrap { position: relative; width: 100%; max-width: 320px; }
+.ws-search-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--mu); }
+.ws-search-inp { width: 100%; padding: 6px 30px 6px 32px; border: 1px solid var(--bd-soft); border-radius: 20px; font-size: 12.5px; font-family: inherit; background: var(--sf2); color: var(--tx); outline: none; transition: border .2s, box-shadow .2s; }
+.ws-search-inp:focus { border-color: var(--accent); background: var(--sf); box-shadow: 0 0 0 3px var(--accent-soft); }
+@media (max-width: 700px) { .ws-search { display: none; } }
 
 /* Add/edit-idea modal — same overlay/box convention as .sdlc-ovl/.sdlc-mbox */
 .ws-mbox {
@@ -387,6 +384,9 @@
 .ws-team-name { font-size: 13px; }
 .ws-team-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 
+.ws-team-add-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.ws-team-add-row input { flex: 1; }
+
 .ws-member-panel {
   padding: 4px 0 10px 4px;
 }
@@ -419,5 +419,6 @@
 .ws-member-add {
   display: flex;
   gap: 8px;
+  align-items: flex-start;
 }
-.ws-member-add select { flex: 1; }
+.ws-member-add .combo-wrap { flex: 1; }

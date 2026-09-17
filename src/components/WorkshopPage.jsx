@@ -308,21 +308,53 @@ function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
   );
 }
 
-function TeamUserManagerModal({ teams, workshopUsers, onClose, onRename, onDelete, onAddMember, onRemoveMember }) {
+function TeamUserManagerModal({ teams, workshopUsers, onClose, onRename, onDelete, onAddTeam, onAddMember, onRemoveMember }) {
   const [editing, setEditing] = useState(null); // { id, name }
   const [expanded, setExpanded] = useState(null); // team id
-  const [memberPick, setMemberPick] = useState('');
+  const [memberPickText, setMemberPickText] = useState('');
+  const [newTeamName, setNewTeamName] = useState('');
+  const [addingTeam, setAddingTeam] = useState(false);
+  const [addTeamErr, setAddTeamErr] = useState('');
+
+  async function handleAddTeamClick() {
+    setAddingTeam(true);
+    setAddTeamErr('');
+    try {
+      await onAddTeam(newTeamName);
+      setNewTeamName('');
+    } catch (e) {
+      setAddTeamErr(e?.message || 'Could not add team.');
+    } finally {
+      setAddingTeam(false);
+    }
+  }
 
   return (
     <div className="ws-ovl" onClick={onClose}>
       <div className="ws-mbox" onClick={(e) => e.stopPropagation()}>
         <button className="ws-mclose" onClick={onClose}>✕</button>
         <div className="ws-mtitle">Team &amp; User Management</div>
+
+        <div className="ws-team-add-row">
+          <input
+            className="ws-input"
+            style={{ height: 32 }}
+            placeholder="New team name…"
+            value={newTeamName}
+            onChange={(e) => setNewTeamName(e.target.value)}
+          />
+          <button type="button" className="btn-sm appr" disabled={!newTeamName.trim() || addingTeam} onClick={handleAddTeamClick}>
+            {addingTeam ? 'Adding…' : '+ Add team'}
+          </button>
+        </div>
+        {addTeamErr && <div className="ws-err">{addTeamErr}</div>}
+
         {teams.length === 0 && <div className="ws-hint">No teams yet.</div>}
         {teams.map((t) => {
           const memberIds = t.members || [];
           const memberNames = t.memberNames || {};
           const eligible = workshopUsers.filter((u) => !memberIds.includes(u.uid));
+          const eligibleLabel = (u) => `${u.displayName || u.email} (${u.email})`;
           return (
             <div key={t.id} className="ws-team-block">
               <div className="ws-team-row">
@@ -372,25 +404,20 @@ function TeamUserManagerModal({ teams, workshopUsers, onClose, onRename, onDelet
                     ))}
                   </div>
                   <div className="ws-member-add">
-                    <select
-                      className="ws-input"
-                      style={{ height: 32 }}
-                      value={memberPick}
-                      onChange={(e) => setMemberPick(e.target.value)}
-                    >
-                      <option value="">Add member…</option>
-                      {eligible.map((u) => (
-                        <option key={u.uid} value={u.uid}>{u.displayName || u.email} ({u.role})</option>
-                      ))}
-                    </select>
+                    <ComboInput
+                      value={memberPickText}
+                      onChange={setMemberPickText}
+                      options={eligible.map(eligibleLabel)}
+                      placeholder="Type name or email…"
+                    />
                     <button
                       type="button"
                       className="btn-sm appr"
-                      disabled={!memberPick}
+                      disabled={!memberPickText.trim()}
                       onClick={() => {
-                        const u = workshopUsers.find((x) => x.uid === memberPick);
-                        if (u) onAddMember(t, u);
-                        setMemberPick('');
+                        const match = eligible.find((u) => eligibleLabel(u) === memberPickText);
+                        if (match) onAddMember(t, match);
+                        setMemberPickText('');
                       }}
                     >
                       Add
@@ -526,18 +553,13 @@ export default function WorkshopPage() {
     });
   }
 
-  // Returns the team's doc id (existing match or newly created doc), so the
-  // caller can attach `teamId` to the idea payload. New teams get their
-  // 2-digit `number` assigned via the shared counter transaction right after
-  // creation — a second write, not embedded in the create payload, so the
-  // client never has to pre-compute the counter value itself.
-  async function ensureTeam(name) {
-    const trimmed = (name || '').trim();
-    if (!trimmed) return null;
-    const existing = teams.find((t) => t.name.toLowerCase() === trimmed.toLowerCase());
-    if (existing) return existing.id;
+  // Creates a brand-new workshopTeams doc + claims its number. The one place
+  // both ensureTeam() (implicit creation via idea submission) and the
+  // explicit "+ Add team" control in TeamUserManagerModal call, so
+  // claimNextTeamNumber() is only ever invoked from here.
+  async function createTeamDoc(name) {
     const created = await addDoc(collection(db, 'workshopTeams'), {
-      name: trimmed,
+      name,
       createdBy: user.uid,
       createdByName: user.displayName || user.email || '',
       createdAt: serverTimestamp(),
@@ -545,6 +567,29 @@ export default function WorkshopPage() {
     const number = await claimNextTeamNumber();
     await updateDoc(created, { number });
     return created.id;
+  }
+
+  // Returns the team's doc id (existing match or newly created doc), so the
+  // caller can attach `teamId` to the idea payload.
+  async function ensureTeam(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return null;
+    const existing = teams.find((t) => t.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) return existing.id;
+    return createTeamDoc(trimmed);
+  }
+
+  // Explicit "+ Add team" action from the admin panel — unlike ensureTeam()'s
+  // tolerant dedupe (meant for the implicit sticker-submission path), a
+  // deliberate "create" click on a name that already exists should surface
+  // an error rather than silently no-op onto the existing team.
+  async function handleAddTeam(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    if (teams.some((t) => t.name.toLowerCase() === trimmed.toLowerCase())) {
+      throw new Error('A team with this name already exists.');
+    }
+    await createTeamDoc(trimmed);
   }
 
   // Single source of truth for team-number assignment — used by both the
@@ -855,6 +900,22 @@ export default function WorkshopPage() {
           <button className={`nav-tab ${activeTab === 'workshop' ? 'active' : ''}`} onClick={() => setActiveTab('workshop')}>Workshop</button>
           <button className={`nav-tab ${activeTab === 'ucs' ? 'active' : ''}`} onClick={() => setActiveTab('ucs')}>Use Cases</button>
         </div>
+        {activeTab === 'ucs' && (
+          <div className="ws-search">
+            <div className="ws-search-wrap">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                className="ws-search-inp"
+                placeholder="Search by agent or skill name…"
+                value={ucSearch}
+                onChange={(e) => setUcSearch(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
         <div className="nav-r" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           {isAdmin && (
             <button type="button" className="ws-icon-btn ws-nav-icon-btn" title="Team & User Management" onClick={() => setShowTeamMgr(true)}>
@@ -869,17 +930,6 @@ export default function WorkshopPage() {
       </nav>
 
       <div className="sdlc-tab">
-        {activeTab === 'ucs' && (
-          <div className="ws-uc-search-wrap">
-            <input
-              type="text"
-              className="ws-uc-search"
-              placeholder="Search by agent or skill name…"
-              value={ucSearch}
-              onChange={(e) => setUcSearch(e.target.value)}
-            />
-          </div>
-        )}
         {dataLoading ? (
           <div className="sdlc-empty">Loading…</div>
         ) : (
@@ -938,6 +988,7 @@ export default function WorkshopPage() {
           onClose={() => setShowTeamMgr(false)}
           onRename={renameTeam}
           onDelete={deleteTeam}
+          onAddTeam={handleAddTeam}
           onAddMember={addTeamMember}
           onRemoveMember={removeTeamMember}
         />

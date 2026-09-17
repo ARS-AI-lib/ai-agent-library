@@ -356,6 +356,15 @@ service cloud.firestore {
       allow read: if isKnownUser();
       allow write: if false;
     }
+    // Pending role/team grants for people who have never logged in yet
+    // (2026-09-17 roster backfill). Written only by the one-off
+    // backfill-workshop-roster.cjs script (admin SDK, bypasses rules) and
+    // consumed only by the claimPendingRoleGrant callable (also admin SDK).
+    // Fully closed to every client — exposing read would leak the entire
+    // intended-role roster (who gets promoted to what) to any signed-in user.
+    match /pendingRoleGrants/{emailLower} {
+      allow read, write: if false;
+    }
     // Content-free chat counters (2026-08-04): turn counts, which tool the
     // model picked, list-vs-prose, not-found rate. No message text, no user
     // identity — the session-only/no-transcript rule for chat is unchanged.

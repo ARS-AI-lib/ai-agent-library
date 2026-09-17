@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut as fbSignOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { auth, googleProvider, db, isAllowedEmail, ALLOWED_DOMAINS_LABEL } from '../lib/firebase';
 import { setDirectoryToken, warmDirectory } from '../lib/directory';
 
@@ -82,17 +83,25 @@ export function useAuth() {
           if (cancelled) return;
           attempts = 0; // a successful read means auth is settled
           if (!snap.exists()) {
-            // First sign-in for an allowed-domain account → auto-provision the
-            // base "user" tier so they get in immediately. Security rules only
-            // permit self-create with role=="user"; approver/committee/admin
-            // are granted later by an admin. This write re-fires the listener.
-            setDoc(ref, {
-              role: 'user',
-              email: user.email || '',
-              displayName: user.displayName || '',
-              approveAreas: [],
-              createdAt: serverTimestamp(),
-            }).catch(() => { if (!cancelled) { setRole(null); setApproveAreas([]); } });
+            // First sign-in for an allowed-domain account. Route through the
+            // claimPendingRoleGrant callable so a pre-seeded role/team (from
+            // the 2026-09-17 roster backfill) is honored immediately instead
+            // of always landing at the base "user" tier — but a Cloud
+            // Function outage must never block login, so any callable
+            // failure falls back to the exact direct setDoc this replaces
+            // (security rules only permit that self-create with
+            // role=="user"; approver/committee/admin are still only granted
+            // later by an admin on that fallback path). Either path re-fires
+            // this listener once the write lands.
+            httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'claimPendingRoleGrant')()
+              .catch(() => setDoc(ref, {
+                role: 'user',
+                email: user.email || '',
+                displayName: user.displayName || '',
+                approveAreas: [],
+                createdAt: serverTimestamp(),
+              }))
+              .catch(() => { if (!cancelled) { setRole(null); setApproveAreas([]); } });
             return;
           }
           const data = snap.data();

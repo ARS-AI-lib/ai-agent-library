@@ -1838,3 +1838,84 @@ exports.notifyEvent = onCall(
     return { ok: result.status === 'sent' || result.status === 'dry-run', status: result.status, to: note.to.length };
   },
 );
+
+/**
+ * First-login provisioning for /users/{uid} (2026-09-17 roster backfill).
+ * Firestore rules hard-lock a client self-create to role=='user' — this is
+ * the only way any OTHER role can be granted at first login, and it must be
+ * a callable (admin SDK) rather than a rules change, because it needs to
+ * cross-write into workshopTeams.members, which rules only allow admin to
+ * touch (see the 2026-09-17 workshopTeams tightening).
+ *
+ * useAuth.js calls this unconditionally on first sign-in and falls back to
+ * the exact old direct client setDoc(role:'user', ...) if this call throws,
+ * so a Cloud Function outage never blocks login.
+ *
+ * Ordering matters: the /users write happens first, then (if applicable)
+ * the team-join, and the pendingRoleGrants doc is deleted LAST — only after
+ * both writes have actually been attempted. A genuine error on the team-join
+ * (as opposed to "team doc not found yet", which fails soft) is allowed to
+ * propagate BEFORE the delete, so the grant survives for a harmless retry on
+ * the next login instead of silently losing the intended team membership.
+ */
+exports.claimPendingRoleGrant = onCall(
+  { cors: true, timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    const email = request.auth.token?.email;
+    if (!isOrgEmail(email)) {
+      throw new HttpsError('permission-denied', 'Organisation account required.');
+    }
+    const uid = request.auth.uid;
+    const displayName = request.auth.token?.name || '';
+    const emailLower = email.toLowerCase();
+
+    const grantRef = db.collection('pendingRoleGrants').doc(emailLower);
+    const userRef = db.collection('users').doc(uid);
+
+    const grantSnap = await grantRef.get();
+    if (!grantSnap.exists) {
+      // No grant on file -> today's exact default-provision behavior.
+      await userRef.set({
+        role: 'user',
+        email,
+        displayName,
+        approveAreas: [],
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      return { granted: false };
+    }
+
+    const grant = grantSnap.data() || {};
+    const { role, teamNumber } = grant;
+
+    await userRef.set({
+      role,
+      email,
+      displayName,
+      approveAreas: [],
+      createdAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    if (role === 'workshop' && teamNumber) {
+      const teamQuery = await db.collection('workshopTeams')
+        .where('number', '==', teamNumber).limit(1).get();
+      if (!teamQuery.empty) {
+        const teamDoc = teamQuery.docs[0];
+        // A real error here (not "team not found") must propagate BEFORE
+        // the grant is deleted below — see ordering note above.
+        await teamDoc.ref.update({
+          members: FieldValue.arrayUnion(uid),
+          [`memberNames.${uid}`]: displayName || email,
+        });
+      }
+      // Team doc genuinely missing (should not happen if the backfill script
+      // creates teams 3-18 before writing any grants): fail soft. The user
+      // still gets their role; a missing join is repairable with a small
+      // follow-up script rather than blocking their login.
+    }
+
+    await grantRef.delete();
+    return { granted: true, role };
+  },
+);
