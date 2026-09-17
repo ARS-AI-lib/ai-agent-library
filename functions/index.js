@@ -1050,6 +1050,7 @@ const {
   checkAgentActor, checkMarkReady, checkRenameDecider, checkRenameValue,
   checkVersionHistoryViewer, checkVersionDownload,
 } = require('./agentReadyRules');
+const { isProtectedAdminEmail } = require('./protectedAdmins');
 
 // Who may open the Agent/Skill Usage report. Deliberately its own set: it is
 // broader than checkAgentActor (committee included) and unrelated to upload.
@@ -1870,9 +1871,24 @@ exports.claimPendingRoleGrant = onCall(
     const displayName = request.auth.token?.name || '';
     const emailLower = email.toLowerCase();
 
-    const grantRef = db.collection('pendingRoleGrants').doc(emailLower);
     const userRef = db.collection('users').doc(uid);
 
+    // Guaranteed-admin account: always provisioned as admin on first login,
+    // regardless of any grant on file (there should never be one, but this
+    // takes priority even if there were). This is how the system guarantees
+    // at least one admin always exists — see protectedAdmins.js.
+    if (isProtectedAdminEmail(email)) {
+      await userRef.set({
+        role: 'admin',
+        email,
+        displayName,
+        approveAreas: [],
+        createdAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return { granted: true, role: 'admin', protected: true };
+    }
+
+    const grantRef = db.collection('pendingRoleGrants').doc(emailLower);
     const grantSnap = await grantRef.get();
     if (!grantSnap.exists) {
       // No grant on file -> today's exact default-provision behavior.

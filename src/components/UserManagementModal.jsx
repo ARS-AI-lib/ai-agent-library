@@ -21,6 +21,14 @@ function fmtSyncTime(ts) {
 
 const ROLES = ['user', 'workshop', 'staff', 'approver', 'committee', 'admin'];
 
+// This account can never be demoted from admin (firestore.rules enforces
+// this as the real boundary — see the /users/{uid} update rule; this is
+// just a UI reflection of it so the picker doesn't invite a write that will
+// be rejected). Keep in sync with functions/protectedAdmins.js by hand —
+// rules/client/functions are three separate bundles that can't share a
+// literal JS import across all of them.
+const PROTECTED_ADMIN_EMAIL = 'tinnapat.p@arise.tech';
+
 // Admin-only console for granting roles + approve areas. Security rules only
 // permit an admin to update /users docs, so this UI is gated on isAdmin too.
 export default function UserManagementModal({ onClose, schema, currentUid }) {
@@ -157,6 +165,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
           const d = draftFor(u);
           const dirty = !!drafts[u.uid];
           const isSelf = u.uid === currentUid;
+          const isProtected = (u.email || '').toLowerCase() === PROTECTED_ADMIN_EMAIL;
           return (
             <div key={u.uid} style={UM_ROW}>
               <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -178,7 +187,9 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
                   value={d.role}
                   onChange={(r) => setDraft(u.uid, { role: r })}
                   ariaLabel={`Role ของ ${u.displayName || u.email || u.uid}`}
+                  disabled={isProtected}
                 />
+                {isProtected && <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 4 }}>🔒 Always admin</div>}
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={UM_LABEL}>Approve areas</div>

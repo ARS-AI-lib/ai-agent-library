@@ -323,7 +323,15 @@ service cloud.firestore {
       // including themselves (2026-07-04, revised: self-lockout is an
       // accepted risk the admin can knowingly take, not something to block).
       // No other role has any user-management rights at all.
-      allow update: if isAdmin();
+      //
+      // Exception (2026-09-17): tinnapat.p@arise.tech can never be demoted
+      // from admin by ANY write, including by themselves — this is the
+      // system's guarantee that at least one admin always exists (see
+      // functions/protectedAdmins.js, which duplicates this exact email for
+      // the Node-side callable/backfill script; rules syntax can't require()
+      // that module, so the literal is kept in sync by hand here).
+      allow update: if isAdmin()
+        && !(resource.data.email == 'tinnapat.p@arise.tech' && request.resource.data.role != 'admin');
 
       allow delete: if false;
     }

@@ -23,6 +23,7 @@
 //
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { isProtectedAdminEmail } = require('./protectedAdmins');
 
 const APPLY = process.argv.includes('--apply');
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1ZtKdVKc5sNcC0th92GSokgsyQKxIL_Iphh0NocMHTpo/export?format=csv';
@@ -136,6 +137,11 @@ async function claimNextTeamNumber() {
     const level = (r.Level || '').trim();
     const role = ROLE_MAP[level];
     if (!role || !email) { counters.skipped++; console.log(`  skipping malformed row: ${JSON.stringify(r)}`); continue; }
+    if (isProtectedAdminEmail(email)) {
+      counters.skipped++;
+      console.log(`  ⚠ PROTECTED ADMIN: ${email} is never touched by this script, regardless of sheet level.`);
+      continue;
+    }
     const teamNumber = role === 'workshop' ? String(r.Team || '').trim().padStart(2, '0') : null;
 
     const existingUser = userByEmail.get(email);
