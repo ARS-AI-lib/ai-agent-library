@@ -13,6 +13,8 @@ import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import ComboInput from './ComboInput';
 import AgentDetailModal from './AgentDetailModal';
 import PreRegModal from './PreRegModal';
+import LoginScreen from './LoginScreen';
+import { ALLOWED_DOMAINS_LABEL } from '../lib/firebase';
 import ChatAssistant from './ChatAssistant';
 import '../styles/SDLCTab.css';
 import '../styles/WorkshopPage.css';
@@ -438,11 +440,29 @@ function TeamUserManagerModal({ teams, workshopUsers, onClose, onRename, onDelet
 }
 
 export default function WorkshopPage() {
-  const { user, role, loading, roleReady } = useAuth();
+  const { user, role, loading, roleReady, domainError, signIn } = useAuth();
   const canView = !!user && WORKSHOP_VIEW_ROLES.includes(role);
   const canParticipate = !!user && WORKSHOP_TAG_ROLES.includes(role);
   const isStaffPlus = !!user && ['admin', 'committee', 'staff'].includes(role);
   const isAdmin = role === 'admin';
+  const [signInError, setSignInError] = useState('');
+
+  async function handleSignIn() {
+    setSignInError('');
+    try {
+      await signIn();
+    } catch (e) {
+      setSignInError(e.message);
+    }
+  }
+
+  // Direct visits to /workshop: signing in happens in place (popup) on this
+  // same URL, so a signed-in workshop-capable user just re-renders into the
+  // board. Anyone without Workshop access (plain user/approver/no role) is
+  // sent to the main Library instead of a dead-end.
+  useEffect(() => {
+    if (roleReady && user && !domainError && !canView) window.location.replace('/');
+  }, [roleReady, user, domainError, canView]);
 
   // Workshop page is always light-mode only, independent of the site-wide
   // theme preference (which lives in localStorage `agentlib-theme` and is
@@ -923,12 +943,13 @@ export default function WorkshopPage() {
   }
 
   if (loading) return <div className="tl-center"><div className="spin" /><span>กำลังโหลด…</span></div>;
-  if (!user) {
+  if (!user) return <LoginScreen onSignIn={handleSignIn} error={signInError} />;
+  if (domainError) {
     return (
-      <div className="tl-center">
-        <h2>กรุณาเข้าสู่ระบบ</h2>
-        <p style={{ color: 'var(--mu)' }}>เปิดหน้านี้จากในแอปหลังจาก sign in แล้ว</p>
-      </div>
+      <LoginScreen
+        onSignIn={handleSignIn}
+        error={`อีเมลนี้ไม่อยู่ใน domain ที่อนุญาต (${ALLOWED_DOMAINS_LABEL})`}
+      />
     );
   }
   if (!roleReady) return <div className="tl-center"><div className="spin" /><span>กำลังตรวจสิทธิ์…</span></div>;
