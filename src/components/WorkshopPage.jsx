@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useApprovedAgents } from '../hooks/useAgents';
 import { useConfigSchema } from '../hooks/useConfigSchema';
 import { getType } from '../lib/tier';
-import { agentProcessIds, agentUseCaseNames, buildAgentFilter } from '../lib/agentUtils';
+import { agentProcessIds, agentUseCaseNames, buildAgentFilter, relationshipLabel } from '../lib/agentUtils';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import ComboInput from './ComboInput';
 import AgentDetailModal from './AgentDetailModal';
@@ -67,6 +67,20 @@ function withProgress(agent) {
   const prog = agent?.devProgress;
   const num = typeof prog === 'number' ? prog : parseInt(String(prog || '').replace('%', ''), 10);
   return { ...agent, devProgress: isNaN(num) ? 0 : num };
+}
+
+// Fork of tagRow in SDLCTab.jsx (same deliberate-fork rationale as the board
+// constants above): owner / relationship-label / role tags, deduped by text.
+function tagRow(a, t, rel) {
+  const roleText = a.relatedRole ? (Array.isArray(a.relatedRole) ? a.relatedRole.join(', ') : a.relatedRole) : '';
+  const seen = new Set();
+  const tags = [];
+  if (a.owner && !seen.has(a.owner)) { seen.add(a.owner); tags.push({ key: 'owner', text: a.owner }); }
+  if (rel && !seen.has(rel.label)) { seen.add(rel.label); tags.push({ key: 'rel', text: rel.label, color: t === 'skill' ? 'var(--ag)' : 'var(--sk)' }); }
+  if (roleText && !seen.has(roleText)) { seen.add(roleText); tags.push({ key: 'role', text: roleText }); }
+  return tags.map((tag) => (
+    <span key={tag.key} className="ttag" style={tag.color ? { color: tag.color } : undefined}>{tag.text}</span>
+  ));
 }
 
 // 'workshop' role (2026-09-16 revamp) can participate exactly like staff+ can
@@ -794,6 +808,27 @@ export default function WorkshopPage() {
     );
   }
 
+  function NoUseCaseCard({ agent: a }) {
+    const t = getType(a);
+    const rel = relationshipLabel(a, agents);
+    const progress = typeof a.devProgress === 'number' ? a.devProgress : 0;
+    return (
+      <div className="uc-card" onClick={() => setSelectedAgent(a)} style={{ cursor: 'pointer' }}>
+        <div className={`uc-arow ${t}`} style={{ background: 'transparent', border: 'none', padding: 0 }}>
+          <span className={`uc-tb ${t === 'agent' ? 'tbag' : 'tbsk'}`}>{t.toUpperCase()}</span>
+          <div className="uc-abody">
+            <div className="uc-aname">{a.agentName}</div>
+            <div className="uc-afoot">{tagRow(a, t, rel)}</div>
+            <div className="ac-progress-row" style={{ margin: '6px 0 0' }}>
+              <div className="ac-progress-track"><div className={`ac-progress-fill ${progressBucket(progress)}`} style={{ width: `${progress}%` }} /></div>
+              <span className="ac-progress-pct">{progress}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderBoard() {
     return (
       <div className="adopt-board">
@@ -839,7 +874,18 @@ export default function WorkshopPage() {
     // must be passed explicitly even though this page never filters by type.
     const searchPred = trimmedSearch ? buildAgentFilter({ type: 'all', search: trimmedSearch }) : null;
 
-    return groups.map((g) => {
+    // Same definition as the main Library's "Missing Use Case" section
+    // (SDLCTab.jsx noUseCaseOnly): has an SDLC process mapping that exists in
+    // sdlcProcesses, but no use-case name matching any sdlcUseCases doc.
+    const ucNameSet = new Set(useCases.map((u) => (u.name || '').toLowerCase()));
+    const procIdSet = new Set(processes.map((p) => p.id));
+    const missingUC = agents.filter((a) =>
+      !agentUseCaseNames(a).some((n) => ucNameSet.has(n.toLowerCase()))
+      && agentProcessIds(a).some((id) => procIdSet.has(id))
+      && (!searchPred || searchPred(a))
+    );
+
+    const stageGroups = groups.map((g) => {
       const ucs = useCases
         .filter((u) => procToStage[u.processId] === g.key)
         .filter((u) => !searchPred || agentsForUC(u).some(searchPred));
@@ -857,6 +903,23 @@ export default function WorkshopPage() {
         </div>
       );
     }).filter(Boolean);
+
+    if (missingUC.length > 0) {
+      stageGroups.push(
+        <div key="__no_use_case__" className="sb">
+          <div className="sh">
+            <div className="sbar" style={{ background: '#8c6b45' }} />
+            <span className="sname" style={{ color: '#8c6b45' }}>Missing Use Case</span>
+            <span className="sbadge">{missingUC.length} items</span>
+            <span className="scov">มี Stage/Process แล้ว แต่ยังไม่ระบุ Use Case</span>
+          </div>
+          <div className="uc-grid">
+            {missingUC.map((a) => <NoUseCaseCard key={a.id} agent={a} />)}
+          </div>
+        </div>
+      );
+    }
+    return stageGroups;
   }
 
   if (loading) return <div className="tl-center"><div className="spin" /><span>กำลังโหลด…</span></div>;
