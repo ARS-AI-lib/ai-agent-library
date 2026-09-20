@@ -534,16 +534,27 @@ service cloud.firestore {
         && request.resource.data.teamId is string
         && request.resource.data.ideaName is string
         && request.resource.data.ideaName.size() <= 100
+        && request.resource.data.skillName is string
+        && request.resource.data.skillName.size() > 0
+        && request.resource.data.skillName.size() <= 60
         && request.resource.data.status == 'idea';
 
-      // Full-edit branch (rename team / edit short description). Explicitly
-      // forbidden from touching status/skillName so this path can never be
-      // used to spoof a status transition.
+      // Full-edit branch (skill name / team / short description). Forbidden
+      // from touching status so this path can never spoof a status
+      // transition. skillName is required from creation (2026-09-21) and
+      // stays editable here; it must remain a non-empty string.
       allow update: if (
           isStaffOrAbove()
           || (isWorkshopOrAbove() && resource.data.createdBy == request.auth.uid)
         )
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'skillName']);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status'])
+        // Only validated when present: legacy stickers (pre-2026-09-21) have
+        // no skillName, and admin's team-rename cascade rewrites `team` on
+        // them — a hard requirement here would deny that batch.
+        && (!('skillName' in request.resource.data)
+            || (request.resource.data.skillName is string
+                && request.resource.data.skillName.size() > 0
+                && request.resource.data.skillName.size() <= 60));
 
       // Status-transition branch: staff+, the creator, or a member of the
       // idea's team (looked up by teamId — guarded with .get() defaults so

@@ -10,6 +10,7 @@ import { useConfigSchema } from '../hooks/useConfigSchema';
 import { getType } from '../lib/tier';
 import { agentProcessIds, agentUseCaseNames, buildAgentFilter, relationshipLabel } from '../lib/agentUtils';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
+import { downloadCsv } from '../lib/csv';
 import ComboInput from './ComboInput';
 import AgentDetailModal from './AgentDetailModal';
 import PreRegModal from './PreRegModal';
@@ -118,7 +119,7 @@ function WorkshopStickers({ ideas, teams, canAdd, onAdd, onOpen }) {
             type="button"
             className="ws-sticker"
             style={{ background: STATUS_COLOR[idea.status] || STATUS_COLOR.idea }}
-            title={`${idea.team} — ${idea.ideaName}`}
+            title={`${idea.team} — ${idea.skillName || idea.ideaName}`}
             onClick={() => onOpen(idea)}
           >
             {team?.number || '??'}
@@ -172,7 +173,9 @@ function StatusProgressBar({ idea, canAdvance, onAdvance }) {
 
   function handleStepClick(step, idx) {
     if (!canAdvance || idx !== curIdx + 1) return;
-    if (step === 'done') { setShowDoneForm(true); return; }
+    // New stickers carry their skill name from creation; only legacy ones
+    // (created before 2026-09-21) still need it collected at Done.
+    if (step === 'done' && !idea.skillName) { setShowDoneForm(true); return; }
     onAdvance(step);
   }
 
@@ -198,7 +201,7 @@ function StatusProgressBar({ idea, canAdvance, onAdvance }) {
           );
         })}
       </div>
-      {showDoneForm && target === 'done' && (
+      {showDoneForm && target === 'done' && !idea.skillName && (
         <div className="ws-done-form">
           <label className="ws-flabel">Skill name</label>
           <input
@@ -233,6 +236,7 @@ function StickerDetailPopup({ idea, canEdit, canDelete, canAdvance, onClose, onE
         <div className="ws-sticker ws-popup-sticker" style={{ background: STATUS_COLOR[idea.status] || STATUS_COLOR.idea }} />
         <button className="ws-mclose" onClick={onClose}>✕</button>
         <div className="ws-popup-body">
+          {idea.skillName && <div className="ws-popup-row"><span className="ws-popup-label">Skill name</span><span>{idea.skillName}</span></div>}
           <div className="ws-popup-row"><span className="ws-popup-label">Team</span><span>{idea.team}</span></div>
           <div className="ws-popup-row"><span className="ws-popup-label">Description</span><span>{idea.ideaName}</span></div>
         </div>
@@ -253,13 +257,14 @@ function StickerDetailPopup({ idea, canEdit, canDelete, canAdvance, onClose, onE
 
 function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
   const [team, setTeam] = useState(initial?.team || '');
+  const [skillName, setSkillName] = useState(initial?.skillName || '');
   const [ideaName, setIdeaName] = useState(initial?.ideaName || '');
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const isEdit = !!initial;
 
   async function handleSubmit() {
-    if (!team.trim() || !ideaName.trim()) { setErr('Team and Skill short description are required.'); return; }
+    if (!skillName.trim() || !team.trim() || !ideaName.trim()) { setErr('Skill name, Team and Skill short description are required.'); return; }
     // Autocomplete lets the user type-to-filter, but team creation is
     // admin-only now (Team & User Management panel) — so the typed value
     // must resolve to an existing team, not just be non-empty.
@@ -268,7 +273,7 @@ function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
     setSaving(true);
     setErr('');
     try {
-      await onSubmit({ team: matchedTeam, ideaName: ideaName.trim().slice(0, 100) });
+      await onSubmit({ skillName: skillName.trim().slice(0, 60), team: matchedTeam, ideaName: ideaName.trim().slice(0, 100) });
       onClose();
     } catch (e) {
       setErr(e?.message || 'Could not save.');
@@ -282,6 +287,17 @@ function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
       <div className="ws-mbox" onClick={(e) => e.stopPropagation()}>
         <button className="ws-mclose" onClick={onClose}>✕</button>
         <div className="ws-mtitle">{proc.id} — {proc.name}</div>
+
+        <label className="ws-flabel">Skill name</label>
+        <input
+          type="text"
+          className="ws-input"
+          value={skillName}
+          maxLength={60}
+          onChange={(e) => setSkillName(e.target.value.slice(0, 60))}
+          placeholder="e.g. Test Data Generator"
+          autoFocus
+        />
 
         <label className="ws-flabel">Team</label>
         {/* Type-to-filter autocomplete, but NOT free-add — team creation is
@@ -668,7 +684,7 @@ export default function WorkshopPage() {
   // never spread extra fields into this call.
   async function handleAdvanceStatus(idea, status, skillName) {
     const payload = { status, updatedAt: serverTimestamp() };
-    if (status === 'done') payload.skillName = skillName;
+    if (status === 'done' && skillName) payload.skillName = skillName;
     await updateDoc(doc(db, 'workshopIdeas', idea.id), payload);
     setDetailIdea((cur) => (cur && cur.id === idea.id ? { ...cur, ...payload } : cur));
   }
@@ -679,8 +695,23 @@ export default function WorkshopPage() {
     setDetailIdea(null);
   }
 
+  // Staff+ export of every sticker: team, skill name, description, status.
+  function exportStickersCsv() {
+    const numOf = (name) => parseInt(teams.find((t) => t.name === name)?.number, 10) || 9999;
+    const rows = [...ideas]
+      .sort((a, b) => numOf(a.team) - numOf(b.team))
+      .map((i) => ({
+        team: i.team || '',
+        skillName: i.skillName || '',
+        description: i.ideaName || '',
+        status: STATUS_LABEL[i.status] || i.status || '',
+      }));
+    downloadCsv(rows, `workshop-stickers-${new Date().toISOString().slice(0, 10)}.csv`,
+      ['team', 'skillName', 'description', 'status'], ['Team', 'Skill name', 'Description', 'Status']);
+  }
+
   async function handleDeleteIdea(idea) {
-    if (!window.confirm(`Delete sticker "${idea.ideaName}" (team ${idea.team})?`)) return;
+    if (!window.confirm(`Delete sticker "${idea.skillName || idea.ideaName}" (team ${idea.team})?`)) return;
     await deleteDoc(doc(db, 'workshopIdeas', idea.id));
     setDetailIdea(null);
   }
@@ -994,6 +1025,11 @@ export default function WorkshopPage() {
           </div>
         )}
         <div className="nav-r" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          {isStaffPlus && (
+            <button type="button" className="ws-icon-btn ws-nav-icon-btn" title="Export CSV" onClick={exportStickersCsv}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+          )}
           {isAdmin && (
             <button type="button" className="ws-icon-btn ws-nav-icon-btn" title="Team & User Management" onClick={() => setShowTeamMgr(true)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
