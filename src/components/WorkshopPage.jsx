@@ -288,6 +288,13 @@ function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
         <button className="ws-mclose" onClick={onClose}>✕</button>
         <div className="ws-mtitle">{proc.id} — {proc.name}</div>
 
+        <label className="ws-flabel">Team</label>
+        {/* Type-to-filter autocomplete, but NOT free-add — team creation is
+            admin-only now (Team & User Management panel's "+ Add team"), so
+            handleSubmit() rejects any value that doesn't exactly match an
+            existing team name. */}
+        <ComboInput value={team} onChange={setTeam} options={teamOptions} placeholder="Type to search for your team" hideAddHint />
+
         <label className="ws-flabel">Skill name</label>
         <input
           type="text"
@@ -296,15 +303,7 @@ function AddIdeaModal({ proc, teamOptions, initial, onClose, onSubmit }) {
           maxLength={60}
           onChange={(e) => setSkillName(e.target.value.slice(0, 60))}
           placeholder="e.g. Test Data Generator"
-          autoFocus
         />
-
-        <label className="ws-flabel">Team</label>
-        {/* Type-to-filter autocomplete, but NOT free-add — team creation is
-            admin-only now (Team & User Management panel's "+ Add team"), so
-            handleSubmit() rejects any value that doesn't exactly match an
-            existing team name. */}
-        <ComboInput value={team} onChange={setTeam} options={teamOptions} placeholder="Type to search for your team" hideAddHint />
 
         <label className="ws-flabel">Skill short description</label>
         <span className="ws-hint ws-hint-block">e.g. "Auto-generates test data from a schema so QA doesn't have to hand-write fixtures"</span>
