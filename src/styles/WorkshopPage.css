@@ -209,6 +209,7 @@
   color: var(--mu, #6b7280);
 }
 .ws-nav-icon-btn:hover { background: var(--bd-soft, #f0f0f0); color: var(--accent, #3d5a8e); }
+.ws-nav-icon-btn.on { background: var(--accent-soft, #e6ecf7); color: var(--accent, #3d5a8e); }
 
 /* 4-step status progress bar (Idea/Dev/QA/Done) inside the sticker popup */
 .ws-statusbar-wrap { margin-top: 16px; }
