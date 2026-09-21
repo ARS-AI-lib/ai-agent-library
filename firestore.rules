@@ -580,6 +580,20 @@ service cloud.firestore {
               && request.resource.data.skillName.size() > 0)
         );
 
+      // Review Queue rejection (2026-09-21): staff+ only, the ONE sanctioned
+      // backwards step (qa -> dev), and only together with the rejection
+      // flag + reviewer stamp so it can't be used as a plain status revert.
+      // (A "passed" flag leaves status untouched, so the full-edit branch
+      // above already covers it.)
+      allow update: if isStaffOrAbove()
+        && resource.data.status == 'qa'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewResult', 'reviewedBy', 'reviewedByName', 'reviewedAt', 'updatedAt'])
+        && request.resource.data.status == 'dev'
+        && request.resource.data.reviewResult == 'rejected'
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
       allow delete: if isStaffOrAbove()
         || (isWorkshopOrAbove() && resource.data.createdBy == request.auth.uid);
     }

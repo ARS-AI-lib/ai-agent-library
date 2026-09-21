@@ -401,3 +401,20 @@
   align-items: flex-start;
 }
 .ws-member-add .combo-wrap { flex: 1; }
+
+/* Review Queue (staff+) */
+.ws-review-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--bd, #d1d5db); background: var(--bg, #fff); color: var(--fg, #333); border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.ws-review-btn:hover { border-color: #a1e312; }
+.ws-review-count { background: #a1e312; color: #24330a; border-radius: 999px; padding: 0 7px; font-size: 11px; line-height: 17px; }
+.ws-rq-box { width: 520px; }
+.ws-rq-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--bd-soft, #eee); }
+.ws-rq-name { border: none; background: none; padding: 0; font-size: 13px; font-weight: 600; color: var(--accent, #3d5a8e); cursor: pointer; text-align: left; font-family: inherit; }
+.ws-rq-name:hover { text-decoration: underline; }
+.ws-rq-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.ws-rq-btn { border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #fff; cursor: pointer; font-family: inherit; }
+.ws-rq-btn:disabled { opacity: 0.4; cursor: default; }
+.ws-rq-btn.pass { background: #3f9b3f; }
+.ws-rq-btn.fail { background: #d64545; }
+.ws-review-badge { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 999px; padding: 1px 9px; }
+.ws-review-badge.passed { background: #e3f6d0; color: #2f6b12; }
+.ws-review-badge.rejected { background: #fde2e2; color: #a12a2a; }

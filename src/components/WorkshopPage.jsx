@@ -229,6 +229,79 @@ function StatusProgressBar({ idea, canAdvance, onAdvance }) {
   );
 }
 
+// Review flag is only meaningful while it is newer than the last status
+// change: a rejection is written together with updatedAt (equal stamps), a
+// pass is written without touching updatedAt (reviewedAt later). When the team
+// moves the sticker again updatedAt jumps ahead and the old flag goes stale
+// on its own — so no rule needs to allow deleting review fields.
+function activeReview(idea) {
+  const r = idea.reviewResult;
+  const ra = idea.reviewedAt && idea.reviewedAt.toMillis ? idea.reviewedAt.toMillis() : 0;
+  const ua = idea.updatedAt && idea.updatedAt.toMillis ? idea.updatedAt.toMillis() : 0;
+  if (!r || !ra || ra < ua) return null;
+  if (r === 'rejected' && idea.status !== 'dev') return null;
+  if (r === 'passed' && idea.status !== 'qa') return null;
+  return r;
+}
+
+function fmtGmt7(ts) {
+  if (!ts || !ts.toMillis) return '';
+  return new Date(ts.toMillis() + 7 * 3600e3).toISOString().replace('T', ' ').slice(0, 16);
+}
+
+function ReviewBadge({ idea }) {
+  const r = activeReview(idea);
+  if (!r) return null;
+  return (
+    <div className="ws-popup-row">
+      <span className="ws-popup-label">Review</span>
+      <span className={`ws-review-badge ${r}`}>{r === 'passed' ? 'Passed' : 'Rejected'}{idea.reviewedByName ? ` · ${idea.reviewedByName}` : ''}</span>
+    </div>
+  );
+}
+
+function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  const numOf = (name) => teams.find((t) => t.name === name)?.number || '';
+  const queue = ideas
+    .filter((i) => i.status === 'qa')
+    .sort((a, b) => (a.updatedAt?.toMillis?.() || 0) - (b.updatedAt?.toMillis?.() || 0));
+
+  async function act(idea, result) {
+    setBusy(idea.id + result);
+    setErr('');
+    try { await onReview(idea, result); } catch (e) { setErr(e?.message || 'Could not save.'); } finally { setBusy(''); }
+  }
+
+  return (
+    <div className="ws-ovl" onClick={onClose}>
+      <div className="ws-mbox ws-rq-box" onClick={(e) => e.stopPropagation()}>
+        <button className="ws-mclose" onClick={onClose}>✕</button>
+        <div className="ws-mtitle">Review Queue ({queue.length})</div>
+        {queue.length === 0 && <div className="ws-hint">No stickers waiting for review.</div>}
+        {queue.map((i) => {
+          const r = activeReview(i);
+          return (
+            <div key={i.id} className="ws-rq-row">
+              <div className="ws-rq-main">
+                <button type="button" className="ws-rq-name" onClick={() => onOpen(i)}>{i.skillName || i.ideaName}</button>
+                <div className="ws-hint">Team {numOf(i.team) || i.team} · {fmtGmt7(i.updatedAt)} (GMT+7)</div>
+                {r === 'passed' && <span className="ws-review-badge passed">Passed{i.reviewedByName ? ` · ${i.reviewedByName}` : ''}</span>}
+              </div>
+              <div className="ws-rq-actions">
+                <button type="button" className="ws-rq-btn pass" disabled={!!busy || r === 'passed'} onClick={() => act(i, 'passed')}>Pass</button>
+                <button type="button" className="ws-rq-btn fail" disabled={!!busy} onClick={() => act(i, 'rejected')}>Reject</button>
+              </div>
+            </div>
+          );
+        })}
+        {err && <div className="ws-err">{err}</div>}
+      </div>
+    </div>
+  );
+}
+
 function StickerDetailPopup({ idea, canEdit, canDelete, canAdvance, onClose, onEdit, onDelete, onAdvance, onRegister }) {
   return (
     <div className="ws-ovl" onClick={onClose}>
@@ -239,6 +312,7 @@ function StickerDetailPopup({ idea, canEdit, canDelete, canAdvance, onClose, onE
           {idea.skillName && <div className="ws-popup-row"><span className="ws-popup-label">Skill name</span><span>{idea.skillName}</span></div>}
           <div className="ws-popup-row"><span className="ws-popup-label">Team</span><span>{idea.team}</span></div>
           <div className="ws-popup-row"><span className="ws-popup-label">Description</span><span>{idea.ideaName}</span></div>
+          <ReviewBadge idea={idea} />
         </div>
         <StatusProgressBar idea={idea} canAdvance={canAdvance} onAdvance={onAdvance} />
         {idea.status === 'done' && (
@@ -509,6 +583,7 @@ export default function WorkshopPage() {
   const [detailIdea, setDetailIdea] = useState(null);
   const [ideationPicker, setIdeationPicker] = useState(null); // processId or null
   const [showTeamMgr, setShowTeamMgr] = useState(false);
+  const [showReviewQueue, setShowReviewQueue] = useState(false);
   const [workshopUsers, setWorkshopUsers] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [ucSearch, setUcSearch] = useState('');
@@ -687,6 +762,15 @@ export default function WorkshopPage() {
     if (status === 'done' && skillName) payload.skillName = skillName;
     await updateDoc(doc(db, 'workshopIdeas', idea.id), payload);
     setDetailIdea((cur) => (cur && cur.id === idea.id ? { ...cur, ...payload } : cur));
+  }
+
+  // Review Queue (staff+). Reject = the only sanctioned qa -> dev step; pass
+  // just stamps a flag (status stays Review, team moves it to Done itself).
+  // Payload must match the rules' review branch exactly.
+  async function handleReview(idea, result) {
+    const reviewer = { reviewResult: result, reviewedBy: user.uid, reviewedByName: user.displayName || user.email || '', reviewedAt: serverTimestamp() };
+    const payload = result === 'rejected' ? { ...reviewer, status: 'dev', updatedAt: serverTimestamp() } : reviewer;
+    await updateDoc(doc(db, 'workshopIdeas', idea.id), payload);
   }
 
   function openPreRegForIdea(idea) {
@@ -1046,6 +1130,12 @@ export default function WorkshopPage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </button>
           )}
+          {isStaffPlus && (
+            <button type="button" className="ws-review-btn" title="Review Queue" onClick={() => setShowReviewQueue(true)}>
+              Review Queue
+              <span className="ws-review-count">{ideas.filter((i) => i.status === 'qa').length}</span>
+            </button>
+          )}
           {isAdmin && (
             <button type="button" className="ws-icon-btn ws-nav-icon-btn" title="Team & User Management" onClick={() => setShowTeamMgr(true)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -1107,6 +1197,16 @@ export default function WorkshopPage() {
           onDelete={() => handleDeleteIdea(detailIdea)}
           onAdvance={(status, skillName) => handleAdvanceStatus(detailIdea, status, skillName)}
           onRegister={() => openPreRegForIdea(detailIdea)}
+        />
+      )}
+
+      {showReviewQueue && isStaffPlus && (
+        <ReviewQueueModal
+          ideas={ideas}
+          teams={teams}
+          onClose={() => setShowReviewQueue(false)}
+          onReview={handleReview}
+          onOpen={(i) => { setShowReviewQueue(false); setDetailIdea(i); }}
         />
       )}
 
