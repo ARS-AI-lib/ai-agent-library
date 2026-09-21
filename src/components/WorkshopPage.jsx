@@ -272,11 +272,14 @@ function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
   const [err, setErr] = useState('');
   const [grouped, setGrouped] = useState(false); // default: flat, true chronological order
   const numOf = (name) => teams.find((t) => t.name === name)?.number || '';
+  const doneTeams = new Set(ideas.filter((i) => i.status === 'done').map((i) => i.teamId || i.team));
+  const tier = (i) => (doneTeams.has(i.teamId || i.team) ? 2 : 0) + (isResubmitted(i) ? 1 : 0);
   const queue = ideas
     .filter((i) => i.status === 'qa')
-    // first-time submissions first, resubmitted-after-reject appended; each
-    // block stays chronological
-    .sort((a, b) => (isResubmitted(a) - isResubmitted(b)) || ((a.updatedAt?.toMillis?.() || 0) - (b.updatedAt?.toMillis?.() || 0)));
+    // Tiers (each stays chronological inside): 0 first-time from a team with no
+    // Done skill, 1 resubmitted from such a team, 2 first-time from a team that
+    // already has a Done skill, 3 resubmitted from a team that has a Done skill.
+    .sort((a, b) => (tier(a) - tier(b)) || ((a.updatedAt?.toMillis?.() || 0) - (b.updatedAt?.toMillis?.() || 0)));
   // Group by team; because `queue` is already oldest-first, Map insertion
   // order puts the team whose first sticker entered the queue earliest on top,
   // and each group's items stay oldest-first.
