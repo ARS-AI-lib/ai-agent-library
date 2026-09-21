@@ -244,6 +244,13 @@ function activeReview(idea) {
   return r;
 }
 
+// Resubmitted = back in Review after a rejection. A rejection leaves
+// reviewResult:'rejected' behind (stale once the team moves it again); a later
+// Pass overwrites that, so handleReview also stamps wasRejected before then.
+function isResubmitted(idea) {
+  return idea.status === 'qa' && (idea.reviewResult === 'rejected' || idea.wasRejected === true);
+}
+
 function fmtGmt7(ts) {
   if (!ts || !ts.toMillis) return '';
   return new Date(ts.toMillis() + 7 * 3600e3).toISOString().replace('T', ' ').slice(0, 16);
@@ -267,7 +274,9 @@ function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
   const numOf = (name) => teams.find((t) => t.name === name)?.number || '';
   const queue = ideas
     .filter((i) => i.status === 'qa')
-    .sort((a, b) => (a.updatedAt?.toMillis?.() || 0) - (b.updatedAt?.toMillis?.() || 0));
+    // first-time submissions first, resubmitted-after-reject appended; each
+    // block stays chronological
+    .sort((a, b) => (isResubmitted(a) - isResubmitted(b)) || ((a.updatedAt?.toMillis?.() || 0) - (b.updatedAt?.toMillis?.() || 0)));
   // Group by team; because `queue` is already oldest-first, Map insertion
   // order puts the team whose first sticker entered the queue earliest on top,
   // and each group's items stay oldest-first.
@@ -292,6 +301,7 @@ function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
         {showTeam && <span className="ws-rq-team">{numOf(i.team) || i.team}</span>}
         <div className="ws-rq-main">
           <button type="button" className="ws-rq-name" onClick={() => onOpen(i)}>{i.skillName || i.ideaName}</button>
+          {isResubmitted(i) && <span className="ws-review-badge rejected" style={{ marginLeft: 6 }}>Resubmitted</span>}
           <div className="ws-hint">{fmtGmt7(i.updatedAt)} (GMT+7)</div>
           {r === 'passed' && <span className="ws-review-badge passed">Passed{i.reviewedByName ? ` · ${i.reviewedByName}` : ''}</span>}
         </div>
@@ -793,7 +803,8 @@ export default function WorkshopPage() {
   // Payload must match the rules' review branch exactly.
   async function handleReview(idea, result) {
     const reviewer = { reviewResult: result, reviewedBy: user.uid, reviewedByName: user.displayName || user.email || '', reviewedAt: serverTimestamp() };
-    const payload = result === 'rejected' ? { ...reviewer, status: 'dev', updatedAt: serverTimestamp() } : reviewer;
+    const payload = result === 'rejected' ? { ...reviewer, status: 'dev', updatedAt: serverTimestamp() } : { ...reviewer };
+    if (result === 'passed' && (idea.reviewResult === 'rejected' || idea.wasRejected)) payload.wasRejected = true;
     await updateDoc(doc(db, 'workshopIdeas', idea.id), payload);
   }
 
