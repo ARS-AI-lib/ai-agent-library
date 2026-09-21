@@ -267,6 +267,16 @@ function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
   const queue = ideas
     .filter((i) => i.status === 'qa')
     .sort((a, b) => (a.updatedAt?.toMillis?.() || 0) - (b.updatedAt?.toMillis?.() || 0));
+  // Group by team; because `queue` is already oldest-first, Map insertion
+  // order puts the team whose first sticker entered the queue earliest on top,
+  // and each group's items stay oldest-first.
+  const groups = [];
+  const byTeam = new Map();
+  queue.forEach((i) => {
+    const key = i.teamId || i.team || '';
+    if (!byTeam.has(key)) { const g = { key, team: i.team, items: [] }; byTeam.set(key, g); groups.push(g); }
+    byTeam.get(key).items.push(i);
+  });
 
   async function act(idea, result) {
     setBusy(idea.id + result);
@@ -280,13 +290,16 @@ function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
         <button className="ws-mclose" onClick={onClose}>✕</button>
         <div className="ws-mtitle">Review Queue ({queue.length})</div>
         {queue.length === 0 && <div className="ws-hint">No stickers waiting for review.</div>}
-        {queue.map((i) => {
+        {groups.map((g) => (
+          <div key={g.key} className="ws-rq-group">
+            <div className="ws-rq-ghead">Team {numOf(g.team) || g.team} ({g.items.length})</div>
+            {g.items.map((i) => {
           const r = activeReview(i);
           return (
             <div key={i.id} className="ws-rq-row">
               <div className="ws-rq-main">
                 <button type="button" className="ws-rq-name" onClick={() => onOpen(i)}>{i.skillName || i.ideaName}</button>
-                <div className="ws-hint">Team {numOf(i.team) || i.team} · {fmtGmt7(i.updatedAt)} (GMT+7)</div>
+                <div className="ws-hint">{fmtGmt7(i.updatedAt)} (GMT+7)</div>
                 {r === 'passed' && <span className="ws-review-badge passed">Passed{i.reviewedByName ? ` · ${i.reviewedByName}` : ''}</span>}
               </div>
               <div className="ws-rq-actions">
@@ -296,6 +309,8 @@ function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
             </div>
           );
         })}
+          </div>
+        ))}
         {err && <div className="ws-err">{err}</div>}
       </div>
     </div>
