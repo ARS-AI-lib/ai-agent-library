@@ -263,6 +263,7 @@ function ReviewBadge({ idea }) {
 function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
+  const [grouped, setGrouped] = useState(false); // default: flat, true chronological order
   const numOf = (name) => teams.find((t) => t.name === name)?.number || '';
   const queue = ideas
     .filter((i) => i.status === 'qa')
@@ -284,33 +285,41 @@ function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
     try { await onReview(idea, result); } catch (e) { setErr(e?.message || 'Could not save.'); } finally { setBusy(''); }
   }
 
+  function renderRow(i, showTeam) {
+    const r = activeReview(i);
+    return (
+      <div key={i.id} className="ws-rq-row">
+        {showTeam && <span className="ws-rq-team">{numOf(i.team) || i.team}</span>}
+        <div className="ws-rq-main">
+          <button type="button" className="ws-rq-name" onClick={() => onOpen(i)}>{i.skillName || i.ideaName}</button>
+          <div className="ws-hint">{fmtGmt7(i.updatedAt)} (GMT+7)</div>
+          {r === 'passed' && <span className="ws-review-badge passed">Passed{i.reviewedByName ? ` · ${i.reviewedByName}` : ''}</span>}
+        </div>
+        <div className="ws-rq-actions">
+          <button type="button" className="ws-rq-btn pass" disabled={!!busy || r === 'passed'} onClick={() => act(i, 'passed')}>Pass</button>
+          <button type="button" className="ws-rq-btn fail" disabled={!!busy} onClick={() => act(i, 'rejected')}>Reject</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="ws-ovl" onClick={onClose}>
       <div className="ws-mbox ws-rq-box" onClick={(e) => e.stopPropagation()}>
         <button className="ws-mclose" onClick={onClose}>✕</button>
         <div className="ws-mtitle">Review Queue ({queue.length})</div>
+        <label className="ws-rq-toggle">
+          <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} /> Group by team
+        </label>
         {queue.length === 0 && <div className="ws-hint">No stickers waiting for review.</div>}
-        {groups.map((g) => (
-          <div key={g.key} className="ws-rq-group">
-            <div className="ws-rq-ghead">Team {numOf(g.team) || g.team} ({g.items.length})</div>
-            {g.items.map((i) => {
-          const r = activeReview(i);
-          return (
-            <div key={i.id} className="ws-rq-row">
-              <div className="ws-rq-main">
-                <button type="button" className="ws-rq-name" onClick={() => onOpen(i)}>{i.skillName || i.ideaName}</button>
-                <div className="ws-hint">{fmtGmt7(i.updatedAt)} (GMT+7)</div>
-                {r === 'passed' && <span className="ws-review-badge passed">Passed{i.reviewedByName ? ` · ${i.reviewedByName}` : ''}</span>}
+        {grouped
+          ? groups.map((g) => (
+              <div key={g.key} className="ws-rq-group">
+                <div className="ws-rq-ghead">Team {numOf(g.team) || g.team} ({g.items.length})</div>
+                {g.items.map((i) => renderRow(i, false))}
               </div>
-              <div className="ws-rq-actions">
-                <button type="button" className="ws-rq-btn pass" disabled={!!busy || r === 'passed'} onClick={() => act(i, 'passed')}>Pass</button>
-                <button type="button" className="ws-rq-btn fail" disabled={!!busy} onClick={() => act(i, 'rejected')}>Reject</button>
-              </div>
-            </div>
-          );
-        })}
-          </div>
-        ))}
+            ))
+          : queue.map((i) => renderRow(i, true))}
         {err && <div className="ws-err">{err}</div>}
       </div>
     </div>

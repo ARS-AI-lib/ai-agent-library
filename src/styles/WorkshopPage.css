@@ -406,7 +406,7 @@
 .ws-review-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--bd, #d1d5db); background: var(--bg, #fff); color: var(--fg, #333); border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .ws-review-btn:hover { border-color: #a1e312; }
 .ws-review-count { background: #a1e312; color: #24330a; border-radius: 999px; padding: 0 7px; font-size: 11px; line-height: 17px; }
-.ws-rq-box { width: 520px; }
+.ws-rq-box { width: 720px; max-width: 94vw; }
 .ws-rq-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--bd-soft, #eee); }
 .ws-rq-name { border: none; background: none; padding: 0; font-size: 13px; font-weight: 600; color: var(--accent, #3d5a8e); cursor: pointer; text-align: left; font-family: inherit; }
 .ws-rq-name:hover { text-decoration: underline; }
@@ -420,3 +420,7 @@
 .ws-review-badge.rejected { background: #fde2e2; color: #a12a2a; }
 .ws-rq-group { margin-top: 12px; }
 .ws-rq-ghead { font-size: 11.5px; font-weight: 700; color: var(--mu, #6b7280); text-transform: uppercase; letter-spacing: .04em; padding-bottom: 2px; border-bottom: 2px solid #a1e312; }
+.ws-rq-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mu, #6b7280); cursor: pointer; margin: -6px 0 4px; }
+.ws-rq-team { flex-shrink: 0; min-width: 40px; text-align: center; background: #a1e312; color: #24330a; font-size: 14px; font-weight: 800; border-radius: 8px; padding: 6px 8px; }
+.ws-rq-main { flex: 1; min-width: 0; }
+
