@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection, getDocs, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, deleteDoc, writeBatch, runTransaction,
@@ -270,10 +270,16 @@ function ReviewBadge({ idea }) {
 function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
+  const [justPassed, setJustPassed] = useState(() => new Set()); // ids held in place ~5s after Pass, then re-sorted
+  const timers = useRef([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const [grouped, setGrouped] = useState(false); // default: flat, true chronological order
   const numOf = (name) => teams.find((t) => t.name === name)?.number || '';
   const doneTeams = new Set(ideas.filter((i) => i.status === 'done').map((i) => i.teamId || i.team));
-  const tier = (i) => (doneTeams.has(i.teamId || i.team) ? 2 : 0) + (isResubmitted(i) ? 1 : 0);
+  // Already-passed stickers sink below everything still waiting — but only once
+  // the 5s "Passed" confirmation (justPassed) is over.
+  const settledPass = (i) => activeReview(i) === 'passed' && !justPassed.has(i.id);
+  const tier = (i) => (settledPass(i) ? 4 : 0) + (doneTeams.has(i.teamId || i.team) ? 2 : 0) + (isResubmitted(i) ? 1 : 0);
   const queue = ideas
     .filter((i) => i.status === 'qa')
     // Tiers (each stays chronological inside): 0 first-time from a team with no
@@ -294,19 +300,25 @@ function ReviewQueueModal({ ideas, teams, onClose, onReview, onOpen }) {
   async function act(idea, result) {
     setBusy(idea.id + result);
     setErr('');
-    try { await onReview(idea, result); } catch (e) { setErr(e?.message || 'Could not save.'); } finally { setBusy(''); }
+    try {
+      await onReview(idea, result);
+      if (result === 'passed') {
+        setJustPassed((cur) => new Set(cur).add(idea.id));
+        timers.current.push(setTimeout(() => setJustPassed((cur) => { const n = new Set(cur); n.delete(idea.id); return n; }), 5000));
+      }
+    } catch (e) { setErr(e?.message || 'Could not save.'); } finally { setBusy(''); }
   }
 
   function renderRow(i, showTeam) {
     const r = activeReview(i);
     return (
-      <div key={i.id} className="ws-rq-row">
+      <div key={i.id} className={`ws-rq-row ${justPassed.has(i.id) ? 'just-passed' : ''}`}>
         {showTeam && <span className="ws-rq-team">{numOf(i.team) || i.team}</span>}
         <div className="ws-rq-main">
           <button type="button" className="ws-rq-name" onClick={() => onOpen(i)}>{i.skillName || i.ideaName}</button>
           {isResubmitted(i) && <span className="ws-review-badge rejected" style={{ marginLeft: 6 }}>Resubmitted</span>}
           <div className="ws-hint">{fmtGmt7(i.updatedAt)} (GMT+7)</div>
-          {r === 'passed' && <span className="ws-review-badge passed">Passed{i.reviewedByName ? ` · ${i.reviewedByName}` : ''}</span>}
+          {r === 'passed' && <span className="ws-review-badge passed">{justPassed.has(i.id) ? '✓ Passed' : 'Passed'}{i.reviewedByName ? ` · ${i.reviewedByName}` : ''}</span>}
         </div>
         <div className="ws-rq-actions">
           <button type="button" className="ws-rq-btn pass" disabled={!!busy || r === 'passed'} onClick={() => act(i, 'passed')}>Pass</button>
