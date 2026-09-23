@@ -1184,3 +1184,32 @@ tool ใหม่ **`sdlc_gap_match`** — ระบบจับคู่ให�
 ชื่อต้องมาจาก tool result เสมอ · ถ้าจะเพิ่มความสามารถ "วิเคราะห์/จับคู่/แนะนำ" อะไรก็ตาม
 ให้ถามก่อนว่า **"ข้อมูลที่ส่งให้โมเดลพอให้ทำงานนี้จริงไหม"** ถ้าไม่พอ → เขียนเป็น tool ที่คำนวณ
 ให้เสร็จ อย่าสั่งให้โมเดลเดา
+
+
+---
+
+## 32. Batch 2026-09-23 — Owner edit / Virtual Assistant / ลบ Process Owner filter / merge ทีมนก
+
+> 📄 **รายละเอียดเต็มอยู่ที่ [`docs/CHANGELOG-2026-09-23.md`](docs/CHANGELOG-2026-09-23.md)**
+> (เหตุผลเบื้องหลังทุกข้อ + ตัวเลขที่ตรวจกับ Firestore จริง + verification ที่รัน)
+
+สรุปสั้น — **ขึ้น production ครบแล้ว** commit `5ce006c` + `a786a31`:
+
+1. **Tech Innovation 15 ตัว → `reusable: 'Non-reusable'`** (`functions/backfill-ti-reusable.cjs`)
+   ต้องใช้ Admin SDK เพราะทั้ง 15 อยู่ 100%/approved → `isReadyToUseLocked` ซ่อน field
+2. **Admin แก้ Owner ได้ในฟอร์ม Edit** เมื่อ `normalizeProgress(devProgress) < 100`
+   — `canEditOwner()` ใน `agentUtils.js` · `ComboInput` (owner เป็น free text ไม่ใช่ enum)
+   · **Write 2d = updateDoc แยก** (เหตุผลเดียวกับ Write 2b/2c/4 §27)
+   · **ไม่ต้องแก้ rules** เพราะ branch `isAdmin()` อนุญาตทุก field อยู่แล้ว
+3. **Category `Virtual Assistant`** — คีย์**แรกสุด**ของ `CATEGORY_AREA` = กลไกปักบนสุด sidebar
+   (⛔ ย้ายบรรทัดนั้น = ย้ายตำแหน่ง) · แท็ก **28 doc แบบ append** (`tag-virtual-assistant.cjs`)
+   · ⚠️ map ไป `Platform, DevOps & Operations` เพราะ **"Conversational AI / NLP" ไม่มีใน
+   `AREA_ORDER` 16 ค่า** — มีผลกับของใหม่เท่านั้น (28 doc มี stored area = layer 1 ชนะ)
+4. **ลบ filter Process Owner** ออกจาก `SDLCTab.jsx` — ⛔ **เก็บข้อความ display-only ไว้**
+5. **merge `นกต่อ`/`นกรู้`/`นกคุ้ม` → `นกลงทุน`** (13 doc, แก้ทั้ง `owner` และ `team`) +
+   retire 3 ชื่อจาก `/config/schema.team` (65→62, ต้องใช้ Admin SDK เพราะ rules เป็น grow-only)
+   · ⛔ **ไม่แตะ `agentName`** — §25: ลูกเก็บชื่อ parent ใน `matchingAgent` rename เงียบๆ = ลูกหลุด
+   · ⏸️ ยังค้าง: 11 ชื่อที่มี prefix นก รอเคาะรูปแบบ (`agent_0132/0133` ใช้ `Nok -` อังกฤษ)
+
+**ไม่ได้ deploy functions และไม่ได้ publish rules ในรอบนี้** · ไม่ต้อง rebuild vector เพราะ
+`buildEmbedText()` ไม่ได้ embed `reusable`/`owner`/`team` · **ไม่แตะไฟล์ Workshop เลย**
