@@ -84,6 +84,25 @@ export function canEditCategory(userRole, isAdmin) {
   return !!isAdmin;
 }
 
+// Who may edit Owner on the Edit form (2026-09-23): **admin only, and only
+// while the agent is not yet Ready to Use**.
+//
+// "Ready to Use" here is the badge the user actually sees on the card — the
+// 'ru' bucket, which is devProgress >= 100 and nothing else. It is NOT
+// deploymentStatus === 'approved' (the Tier A freeze): the two diverge, and
+// the rule the user asked for is the one written on the card.
+//
+// Owner is free text, so this is deliberately a ComboInput over the owner
+// names already in the library rather than a MultiSelect over an enum —
+// unlike category, owner has never lived in /config/schema.
+//
+// No firestore.rules change backs this: the isAdmin() branch on /agents
+// already allows any field, so the gate is UI-side, same posture as the
+// approve/archive area scoping in §20.
+export function canEditOwner(isAdmin, agent) {
+  return !!isAdmin && normalizeProgress(agent?.devProgress) < 100;
+}
+
 // Ready-to-Use post-freeze exception (2026-07-22): canEditDetails() above
 // freezes EVERY Tier A field once deploymentStatus is 'approved' — correct
 // for the sensitive/structural fields, but it also blocks Description and

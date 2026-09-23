@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, addDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill, getType } from '../lib/tier';
-import { splitRoles, uniq, pairedSubSkills, childSkillIdList, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditReadyToUseFields, agentUseCaseNames } from '../lib/agentUtils';
+import { splitRoles, uniq, pairedSubSkills, childSkillIdList, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditOwner, canEditReadyToUseFields, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
@@ -53,6 +53,10 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   const canSeeApproveArea = canEditApproveArea(userRole, isAdmin);
   // Category: admin ONLY, and pick-from-list only — see canEditCategory.
   const canSeeCategory = canEditCategory(userRole, isAdmin);
+  // Owner: admin ONLY, and only before the card reads "Ready to Use"
+  // (devProgress >= 100) — see canEditOwner. Note this is a DIFFERENT gate
+  // from isReadyToUseLocked below, which keys off deploymentStatus.
+  const canSeeOwner = canEditOwner(isAdmin, agent);
   const lockTierA = !canEditTierA;
   const lockSensitive = lockProgress || !canEditSensitive;
   // Ready-to-Use exception (2026-07-22): only relevant when the general Tier A
@@ -87,6 +91,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     creatorPicks: (Array.isArray(agent.creatorEmails) ? agent.creatorEmails : [])
       .filter(Boolean)
       .map((email) => ({ name: '', email })),
+    owner: agent.owner || '',
     reusable: agent.reusable || '',
     reuseCondition: agent.reuseCondition || '',
     hml: !!agent.hml,
@@ -161,6 +166,15 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   // a hint so an editor can see the automatic answer before overriding it,
   // rather than having to guess what the fallback chain would pick.
   const derivedAreas = useMemo(() => agentApproveAreas({ ...agent, approveArea: [] }), [agent]);
+  // Owner suggestions come from the owners already in the library — allAgents
+  // is already loaded for pairing/skill linking, so this costs no extra read.
+  // Suggestions only: ComboInput still accepts a team name that appears nowhere
+  // yet, which is the point (owner is not an enum in /config/schema).
+  const ownerOptions = useMemo(
+    () => uniq(allAgents.map((a) => (a.owner || '').trim()).filter(Boolean)).sort(),
+    [allAgents],
+  );
+
   // Process Mapping is cascaded from the selected Stage(s) via the real
   // stage↔process link in /sdlcProcesses (same rule as PreRegModal).
   const processOptions = useMemo(() => {
@@ -347,6 +361,24 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
       if (canSeeCategory) {
         await updateDoc(doc(db, 'agents', agent.id), {
           category: [...form.category],
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Write 2d — Owner (2026-09-23): admin only, and only while the agent is
+      // not yet at 100% (canEditOwner). Its own updateDoc for the same
+      // affectedKeys reason as 2b/2c — `owner` appears in no hasOnly() list in
+      // firestore.rules, so bundling it into any other write would poison that
+      // write's branch and fail the whole save. It rides the blanket isAdmin()
+      // branch instead, which needs no rules change.
+      //
+      // Fired only on a real change: an unchanged owner would otherwise bump
+      // updatedAt on every save, and activeReview()-style staleness checks
+      // elsewhere read updatedAt.
+      const ownerNext = form.owner.trim();
+      if (canSeeOwner && ownerNext !== (agent.owner || '')) {
+        await updateDoc(doc(db, 'agents', agent.id), {
+          owner: ownerNext,
           updatedAt: serverTimestamp(),
         });
       }
@@ -724,6 +756,26 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           <div className="fg">
             <label>Category</label>
             <MultiSelect label="เลือก Category…" options={categoryOptions} selected={form.category} onChange={(s) => setField('category', s)} />
+          </div>
+        )}
+
+        {/* ── Owner (2026-09-23) — admin only, and only while the agent has not
+            reached 100%. Unlike Category this is a ComboInput, not a
+            MultiSelect: owner is free text and has never lived in
+            /config/schema, so the dropdown is a convenience over names already
+            in use (from allAgents, already loaded — no extra query) while a
+            genuinely new team name stays typable. Changing it is cosmetic for
+            pairing/cascade: sameSubmitter() reads createdBy/creator, never
+            owner. */}
+        {canSeeOwner && (
+          <div className="fg">
+            <label>Owner</label>
+            <ComboInput
+              value={form.owner}
+              onChange={(v) => setField('owner', v)}
+              options={ownerOptions}
+              placeholder="ชื่อทีมที่ดูแล…"
+            />
           </div>
         )}
 

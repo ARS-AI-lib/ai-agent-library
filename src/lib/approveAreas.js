@@ -259,6 +259,18 @@ export function isVerticalCategory(name) {
 
 export const CATEGORY_AREA = {
   // ── Discipline: 1:1 with an area ──
+  // KEPT FIRST ON PURPOSE (2026-09-23): seed-approve-area-schema.cjs writes
+  // /config/schema.category from Object.keys() of this map, and Sidebar.jsx
+  // renders that array in raw order with no sort — so "first key here" is
+  // literally "pinned to the top of the Agent Library sidebar". Moving this
+  // line moves the sidebar entry.
+  //
+  // Area: there is no conversational-AI area in AREA_ORDER, and adding a 17th
+  // area would re-route approvals system-wide. Platform, DevOps & Operations
+  // is what 22 of the 28 docs in this category already carry. This mapping is
+  // layer 5 anyway — every one of those 28 has a stored approveArea (layer 1),
+  // so it only ever applies to future agents.
+  'Virtual Assistant': 'Platform, DevOps & Operations',          // added 2026-09-23
   'Compliance & Governance': 'Governance, Risk & Procurement',
   'Project & Delivery': 'Delivery Management',
   'Requirements & Product': 'Business Analysis',

@@ -59,7 +59,7 @@ async function getCoreAbilityOptions() {
 // 2026-08-10 so every category maps to exactly one approver area). Only a
 // fallback for when /config/schema is unreachable — that doc is the live list.
 const FALLBACK_CATEGORY = [
-  'Compliance & Governance', 'Project & Delivery', 'Requirements & Product',
+  'Virtual Assistant', 'Compliance & Governance', 'Project & Delivery', 'Requirements & Product',
   'UX Research', 'Design & UI', 'Writing & Content', 'Architecture',
   'Software Development', 'SIT', 'QA', 'Security', 'DevOps & Platform',
   'SRE & Reliability', 'Incident Management', 'Data & Analytics',

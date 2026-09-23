@@ -104,7 +104,6 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   const [stage, setStage] = useState('all');
   const [owner, setOwner] = useState(new Set());
   const [role, setRole] = useState(new Set());
-  const [procOwner, setProcOwner] = useState(new Set());
   const [reusable, setReusable] = useState(new Set());
   const [hasAgent, setHasAgent] = useState(false);
   const [nonSdlcOnly, setNonSdlcOnly] = useState(false);
@@ -141,14 +140,13 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   function changeAdoptView(v) { setAdoptView(v); if (v !== 'by-stage') setStage('all'); }
   function clearFilters() {
     setShowUseCases(false); setHasAgent(false); setNonSdlcOnly(false); setAdoptView('by-stage');
-    setStage('all'); setOwner(new Set()); setRole(new Set()); setProcOwner(new Set()); setReusable(new Set()); setSelectedStatus(new Set());
+    setStage('all'); setOwner(new Set()); setRole(new Set()); setReusable(new Set()); setSelectedStatus(new Set());
   }
 
   // Unioned with /config/schema.team (2026-08-10) — same reasoning as App.jsx's
   // Library-tab Owner filter.
   const ownerOptions = uniq([...(schema.team || []), ...agents.map((a) => a.owner)]).sort();
   const roleOptions = uniq(agents.flatMap((a) => splitRoles(a.relatedRole))).sort();
-  const procOwnerOptions = uniq(processes.map((p) => p.owner)).filter(Boolean).sort();
   const reusableOptions = uniq(agents.map((a) => a.reusable).filter(Boolean)).sort();
 
   // Shared agent filter (Owner + Role + Reusable + search)
@@ -188,11 +186,6 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     if (pids.length === 0) return true;
     return pids.includes(uc.processId);
   });
-  const procOwnerOk = (ownerStr) => {
-    if (procOwner.size === 0) return true;
-    if (!ownerStr) return false;
-    return ownerStr.split(',').map((s) => s.trim()).some((n) => procOwner.has(n));
-  };
 
   // "Non-SDLC" = agents/skills that pass every active filter but never render
   // on the board because they aren't mapped to any real SDLC process (board
@@ -229,30 +222,12 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   // fall out of this bucket silently, undercounting it vs. nonSdlcBoard).
   const nonSdlcUC = nonSdlcBoard;
 
-  // Only surface the Non-SDLC group when no Process-Owner filter is active —
-  // that filter narrows the legend to process-owned agents (which excludes the
-  // process-less Non-SDLC set), so showing the group then would re-break the
-  // counter reconciliation this whole feature is about.
-  const showNonSdlc = procOwner.size === 0;
-
-  // Counter chips + status legend must reflect the Process Owner filter too,
-  // even though that filter operates at the process/UC level rather than
-  // directly on agents — so derive the agent set actually visible on screen.
-  const legendAgents = useMemo(() => {
-    if (procOwner.size === 0) return visAgents;
-    const ids = new Set();
-    if (showUseCases) {
-      useCases.forEach((u) => {
-        const proc = processes.find((p) => p.id === u.processId);
-        if (procOwnerOk(proc?.owner)) agentsForUC(u).forEach((a) => ids.add(a.id));
-      });
-    } else {
-      processes.forEach((p) => {
-        if (procOwnerOk(p.owner)) agentsForProcess(p.id).forEach((a) => ids.add(a.id));
-      });
-    }
-    return visAgents.filter((a) => ids.has(a.id));
-  }, [visAgents, procOwner, showUseCases, useCases, processes]);
+  // The legend/counters used to be narrowed by the Process Owner filter
+  // (removed 2026-09-23). With that filter gone there is no process-level
+  // filter left, so the agents on screen are exactly visAgents — and the
+  // Non-SDLC group no longer has a case where it must be hidden to keep the
+  // counters reconciled.
+  const legendAgents = visAgents;
 
   useEffect(() => {
     onVisibleAgentsChange?.(legendAgents);
@@ -266,7 +241,6 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   function ProcessCard({ proc }) {
     const ags = agentsForProcess(proc.id);
     if (hasAgent && !ags.length) return null;
-    if (!procOwnerOk(proc?.owner)) return null;
 
     const counts = { td: 0, ip: 0, pilot: 0, ru: 0 };
     ags.forEach((a) => { counts[agentStatus(withProgress(a))]++; });
@@ -386,7 +360,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
           </div>
         ))}
       </div>
-      {showNonSdlc && nonSdlcBoard.length > 0 && <NonSdlcBoardCard />}
+      {nonSdlcBoard.length > 0 && <NonSdlcBoardCard />}
       </>
     );
   }
@@ -492,7 +466,6 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
 
     const out = groups.map((g) => {
       let ucs = useCases.filter((u) => (dim === 'stage' ? procToStage[u.processId] === g.key : u.processId === g.key));
-      ucs = ucs.filter((u) => procOwnerOk(processes.find((p) => p.id === u.processId)?.owner));
       const all = ucs.length;
       const cov = ucs.filter((u) => agentsForUC(u).length > 0).length;
       if (hasAgent) ucs = ucs.filter((u) => agentsForUC(u).length > 0);
@@ -515,7 +488,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
     // "Missing Use Case" group — agents/skills that DO have a real Stage/
     // Process mapping but no Use Case picked yet. Kept separate from true
     // "Non-SDLC" below so it isn't mislabeled as having no SDLC info at all.
-    if (showNonSdlc && noUseCaseOnly.length > 0) {
+    if (noUseCaseOnly.length > 0) {
       out.push(
         <div key="__no_use_case__" className="sb">
           <div className="sh">
@@ -533,7 +506,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
 
     // Non-SDLC group — agents/skills with NO process mapping at all, shown as
     // their own section at the bottom so the UC view total reconciles with the legend.
-    if (showNonSdlc && nonSdlcUC.length > 0) {
+    if (nonSdlcUC.length > 0) {
       out.push(
         <div key="__non_sdlc__" className="sb">
           <div className="sh">
@@ -598,14 +571,6 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
         <div className="cg"><span className="cl">ROLE</span>
           <MultiSelect label="Role" options={roleOptions} selected={role} onChange={setRole} />
         </div>
-        {procOwnerOptions.length > 0 && (
-          <>
-            <div className="csep" />
-            <div className="cg"><span className="cl">PROCESS OWNER</span>
-              <MultiSelect label="Process Owner" options={procOwnerOptions} selected={procOwner} onChange={setProcOwner} />
-            </div>
-          </>
-        )}
         <div className="csep" />
         <div className="cg"><span className="cl">REUSABLE</span>
           <MultiSelect label="Reusable" options={reusableOptions} selected={reusable} onChange={setReusable} />
