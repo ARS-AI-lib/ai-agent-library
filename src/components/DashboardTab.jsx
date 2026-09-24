@@ -109,6 +109,23 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
   }, [agents, statsById]);
   const maxOpens = Math.max(1, ...usage.top.map((r) => r.s.detailOpens));
 
+  // ── Engagement Depth ── the deepest thing that has ever happened to each
+  // item: used (endpoint click) > viewed (detail open) > surfaced (search hit)
+  // > untouched. One bucket per item, so the bar is a true part-to-whole.
+  const depth = useMemo(() => {
+    const b = { used: [], viewed: [], search: [], none: [] };
+    agents.forEach((a) => {
+      const s = readStats(statsById.get(a.id));
+      if (s.endpointClicks > 0) b.used.push(a);
+      else if (s.detailOpens > 0) b.viewed.push(a);
+      else if (s.searchHits > 0) b.search.push(a);
+      else b.none.push(a);
+    });
+    const ready = agents.filter((a) => normalizeProgress(a.devProgress) >= 100);
+    const readyUnused = ready.filter((a) => readStats(statsById.get(a.id)).endpointClicks === 0);
+    return { b, ready, readyUnused };
+  }, [agents, statsById]);
+
   // ── Category ── multi-valued (§23): counted per tag, so bars can sum past `total`.
   const cats = useMemo(() => {
     const c = {};
@@ -296,6 +313,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
               </div>
             )}
           </div>
+          <div className="dash-col">
           <div className="dash-card">
             <div className="dash-card-title">Engagement Totals</div>
             <div className="dash-card-sub dash-mb">สะสมทั้งไลบรารี</div>
@@ -308,6 +326,46 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
             <p className="dash-note">
               มีคน rating แค่ {usage.totals.r} ครั้ง — ยังวัดความพึงพอใจไม่ได้ · {usage.untouched} รายการที่ยังไม่มีใครแตะเลย (retire candidates)
             </p>
+          </div>
+          <div className="dash-card">
+            <div className="dash-card-title">Engagement Depth</div>
+            <div className="dash-card-sub dash-mb">Agent/Skill แต่ละตัวถูกใช้ลึกแค่ไหน (นับระดับสูงสุดที่เคยเกิด) · คลิกเพื่อดูรายการ</div>
+            <div className="dash-stack dash-depth-bar">
+              {DEPTH.filter((d) => depth.b[d.key].length).map((d) => (
+                <i
+                  key={d.key}
+                  style={{ flex: depth.b[d.key].length, background: d.color, cursor: 'pointer' }}
+                  title={`${d.label} ${depth.b[d.key].length}`}
+                  onClick={() => setListModal({ sub: 'Engagement Depth', title: d.label, agents: depth.b[d.key] })}
+                />
+              ))}
+            </div>
+            <div className="dash-depth-lg">
+              {DEPTH.filter((d) => depth.b[d.key].length).map((d) => (
+                <button
+                  type="button"
+                  key={d.key}
+                  className="dash-rowbtn"
+                  onClick={() => setListModal({ sub: 'Engagement Depth', title: d.label, agents: depth.b[d.key] })}
+                >
+                  <b style={{ background: d.color }} />
+                  <span>{d.label}<small>{d.hint}</small></span>
+                  <em>{depth.b[d.key].length}</em>
+                  <small>{pct(depth.b[d.key].length)}%</small>
+                </button>
+              ))}
+            </div>
+            {depth.ready.length > 0 && (
+              <button
+                type="button"
+                className="dash-insight dash-rowbtn dash-depth-ins"
+                onClick={() => setListModal({ sub: 'Engagement Depth', title: 'Ready to Use — not used yet', agents: depth.readyUnused })}
+              >
+                Ready to Use ที่ถูกกดใช้จริง <b>{depth.ready.length - depth.readyUnused.length} / {depth.ready.length}</b>
+                {depth.readyUnused.length > 0 && <> · อีก {depth.readyUnused.length} ตัวยังไม่มีใครกดใช้ →</>}
+              </button>
+            )}
+          </div>
           </div>
         </div>
       </section>
@@ -488,6 +546,15 @@ const REUSE = [
   { key: 'Reusable with Conditions', label: 'Reusable with Conditions', color: 'color-mix(in srgb, var(--accent) 45%, var(--sf))' },
   { key: 'Non-reusable', label: 'Non-reusable', color: 'var(--tx2)' },
   { key: '', label: 'Not set', color: 'var(--bd)' },
+];
+
+// Engagement Depth buckets, deepest first — one hue (accent) stepping down,
+// because depth is ordered, not a set of unrelated categories.
+const DEPTH = [
+  { key: 'used', label: 'Used', hint: 'กดไปใช้จริง', color: 'var(--accent)' },
+  { key: 'viewed', label: 'Viewed only', hint: 'เปิดดูแต่ยังไม่กดใช้', color: 'color-mix(in srgb, var(--accent) 55%, var(--sf))' },
+  { key: 'search', label: 'Found in search only', hint: 'ขึ้นในผลค้นหาแต่ไม่มีคนเปิด', color: 'color-mix(in srgb, var(--accent) 25%, var(--sf))' },
+  { key: 'none', label: 'Untouched', hint: 'ยังไม่มีใครแตะเลย', color: 'var(--bd)' },
 ];
 
 const TL_KEYS = ['done', 'pilot', 'ontime', 'risk', 'delay'];
