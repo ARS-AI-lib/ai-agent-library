@@ -137,13 +137,13 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
         </div>
 
         <div className="dash-bp-lg">
-          {HITL_ORDER.map((k) => (
+          {HITL_ORDER.filter((k) => lvTally[k] > 0).map((k) => (
             <span key={k} className="dash-bp-chip" data-lv={k}>{HITL_DEF[k].lb} <em>{lvTally[k]}</em></span>
           ))}
         </div>
       </div>
 
-      <div>
+      <div className="dash-rv-right">
         <div className="dash-rv-top">
           <b>{agents.length} AI total across {cards.length} roles</b>
           <span>

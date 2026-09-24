@@ -231,3 +231,22 @@
    prefers-color-scheme — see theme.css. The navy badge is a literal hex, so it
    is the one thing here that needs a dark step of its own. */
 :root[data-theme="dark"] .dash-rc-b { background: #0f1320; color: var(--tx); }
+
+/* ── Balance pass (2026-09-24) ─────────────────────────────────────────
+   Side-by-side cards stretch to their row and distribute their own content,
+   so no card ends with a blank band under a taller neighbour. */
+.dash-duo > .dash-card, .dash-g2 > .dash-card { display: flex; flex-direction: column; }
+.dash-g2 { align-items: stretch; }
+.dash-donut-w { flex: 1; align-content: center; justify-content: center; }
+.dash-donut-box { width: 168px; height: 168px; }
+.dash-g2 > .dash-card > .dash-fn { margin-top: auto; padding-top: 16px; gap: 12px; }
+.dash-g2 > .dash-card > .dash-fn .dash-fn-t { height: 20px; }
+.dash-g2 > .dash-col > .dash-card { flex: 1; }
+/* Role Coverage: role cards fill the blueprint's height (3 rows share it). */
+.dash-rv-grid { align-items: stretch; }
+.dash-rv-right { display: flex; flex-direction: column; }
+.dash-rv-right .dash-roles { flex: 1; grid-auto-rows: 1fr; }
+.dash-rv-right .dash-rc { display: flex; flex-direction: column; justify-content: center; }
+@media (max-width: 900px) {
+  .dash-rv-right .dash-roles { grid-auto-rows: auto; }
+}

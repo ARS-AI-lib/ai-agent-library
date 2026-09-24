@@ -270,7 +270,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
               </div>
             </div>
             <div className="dash-dl">
-              {reuse.map((r) => (
+              {reuse.filter((r) => r.n > 0).map((r) => (
                 <div key={r.key}>
                   <b style={{ background: r.color }} />
                   <span>{r.label}</span>
@@ -422,7 +422,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
               <FunnelRow label="Ready to Use" n={ru.length} max={total} color={ST_DEF.ru.dot} />
               <FunnelRow label="Accessible (link/file)" n={accessible} max={total} color={ST_DEF.ru.dot} />
             </div>
-            <p className="dash-note">{missingLink} รายการขึ้น Ready to Use แล้ว แต่ยังไม่มีลิงก์หรือไฟล์ให้คนเข้าไปใช้ (ไม่นับ T4 และ Non-reusable ที่ไม่ต้องมี)</p>
+            {missingLink > 0 && <p className="dash-note">{missingLink} รายการขึ้น Ready to Use แล้ว แต่ยังไม่มีลิงก์หรือไฟล์ให้คนเข้าไปใช้ (ไม่นับ T4 และ Non-reusable ที่ไม่ต้องมี)</p>}
           </div>
           <div className="dash-card">
             <div className="dash-card-title">Launch Plan by Month</div>
@@ -452,7 +452,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
                 {delayed.length} รายการเลย launch date แล้วยังไม่ถึง Pilot · View all →
               </button>
               <div className="dash-late">
-                {delayed.slice(0, 8).map((it) => (
+                {delayed.slice(0, 6).map((it) => (
                   <div key={it.id} onClick={() => onAgentClick?.(it._raw)}>
                     <span className="dash-late-n">{it.name}</span>
                     <span className="dash-late-d">{it.days}d late</span>
@@ -649,7 +649,7 @@ function FunnelRow({ label, n, max, color }) {
 // Stacked bars per launch month, one y-scale; per-segment <title> tooltip.
 function MonthChart({ months }) {
   if (!months.length) return <div className="dash-empty">No launch dates yet</div>;
-  const W = 520; const H = 230; const pl = 30; const pr = 8; const pt = 14; const pb = 26;
+  const W = 520; const H = 180; const pl = 30; const pr = 8; const pt = 14; const pb = 26;
   const max = Math.max(...months.map((m) => TL_KEYS.reduce((s, k) => s + m[k], 0)));
   const step = max > 50 ? 20 : max > 20 ? 10 : 5;
   const yMax = Math.max(step, Math.ceil(max / step) * step);
