@@ -768,6 +768,8 @@ const RATE_LIMITS = {
   // Notifications ride along with ordinary UI actions, so the cap is a
   // runaway guard rather than a usage budget. Real volume is ~7 events/WEEK.
   notifyEvent: 60,
+  // One call per approve click (parent + siblings batched); runaway guard only.
+  classifyRoleGroup: 30,
 };
 
 async function enforceRateLimit(uid, fnName) {
@@ -1933,5 +1935,60 @@ exports.claimPendingRoleGrant = onCall(
 
     await grantRef.delete();
     return { granted: true, role };
+  },
+);
+
+// ── Role Group classification (2026-09-24) ─────────────────────────────
+// Fills agent.roleGroup (PRIMARY role group, one per item) with the v5 prompt
+// in roleGroupRules.js. Called fire-and-forget from PendingApprovalModal
+// right after an approve, and by the admin "Classify Missing Role Groups"
+// menu ({ missingOnly: true }). NEVER overwrites a stored roleGroup — only
+// fills items that have none (user decision: numbers already analysed must
+// not move). Admin SDK write, so no firestore.rules change is needed.
+const { needsRoleGroup, classifyWithAi } = require('./roleGroupRules');
+const ROLE_GROUP_CALLER_ROLES = ['approver', 'committee', 'admin'];
+
+exports.classifyRoleGroup = onCall(
+  { cors: true, timeoutSeconds: 300 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    if (!isOrgEmail(request.auth.token?.email)) {
+      throw new HttpsError('permission-denied', 'Organisation account required.');
+    }
+    const role = (await db.collection('users').doc(request.auth.uid).get()).data()?.role;
+    if (!ROLE_GROUP_CALLER_ROLES.includes(role)) {
+      throw new HttpsError('permission-denied', 'Approver, committee or admin only.');
+    }
+    await enforceRateLimit(request.auth.uid, 'classifyRoleGroup');
+
+    const { agentIds, missingOnly } = request.data || {};
+    if (missingOnly && role !== 'admin') throw new HttpsError('permission-denied', 'Admin only.');
+    if (!missingOnly && (!Array.isArray(agentIds) || !agentIds.length || agentIds.length > 20)) {
+      throw new HttpsError('invalid-argument', 'agentIds must be 1-20 ids.');
+    }
+
+    // One read of the library: the targets plus the already-classified baseline.
+    const all = (await db.collection('agents').get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+    const wanted = missingOnly ? null : new Set(agentIds);
+    const targets = all.filter((a) => (!wanted || wanted.has(a.id)) && needsRoleGroup(a));
+    if (!targets.length) return { classified: 0, requested: 0 };
+
+    const classified = all.filter((a) => a.roleGroup && !a.archived);
+    const results = await classifyWithAi(ai, targets.slice(0, 300), classified);
+
+    const batch = db.batch();
+    let n = 0;
+    Object.entries(results).forEach(([id, r]) => {
+      batch.update(db.collection('agents').doc(id), {
+        roleGroup: r.primary,
+        roleGroupSecondary: r.secondary,
+        roleGroupReason: r.reason,
+        roleGroupSource: 'ai',
+        roleGroupAt: FieldValue.serverTimestamp(),
+      });
+      n += 1;
+    });
+    if (n) await batch.commit();
+    return { classified: n, requested: targets.length };
   },
 );

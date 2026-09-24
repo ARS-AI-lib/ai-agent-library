@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { rebuildAllVectors } from '../lib/reindex';
+import { classifyMissingRoleGroups } from '../lib/roleGroupClassify';
 import ThemeToggle from './ThemeToggle';
 
 export default function Nav({
@@ -11,6 +12,7 @@ export default function Nav({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
+  const [classifying, setClassifying] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -155,6 +157,30 @@ export default function Nav({
                   }}
                 >
                   {reindexing ? 'Rebuilding…' : 'Rebuild Search Index'}
+                </button>
+              )}
+              {isAdmin && (
+                // Safety net for Role Group classification: approvals fire it
+                // automatically, but a bulk import or a lost call leaves items
+                // on the alias fallback. Only fills items with no roleGroup —
+                // never changes one already analysed.
+                <button
+                  type="button"
+                  disabled={classifying}
+                  onClick={async () => {
+                    setClassifying(true);
+                    try {
+                      const r = await classifyMissingRoleGroups();
+                      window.alert(`Role groups classified\n\nMissing ${r.requested} · Classified ${r.classified}`);
+                    } catch (e) {
+                      window.alert(`Classification failed: ${e?.message || e}`);
+                    } finally {
+                      setClassifying(false);
+                      setMenuOpen(false);
+                    }
+                  }}
+                >
+                  {classifying ? 'Classifying…' : 'Classify Missing Role Groups'}
                 </button>
               )}
               {canSeeTimeline && (

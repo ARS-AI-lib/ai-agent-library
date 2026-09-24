@@ -59,3 +59,26 @@ export function statusCounts(agents) {
 export function progressBucket(p) {
   return phaseForProgress(p);
 }
+
+// ── Human / AI level (2026-09-24) — AI-SDLC Blueprint only ──────────
+// How much of the work AI carries for one agent/skill, derived from the
+// same status bucket plus the stored `hml` (Human-in-the-Loop) flag:
+//   To Do                              → 'human'  (people still do the work)
+//   In Progress / Pilot                → 'mixed'  (Gen AI + Human)
+//   Ready to Use with hml = true       → 'mixed'
+//   Ready to Use with hml = false      → 'ai'     (Gen AI, no human in the loop)
+// Takes the already-normalized progress number (callers use
+// normalizeProgress first — agentUtils imports this file, not the reverse).
+export const HITL_ORDER = ['human', 'mixed', 'ai'];
+export const HITL_DEF = {
+  human: { lb: 'Human', color: '#004E85' },
+  mixed: { lb: 'Gen AI + Human', color: '#FF761E' },
+  ai: { lb: 'Gen AI', color: '#0EB678' },
+};
+export function hitlLevel(progress, hml) {
+  const b = phaseForProgress(progress);
+  if (b === 'td') return 'human';
+  if (b !== 'ru') return 'mixed';
+  const inLoop = hml === true || String(hml).toLowerCase() === 'true';
+  return inLoop ? 'mixed' : 'ai';
+}

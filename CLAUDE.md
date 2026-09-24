@@ -1213,3 +1213,47 @@ tool ใหม่ **`sdlc_gap_match`** — ระบบจับคู่ให�
 
 **ไม่ได้ deploy functions และไม่ได้ publish rules ในรอบนี้** · ไม่ต้อง rebuild vector เพราะ
 `buildEmbedText()` ไม่ได้ embed `reusable`/`owner`/`team` · **ไม่แตะไฟล์ Workshop เลย**
+
+---
+
+## 33. Role Group = Primary ที่ AI จำแนก + เก็บใน DB · Blueprint สี Human/AI (2026-09-24)
+
+### ที่มา
+การ์ด Role Coverage เดิมนับ **ทุก role** (1 รายการนับได้หลายการ์ด ยอดรวม ~326) · ผู้ใช้ต้องการ
+**1 รายการ = 1 กลุ่ม (Primary)** · pilot Gemini read-only 5 รอบ เทียบกับ sheet ที่คนจัดเอง:
+v5 = **Name → Description (TBC → name+role) → Related Role (ยืนยัน) → Output (ยืนยัน)** ตรงกับคน
+**88% (166/189)** ดีที่สุด · ใส่ relatedRole ก่อน description = ถอยกลับไปจัดตาม "คนสร้าง" (เช่น
+banking chatbot ติด AI Engineer → Software Engineer)
+
+### Field บน `agents` (เขียนด้วย Admin SDK)
+`roleGroup` (1 ใน 15 key ของ `ROLE_GROUP_ORDER`) · `roleGroupSecondary` (≤2) · `roleGroupReason` ·
+`roleGroupSource` (`'ai'` | `'admin'`) · `roleGroupAt`
+- **ไม่ต้องแก้ rules**: ไม่อยู่ใน `hasOnly()` ไหน → user ทั่วไปเขียนไม่ได้ · admin แก้ผ่าน branch `isAdmin()` (Write 2e)
+- ไม่ embed → ไม่ต้อง rebuild vector
+
+### ⛔ กฎเหล็ก: AI ไม่เขียนทับ
+`needsRoleGroup()` = approved + ไม่ archived + **ยังไม่มี `roleGroup`** เท่านั้น · ตัวเลขที่เคยวิเคราะห์แล้ว
+ต้องไม่ขยับเอง (ผู้ใช้สั่ง) · แก้ได้ทางเดียวคือ admin เลือกใน Edit form (`roleGroupSource:'admin'`)
+· รายการที่จัดแล้วถูกส่งให้ AI ดูเป็นตัวอย่าง (`pickExamples`: role/category ทับกัน ≤20) ให้ของใหม่สอดคล้อง
+
+### เส้นทาง
+- **approve** → `PendingApprovalModal.handleApprove` เรียก `classifyRoleGroups([parent, ...siblings])`
+  **ครั้งเดียวนอก loop** fire-and-forget (`src/lib/roleGroupClassify.js`) → callable `classifyRoleGroup`
+- **เก็บตก** → เมนู admin "Classify Missing Role Groups" (`missingOnly`, admin เท่านั้น)
+- **ยังไม่ถูกจำแนก** → การ์ดใช้ alias ตัวแรก (`roleGroupsOf()[0]`) + header บอก "N awaiting classification"
+- ⚠️ bulk import/สคริปต์ไม่ผ่านปุ่ม approve → ต้องกดเก็บตกหรือรัน `backfill-role-group.cjs`
+
+### Blueprint (เฉพาะกล่องนี้ — ส่วนอื่นของ Dashboard ยังใช้ ST_DEF)
+`hitlLevel(progress, hml)` ใน `status.js`: To Do → **Human** `#004E85` · In Progress/Pilot/Ready+`hml` →
+**Gen AI + Human** `#FF761E` · Ready + `!hml` → **Gen AI** `#0EB678` (สีวัดจาก pixel รูปที่ผู้ใช้ให้)
+· tile = level ที่ **มีมากที่สุด** ใน process (เสมอ → เอียงไปทาง AI) · ผลจริงวันแรก: Gen AI 0 tile
+เพราะใน process ส่วนใหญ่ ของที่ Ready+ไม่มี HML ยังเป็นเสียงข้างน้อย — ถูกต้องตามกฎ ไม่ใช่บั๊ก
+
+### Key files
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `functions/roleGroupRules.js` | ⭐ prompt v5 + schema enum + `needsRoleGroup` + `pickExamples` + `classifyWithAi` ที่เดียว |
+| `functions/verify-role-group.cjs` | **รันก่อน deploy** — 14 เคส offline รวม key ตรงกับ `src/lib/roleGroups.js` |
+| `functions/backfill-role-group.cjs` | เติมครั้งแรก (dry-run default) · เขียนเฉพาะที่ยังไม่มี |
+| `src/components/DashboardRoleView.jsx` | การ์ด Primary + Blueprint 3 สี |
+| deploy | `npx firebase-tools deploy --only functions:classifyRoleGroup` (scoped เสมอ §11) |

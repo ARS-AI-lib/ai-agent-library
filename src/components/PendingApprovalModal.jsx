@@ -7,6 +7,7 @@ import { matchingAgentNames, pairedSubSkills, agentTypeLabel, fmtDate, categoryC
 import { queueViewer, visiblePending, visibleDeployRequests, visibleRenameRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
 import { decideRenameRequest } from '../lib/endpointFiles';
 import { notifyEvent } from '../lib/notify';
+import { classifyRoleGroups } from '../lib/roleGroupClassify';
 import AgentDetailModal from './AgentDetailModal';
 import useEscapeKey from '../hooks/useEscapeKey';
 
@@ -311,7 +312,10 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
       // decision and must be one email.
       notifyEvent('agent.approved', { agentId: agent.id });
 
-      for (const sib of findCascadeSiblings(agent)) {
+      // Captured once: `pending` is live state and the siblings leave it as
+      // soon as they are approved, so re-deriving later would come back empty.
+      const siblings = findCascadeSiblings(agent);
+      for (const sib of siblings) {
         await updateDoc(doc(db, 'agents', sib.id), {
           approvalStatus: 'approved',
           approvedBy: user?.uid || '',
@@ -319,6 +323,9 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
         });
         await recordOutcome(sib.id, 'approved', user?.uid);
       }
+      // Once, after the whole cascade is approved: give the parent and its
+      // siblings a primary Role Group. Fire-and-forget — never blocks approval.
+      classifyRoleGroups([agent.id, ...siblings.map((s) => s.id)]);
     } catch (e) {
       setError(e.message || 'Approve failed');
     } finally {

@@ -145,18 +145,20 @@
 .dash-bp-sq button { display: block; width: 100%; padding: 0; aspect-ratio: 1; border-radius: 4px; border: 1px solid rgba(0, 0, 0, .06); cursor: pointer; }
 .dash-bp-sq button:disabled { cursor: default; }
 .dash-bp-sq button:not(:disabled):hover { outline: 2px solid var(--accent); outline-offset: 1px; }
-/* Status hues are the site's own (status.js ST_DEF.dot) — see the component
-   header for why the legend and the per-square tooltip are mandatory rather
-   than optional here. */
-.dash-bp-sq button[data-st='td'] { background: #9ca3af; }
-.dash-bp-sq button[data-st='ip'] { background: #f5a623; }
-.dash-bp-sq button[data-st='pilot'] { background: #4a6fa5; }
-.dash-bp-sq button[data-st='ru'] { background: #15803d; }
-.dash-bp-sq button[data-st='none'] { background: var(--sf2); border-color: var(--bd); }
-.dash-bp-lg { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--tx2); }
-.dash-bp-lg span { display: inline-flex; align-items: center; gap: 5px; }
-.dash-bp-lg b { width: 9px; height: 9px; border-radius: 3px; display: inline-block; border: 1px solid rgba(0, 0, 0, .08); }
-.dash-bp-lg b.dash-bp-none { background: var(--sf2); border-color: var(--bd); }
+/* Human / AI levels (status.js HITL_DEF) — colours specified by the user for
+   the blueprint only (2026-09-24); the rest of the Dashboard keeps ST_DEF. */
+.dash-bp-sq button[data-lv='human'] { background: #004E85; }
+.dash-bp-sq button[data-lv='mixed'] { background: #FF761E; }
+.dash-bp-sq button[data-lv='ai'] { background: #0EB678; }
+.dash-bp-sq button[data-lv='none'] { background: var(--sf2); border-color: var(--bd); }
+/* Legend = solid chips with white text, matching the reference image. */
+.dash-bp-lg { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; }
+.dash-bp-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 3px; color: #fff; font-weight: 600; }
+.dash-bp-chip em { font-style: normal; font-weight: 700; opacity: .9; }
+.dash-bp-chip[data-lv='human'] { background: #004E85; }
+.dash-bp-chip[data-lv='mixed'] { background: #FF761E; }
+.dash-bp-chip[data-lv='ai'] { background: #0EB678; }
+.dash-bp-chip[data-lv='none'] { background: var(--sf2); color: var(--tx2); border: 1px solid var(--bd); }
 .dash-rv-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .dash-rv-top b { font-size: 19px; font-weight: 700; color: var(--tx); }
 .dash-rv-top span { font-size: 12px; color: var(--mu); }
