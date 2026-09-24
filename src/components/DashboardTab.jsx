@@ -123,7 +123,13 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
 
   // ── Delivery ──
   const ru = agents.filter((a) => normalizeProgress(a.devProgress) >= 100);
-  const accessible = ru.filter((a) => String(a.endpoint || '').trim() || a.endpointFile?.storagePath).length;
+  const hasLink = (a) => String(a.endpoint || '').trim() || a.endpointFile?.storagePath;
+  const accessible = ru.filter(hasLink).length;
+  // Only items that are SUPPOSED to be reachable count as a gap: T4 and
+  // Non-reusable ones are exempt from needing a link/file (user rule
+  // 2026-09-24; Non-reusable matches the 100% gate in §25).
+  const linkExempt = (a) => getTier(a) === 'T4' || a.reusable === 'Non-reusable';
+  const missingLink = ru.filter((a) => !hasLink(a) && !linkExempt(a)).length;
   const tlCounts = useMemo(() => {
     const c = { done: 0, pilot: 0, ontime: 0, risk: 0, delay: 0 };
     tlOf.forEach((s) => { c[s] += 1; });
@@ -347,7 +353,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
               <FunnelRow label="Ready to Use" n={ru.length} max={total} color={ST_DEF.ru.dot} />
               <FunnelRow label="Accessible (link/file)" n={accessible} max={total} color={ST_DEF.ru.dot} />
             </div>
-            <p className="dash-note">{ru.length - accessible} รายการขึ้น Ready to Use แล้ว แต่ยังไม่มีลิงก์หรือไฟล์ให้คนเข้าไปใช้</p>
+            <p className="dash-note">{missingLink} รายการขึ้น Ready to Use แล้ว แต่ยังไม่มีลิงก์หรือไฟล์ให้คนเข้าไปใช้ (ไม่นับ T4 และ Non-reusable ที่ไม่ต้องมี)</p>
           </div>
           <div className="dash-card">
             <div className="dash-card-title">Launch Plan by Month</div>
@@ -400,7 +406,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
               <div className="dash-card-title">Data Quality</div>
               <div className="dash-card-sub dash-mb">ข้อมูลที่ยังไม่ครบ</div>
               <div className="dash-dq">
-                <div><span><span className="dash-sev">Fix</span>Ready to Use แต่ไม่มีลิงก์/ไฟล์</span><b>{ru.length - accessible}</b></div>
+                <div><span><span className="dash-sev">Fix</span>Ready to Use แต่ไม่มีลิงก์/ไฟล์</span><b>{missingLink}</b></div>
                 <div><span><span className="dash-sev">Fix</span>ไม่มี Launch Date</span><b>{noLaunch}</b></div>
                 <div><span><span className="dash-sev">Fix</span>Reusable ว่าง</span><b>{noReusable}</b></div>
               </div>
