@@ -770,6 +770,8 @@ git** (มี version, diff, คนรีวิวตอน deploy) — ไฟ�
   ถูก grandfather ไว้ และไปโผล่ใน Data Quality Watchlist แทน
 
 ### ⚠️ ข้อยกเว้น: Non-reusable ไม่ต้องมี endpoint/ไฟล์ (2026-09-16)
+> **อัปเดต 2026-09-24: T4 (Agent + External) ได้รับยกเว้นด้วย** — ทั้ง `AgentDetailModal` (`linkExempt`) และ
+> `checkMarkReady()` (server คำนวณ T4 เองให้ตรง `getTier()`) · การ์ด Data Quality บน Dashboard ไม่นับ 2 กลุ่มนี้
 Agent/Skill ที่ `reusable === 'Non-reusable'` = เครื่องมือเฉพาะทาง สร้างมาให้ใช้เองคนเดียว
 ไม่มีใครอื่นจะ "นำไปใช้ต่อ" ดังนั้นเหตุผลทั้งหมดที่ gate นี้มีอยู่ (ให้คนถัดไปมีทางเข้าถึง) ไม่ใช้กับกรณีนี้
 เช็คทั้ง 2 ฝั่ง — ต้องคู่กันเสมอ เพราะ callable เรียกตรงได้โดยไม่ผ่าน UI:
