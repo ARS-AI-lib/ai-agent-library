@@ -81,6 +81,12 @@
 
 /* ── Engagement (totals + depth in one card) ── */
 .dash-stretch { align-items: stretch; }
+/* Balance the two cards whichever is taller: both stretch to the row, and
+   the Most Used table grows its rows to fill the card instead of leaving a
+   blank band under it. */
+.dash-stretch > .dash-card { display: flex; flex-direction: column; }
+.dash-stretch .dash-tbl-w { flex: 1; display: flex; }
+.dash-stretch .dash-tbl { height: 100%; }
 .dash-eng-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .dash-eng-stats div { background: var(--sf2); border-radius: 8px; padding: 10px 12px; }
 .dash-eng-stats b { display: block; font-size: 22px; line-height: 1.1; color: var(--tx); font-variant-numeric: tabular-nums; }
