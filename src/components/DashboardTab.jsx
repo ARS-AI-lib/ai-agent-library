@@ -102,7 +102,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
       o: acc.o + r.s.detailOpens, c: acc.c + r.s.endpointClicks, h: acc.h + r.s.searchHits, r: acc.r + r.s.ratingCount,
     }), { o: 0, c: 0, h: 0, r: 0 });
     return {
-      top: rows.filter((r) => r.d > 0).sort((x, y) => y.d - x.d).slice(0, 8),
+      top: rows.filter((r) => r.d > 0).sort((x, y) => y.d - x.d).slice(0, 10),
       untouched: rows.filter((r) => isUntouched(statsById.get(r.a.id))).length,
       totals: t,
     };
@@ -286,7 +286,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
       {/* ── Adoption ── */}
       <section className="dash-sec">
         <div className="dash-sec-h"><h2>Adoption</h2><span>มีคนเปิดดู / กดไปใช้จริงไหม</span></div>
-        <div className="dash-g21">
+        <div className="dash-g21 dash-stretch">
           <div className="dash-card">
             <div className="dash-card-title">Most Used</div>
             <div className="dash-card-sub dash-mb">เรียงตาม demand score (clicks×3 + opens×2 + search)</div>
@@ -313,29 +313,28 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
               </div>
             )}
           </div>
-          <div className="dash-col">
-          <div className="dash-card">
-            <div className="dash-card-title">Engagement Totals</div>
-            <div className="dash-card-sub dash-mb">สะสมทั้งไลบรารี</div>
-            <div className="dash-ustats">
+          {/* Engagement — one card: what happened (totals), then how deep each
+              item has been used (depth). Depth is a part-to-whole of items,
+              totals are event counts; kept visibly separate inside the card. */}
+          <div className="dash-card dash-eng">
+            <div className="dash-card-title">Engagement</div>
+            <div className="dash-card-sub dash-mb">สะสมทั้งไลบรารี · คลิกเพื่อดูรายการ</div>
+            <div className="dash-eng-stats">
               <div><b>{usage.totals.o.toLocaleString()}</b><span>Detail opens</span></div>
               <div><b>{usage.totals.h.toLocaleString()}</b><span>Search hits</span></div>
               <div><b>{usage.totals.c.toLocaleString()}</b><span>Endpoint clicks</span></div>
-              <div><b>{usage.totals.r.toLocaleString()}</b><span>Ratings</span></div>
             </div>
-            <p className="dash-note">
-              มีคน rating แค่ {usage.totals.r} ครั้ง — ยังวัดความพึงพอใจไม่ได้ · {usage.untouched} รายการที่ยังไม่มีใครแตะเลย (retire candidates)
-            </p>
-          </div>
-          <div className="dash-card">
-            <div className="dash-card-title">Engagement Depth</div>
-            <div className="dash-card-sub dash-mb">Agent/Skill แต่ละตัวถูกใช้ลึกแค่ไหน (นับระดับสูงสุดที่เคยเกิด) · คลิกเพื่อดูรายการ</div>
+
+            <div className="dash-eng-h">
+              <span>How deep is each Agent/Skill used?</span>
+              <small>{total} items · ระดับสูงสุดที่เคยเกิด</small>
+            </div>
             <div className="dash-stack dash-depth-bar">
               {DEPTH.filter((d) => depth.b[d.key].length).map((d) => (
                 <i
                   key={d.key}
                   style={{ flex: depth.b[d.key].length, background: d.color, cursor: 'pointer' }}
-                  title={`${d.label} ${depth.b[d.key].length}`}
+                  title={`${d.label} — ${d.hint}: ${depth.b[d.key].length}`}
                   onClick={() => setListModal({ sub: 'Engagement Depth', title: d.label, agents: depth.b[d.key] })}
                 />
               ))}
@@ -346,26 +345,29 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
                   type="button"
                   key={d.key}
                   className="dash-rowbtn"
+                  title={d.hint}
                   onClick={() => setListModal({ sub: 'Engagement Depth', title: d.label, agents: depth.b[d.key] })}
                 >
                   <b style={{ background: d.color }} />
-                  <span>{d.label}<small>{d.hint}</small></span>
+                  <span>{d.label}</span>
                   <em>{depth.b[d.key].length}</em>
                   <small>{pct(depth.b[d.key].length)}%</small>
                 </button>
               ))}
             </div>
+
             {depth.ready.length > 0 && (
               <button
                 type="button"
-                className="dash-insight dash-rowbtn dash-depth-ins"
+                className="dash-rowbtn dash-depth-ins"
                 onClick={() => setListModal({ sub: 'Engagement Depth', title: 'Ready to Use — not used yet', agents: depth.readyUnused })}
               >
-                Ready to Use ที่ถูกกดใช้จริง <b>{depth.ready.length - depth.readyUnused.length} / {depth.ready.length}</b>
-                {depth.readyUnused.length > 0 && <> · อีก {depth.readyUnused.length} ตัวยังไม่มีใครกดใช้ →</>}
+                <span>Ready to Use ที่ถูกกดใช้จริง</span>
+                <b>{depth.ready.length - depth.readyUnused.length}<i> / {depth.ready.length}</i></b>
+                {depth.readyUnused.length > 0 && <small>อีก {depth.readyUnused.length} ตัวยังไม่มีใครกดใช้ →</small>}
               </button>
             )}
-          </div>
+            <p className="dash-note">Rating มีแค่ {usage.totals.r} ครั้ง — ยังวัดความพึงพอใจไม่ได้</p>
           </div>
         </div>
       </section>
