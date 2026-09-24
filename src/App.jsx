@@ -546,7 +546,7 @@ export default function App() {
       )}
 
       {showRoleGroups && (isAdmin || isCommittee) && (
-        <RoleGroupManagerModal onClose={() => setShowRoleGroups(false)} agents={agents} schema={schema} />
+        <RoleGroupManagerModal onClose={() => setShowRoleGroups(false)} agents={agents} schema={schema} isAdmin={isAdmin} />
       )}
 
       {showExport && (

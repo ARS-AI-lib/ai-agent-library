@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { HITL_DEF, HITL_ORDER, hitlLevel } from '../lib/status';
 import { getType } from '../lib/tier';
 import { agentProcessIds, normalizeProgress } from '../lib/agentUtils';
@@ -110,10 +110,6 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
 
   const counted = cards.reduce((s, c) => s + c.total, 0);
 
-  // Hides squares with no agent (and the matching legend row). Display-only.
-  const [hideEmpty, setHideEmpty] = useState(false);
-  const shownSquares = hideEmpty ? squares.filter((s) => s.n > 0) : squares;
-
   const tileTitle = (s) => {
     const head = `${/^\d/.test(s.id) ? `${s.id} ` : ''}${s.name}`;
     if (!s.n) return `${head} — Human · no agent yet`;
@@ -124,20 +120,11 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
   return (
     <div className="dash-rv-grid">
       <div className="dash-card dash-bp">
-        <button
-          type="button"
-          className="dash-bp-hide"
-          aria-pressed={hideEmpty}
-          onClick={() => setHideEmpty((v) => !v)}
-          title={hideEmpty ? 'Show all capabilities' : 'Hide capabilities with no agent yet'}
-        >
-          {hideEmpty ? '◱' : '▦'}
-        </button>
         <div className="dash-bp-h">AI-SDLC Blueprint</div>
         <div className="dash-bp-sub">{processes.length} capabilities across the SDLC · {covered} covered</div>
 
         <div className="dash-bp-sq">
-          {shownSquares.map((s) => (
+          {squares.map((s) => (
             <button
               type="button"
               key={s.id}

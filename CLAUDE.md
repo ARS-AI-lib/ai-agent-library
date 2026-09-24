@@ -1239,7 +1239,7 @@ banking chatbot ติด AI Engineer → Software Engineer)
 ### เส้นทาง
 - **approve** → `PendingApprovalModal.handleApprove` เรียก `classifyRoleGroups([parent, ...siblings])`
   **ครั้งเดียวนอก loop** fire-and-forget (`src/lib/roleGroupClassify.js`) → callable `classifyRoleGroup`
-- **เก็บตก** → เมนู admin "Classify Missing Role Groups" (`missingOnly`, admin เท่านั้น)
+- **เก็บตก** → แถบ "Classify Missing Items" ในหน้า Role Group Management (โผล่เฉพาะเมื่อมีรายการยังไม่จำแนก, admin เท่านั้น, `missingOnly`)
 - **ยังไม่ถูกจำแนก** → การ์ดใช้ alias ตัวแรก (`roleGroupsOf()[0]`) + header บอก "N awaiting classification"
 - ⚠️ bulk import/สคริปต์ไม่ผ่านปุ่ม approve → ต้องกดเก็บตกหรือรัน `backfill-role-group.cjs`
 

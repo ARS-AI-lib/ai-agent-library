@@ -131,11 +131,6 @@
 /* Blueprint panel — dashed border marks it as the catalog side rather than a
    measured widget. */
 .dash-bp { border-style: dashed; border-color: var(--bd); position: relative; }
-/* Small toggle in the box's top-right corner — light grey so it stays out of
-   the way until someone looks for it; title carries the label since there's
-   no room for text. */
-.dash-bp-hide { position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border: none; background: none; color: var(--mu2); font-size: 13px; line-height: 1; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
-.dash-bp-hide:hover { background: var(--sf2); color: var(--tx2); }
 .dash-bp-h { font-size: 12.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--tx); }
 .dash-bp-sub { font-size: 11.5px; color: var(--mu); margin-top: 2px; }
 .dash-bp-sq { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 12px 0 10px; }

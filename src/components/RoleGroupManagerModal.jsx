@@ -4,6 +4,7 @@ import { useRoleGroups } from '../hooks/useRoleGroups';
 import { getType } from '../lib/tier';
 import TagMultiSelect from './TagMultiSelect';
 import useEscapeKey from '../hooks/useEscapeKey';
+import { classifyMissingRoleGroups } from '../lib/roleGroupClassify';
 import '../styles/RoleGroupManager.css';
 
 // Role Group Management (2026-09-24) — admin + committee only (App/Nav gate;
@@ -21,7 +22,7 @@ import '../styles/RoleGroupManager.css';
 
 const call = (payload) => httpsCallable(getFunctions(), 'manageRoleGroups', { timeout: 300000 })(payload).then((r) => r.data);
 
-export default function RoleGroupManagerModal({ onClose, agents = [], schema = {} }) {
+export default function RoleGroupManagerModal({ onClose, agents = [], schema = {}, isAdmin = false }) {
   useEscapeKey(onClose);
   const rg = useRoleGroups();
   const [selKey, setSelKey] = useState(null); // null = nothing picked yet; '__new' = add form
@@ -35,6 +36,11 @@ export default function RoleGroupManagerModal({ onClose, agents = [], schema = {
     agents.forEach((a) => { if (a.roleGroup) c[a.roleGroup] = (c[a.roleGroup] || 0) + 1; });
     return c;
   }, [agents]);
+
+  // Items with no (valid) stored group — normally 0: approvals classify on the
+  // spot. Non-zero after a bulk import or a lost AI call; the banner below is
+  // the safety net (admin only — the callable's missingOnly mode is admin-gated).
+  const missing = agents.filter((a) => !rg.has(a.roleGroup)).length;
 
   const current = rg.groups.find((g) => g.key === selKey) || null;
   const isNew = selKey === '__new';
@@ -113,6 +119,31 @@ export default function RoleGroupManagerModal({ onClose, agents = [], schema = {
             <p>กลุ่มบนการ์ด Role Coverage · แก้ role/คำอธิบายมีผลกับรายการใหม่ ส่วนรายการเดิมไม่ถูกย้ายเอง</p>
           </div>
         </div>
+
+        {isAdmin && missing > 0 && (
+          <div className="rgm-missing">
+            <span><b>{missing}</b> รายการยังไม่ถูกจำแนกกลุ่ม (เช่น import ด้วยสคริปต์ หรือ AI เรียกไม่สำเร็จตอน approve) — ตอนนี้แสดงบนการ์ดด้วยการเดาจาก role ชั่วคราว</span>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!!busy}
+              onClick={async () => {
+                setBusy('classify');
+                setMsg(null);
+                try {
+                  const r = await classifyMissingRoleGroups();
+                  setMsg({ kind: 'ok', text: `Classified ${r.classified} of ${r.requested} item(s).` });
+                } catch (e) {
+                  setMsg({ kind: 'err', text: e?.message || String(e) });
+                } finally {
+                  setBusy('');
+                }
+              }}
+            >
+              {busy === 'classify' ? 'Classifying…' : 'Classify Missing Items'}
+            </button>
+          </div>
+        )}
 
         {msg && <div className={`rgm-msg ${msg.kind}`}>{msg.text}</div>}
 
