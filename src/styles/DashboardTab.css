@@ -247,6 +247,12 @@
 .dash-rv-right { display: flex; flex-direction: column; }
 .dash-rv-right .dash-roles { flex: 1; grid-auto-rows: 1fr; }
 .dash-rv-right .dash-rc { display: flex; flex-direction: column; justify-content: center; }
+.dash-rv-right .dash-rc-n { font-size: 14px; }
+.dash-rv-right .dash-rc-b { font-size: 22px; min-width: 46px; padding: 5px 11px; border-radius: 9px; }
+.dash-rv-right .dash-rc-s { margin-top: 10px; font-size: 12px; }
 @media (max-width: 900px) {
   .dash-rv-right .dash-roles { grid-auto-rows: auto; }
+  .dash-rv-right .dash-rc-n { font-size: 11px; }
+  .dash-rv-right .dash-rc-b { font-size: 13px; min-width: 28px; padding: 2px 6px; border-radius: 7px; }
+  .dash-rv-right .dash-rc-s { margin-top: 6px; font-size: 11px; }
 }
