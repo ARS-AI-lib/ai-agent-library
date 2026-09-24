@@ -13,12 +13,12 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 export function classifyRoleGroups(agentIds) {
   const ids = [...new Set((agentIds || []).filter(Boolean))].slice(0, 20);
   if (!ids.length) return;
-  httpsCallable(getFunctions(), 'classifyRoleGroup')({ agentIds: ids })
+  httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'classifyRoleGroup')({ agentIds: ids })
     .catch((e) => console.warn('classifyRoleGroup failed:', e?.message || e));
 }
 
 /** Admin menu: classify every approved item that still has no roleGroup. Awaited. */
 export async function classifyMissingRoleGroups() {
-  const res = await httpsCallable(getFunctions(), 'classifyRoleGroup', { timeout: 300000 })({ missingOnly: true });
+  const res = await httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'classifyRoleGroup', { timeout: 300000 })({ missingOnly: true });
   return res.data;
 }

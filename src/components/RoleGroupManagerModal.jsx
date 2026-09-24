@@ -20,7 +20,7 @@ import '../styles/RoleGroupManager.css';
 //   only touches AI-set items; anything a person moved stays put.
 // * Deleting a group requires a destination group for its items.
 
-const call = (payload) => httpsCallable(getFunctions(), 'manageRoleGroups', { timeout: 300000 })(payload).then((r) => r.data);
+const call = (payload) => httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'manageRoleGroups', { timeout: 300000 })(payload).then((r) => r.data);
 
 export default function RoleGroupManagerModal({ onClose, agents = [], schema = {}, isAdmin = false }) {
   useEscapeKey(onClose);
