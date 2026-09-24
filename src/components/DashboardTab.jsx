@@ -349,7 +349,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
                   onClick={() => setListModal({ sub: 'Engagement Depth', title: d.label, agents: depth.b[d.key] })}
                 >
                   <b style={{ background: d.color }} />
-                  <span>{d.label}</span>
+                  <span>{d.label}<small>{d.hint}</small></span>
                   <em>{depth.b[d.key].length}</em>
                   <small>{pct(depth.b[d.key].length)}%</small>
                 </button>
