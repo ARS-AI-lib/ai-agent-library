@@ -102,7 +102,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
       o: acc.o + r.s.detailOpens, c: acc.c + r.s.endpointClicks, h: acc.h + r.s.searchHits, r: acc.r + r.s.ratingCount,
     }), { o: 0, c: 0, h: 0, r: 0 });
     return {
-      top: rows.filter((r) => r.d > 0).sort((x, y) => y.d - x.d).slice(0, 10),
+      top: rows.filter((r) => r.d > 0).sort((x, y) => y.d - x.d).slice(0, 8),
       untouched: rows.filter((r) => isUntouched(statsById.get(r.a.id))).length,
       totals: t,
     };
@@ -349,7 +349,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
                   onClick={() => setListModal({ sub: 'Engagement Depth', title: d.label, agents: depth.b[d.key] })}
                 >
                   <b style={{ background: d.color }} />
-                  <span>{d.label}<small>{d.hint}</small></span>
+                  <span>{d.label}</span>
                   <em>{depth.b[d.key].length}</em>
                   <small>{pct(depth.b[d.key].length)}%</small>
                 </button>
