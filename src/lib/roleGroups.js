@@ -14,31 +14,16 @@
 // one `relatedRole` entry at a time.
 //
 // ── Keys are normalized, not raw ──
-// Keys are `normRole(value).toLowerCase()`. Real data carries zero-width
+// Keys go through aliasKey() (normRole + lowercase + no spaces/hyphens/dots). Real data carries zero-width
 // characters — the sheet itself contains 'Dev Lead​' — so a raw-value map
 // silently drops 'Dev Lead' while looking correct in the source. normRole()
 // strips those; lowercasing absorbs the Operations/operations style drift.
 //
-// ── The 19 roles the sheet has no row for ──
-// Measured against live Firestore: the sheet covers 34 of the 54 role values in
-// use, leaving 24 docs in no group at all and the Product owner card empty
-// (the sheet has the group but no `PO` row). Each addition below is inferred
-// from a combination the sheet DOES map, never invented:
-//   UI Designer, UX Researcher, Product Designer, Visual Designer,
-//   Graphic Designer, Design System Engineer, Copywriter → UX/UI
-//     ("UX Designer; UI Designer; UX Writer" → UX/UI puts all design/writing
-//      tokens in one group)
-//   QA Engineer, Reviewer → Software Engineer  ("QA Engineer; Reviewer" → SE)
-//   PO, Product Manager → Product owner        (group exists, token missing)
-//   QA → SIT                                   ("Tester" → SIT)
-//   Front-End Developer, Full Stack Engineer → Software Engineer
-//   Software Architect → System Architect
-//   Agile Practitioner Lead → Delivery Manager
-//   Business Intelligence Analyst → Analyst    (Data/Credit Analyst → Analyst)
-//   SME → Support function                     ("AI Creator; SME" → Support function)
-//   Content Strategist → Business Users        (Content Analyst/Manager → Business Users)
-// Result: 0 unmapped roles, 0 docs without a group, 15 groups.
-//
+// ── Roles the sheet has no row for ──
+// The sheet covers 34 of the 54 role values in use; the rest were added by
+// analogy (2026-09-23) and several were then re-decided by the user
+// (2026-09-24) — see the alias table below, which is now the authority.
+
 // ── An agent counts in EVERY group its roles map to ──
 // A skill tagged ['UX Designer','UI Designer'] really is available to both
 // roles, so excluding it from either card would answer "how many AI does my
@@ -50,8 +35,7 @@
 import { splitRoles } from './agentUtils';
 import { normRole } from './approveAreas';
 
-// Display order / the authoritative group list. Cards are sorted by count at
-// render time; this is the tie-breaker and the reference list.
+// Display order / the authoritative group list — cards render in this order.
 // Row-major 5x3, corrected 2026-09-23 to match the approved mock exactly
 // (row1: UX/UI, Software Engineer, Product owner, Operations, Support function
 //  row2: SIT, Business Users, Business Analyst, DevOps Engineer, Delivery Manager
@@ -89,49 +73,66 @@ export function roleGroupLabel(group) {
   return ROLE_GROUP_LABEL[group] || group;
 }
 
+// Alias table: every spelling that means the same role, grouped under the
+// sheet's group key. Matching is EXACT after aliasKey() folds case, spaces,
+// hyphens, dots and underscores ("Front-End Developer" = "frontend developer")
+// — never substring: a "contains Dev" rule would send "DevOps Engineer" to
+// Software Engineer. A new spelling that shows up in the data must be added
+// here explicitly (the Dashboard shows it as missing from every card until then).
+//
+// ── Groups the user defined on 2026-09-24 (override the sheet) ──
+//   Product owner    = PO, Product Owner, Product Manager
+//   Delivery Manager = DM, Delivery/Project Manager, PM, Scrum, Scrum Master,
+//                      Agile Practitioner (+ Lead) — project management work
+//   UAT              = QA, QA Engineer, UAT, Quality Assessment (+ UAT Test,
+//                      Test management from the sheet, Reviewer moved here)
+//   SIT              = Tester, SIT
+//   Software Engineer= Dev, Developer, Programmer, Fullstack, Backend,
+//                      Frontend, Tech Coach, Software Engineer (+ the sheet's
+//                      AI Engineer / Dev Lead / Tech Lead / SA / Performance Engineer)
+// "PM" is Project Manager here by the user's decision; Product Manager is only
+// matched by its full name.
 const RAW = {
-  // ── from the sheet, single-role rows ──
-  'UX/UI': ['UX Designer', 'UX Writer'],
-  'Software Engineer': ['AI Engineer', 'Backend Engineer', 'Dev Lead', 'Developer', 'Frontend Engineer', 'Performance Engineer', 'SA', 'Tech Lead'],
-  Analyst: ['Analyst', 'Credit Analyst', 'Data Analyst'],
+  'UX/UI': ['UX Designer', 'UX Writer', 'UI Designer', 'UX Researcher', 'Product Designer', 'Visual Designer', 'Graphic Designer', 'Design System Engineer', 'Copywriter'],
+  'Software Engineer': [
+    'Software Engineer', 'Dev', 'Developer', 'Programmer', 'Programer',
+    'Fullstack', 'Full Stack Engineer', 'Full Stack Developer',
+    'Backend', 'Backend Engineer', 'Backend Developer',
+    'Frontend', 'Frontend Engineer', 'Front-End Developer',
+    'Tech Coach', 'Tech Lead', 'Dev Lead', 'AI Engineer', 'Performance Engineer', 'SA',
+  ],
+  'Product owner': ['PO', 'Product Owner', 'Product Manager'],
+  'Delivery Manager': ['Delivery Manager', 'DM', 'Project Manager', 'PM', 'Scrum', 'Scrum Master', 'Agile Practitioner', 'Agile Practitioner Lead'],
+  UAT: ['QA', 'QA Engineer', 'UAT', 'UAT Test', 'Quality Assessment', 'Test management', 'Reviewer'],
+  SIT: ['Tester', 'SIT'],
+  Analyst: ['Analyst', 'Credit Analyst', 'Data Analyst', 'Business Intelligence Analyst'],
   'Business Analyst': ['BA'],
-  'Business Users': ['CIO', 'Compliance Officer', 'Content Analyst', 'Content Manager', 'CRM Manager', 'Investment Advisor', 'Strategist'],
-  'Delivery Manager': ['Delivery Manager'],
+  'Business Users': ['CIO', 'Compliance Officer', 'Content Analyst', 'Content Manager', 'CRM Manager', 'Investment Advisor', 'Strategist', 'Content Strategist'],
   'DevOps Engineer': ['DevOps Engineer'],
   Operations: ['Operations'],
   'Security Engineer': ['Security Engineer'],
-  SIT: ['Tester'],
-  'Support function': ['AI Creator', 'Customer Support', 'Marketing', 'Support', 'Support Manager'],
+  'Support function': ['AI Creator', 'Customer Support', 'Marketing', 'Support', 'Support Manager', 'SME'],
   System: ['System', 'System Administrator'],
-  'System Architect': ['System Architect'],
-  UAT: ['Test management', 'UAT', 'UAT Test'],
-  // ── added here (see header) ──
-  __added: {
-    'UX/UI': ['UI Designer', 'UX Researcher', 'Product Designer', 'Visual Designer', 'Graphic Designer', 'Design System Engineer', 'Copywriter'],
-    'Software Engineer': ['QA Engineer', 'Reviewer', 'Front-End Developer', 'Full Stack Engineer'],
-    'Product owner': ['PO', 'Product Manager'],
-    SIT: ['QA'],
-    'System Architect': ['Software Architect'],
-    'Delivery Manager': ['Agile Practitioner Lead'],
-    Analyst: ['Business Intelligence Analyst'],
-    'Support function': ['SME'],
-    'Business Users': ['Content Strategist'],
-  },
+  'System Architect': ['System Architect', 'Software Architect'],
 };
 
-const key = (r) => normRole(r).toLowerCase();
+// normRole() strips the zero-width characters real data carries ('Dev Lead​');
+// the rest folds the spelling variants listed above onto one key.
+const aliasKey = (r) => normRole(r).toLowerCase().replace(/[\s\-_.]+/g, '');
 
 export const ROLE_GROUP = (() => {
   const out = {};
-  const add = (group, roles) => roles.forEach((r) => { if (key(r)) out[key(r)] = group; });
-  Object.entries(RAW).forEach(([group, roles]) => { if (group !== '__added') add(group, roles); });
-  Object.entries(RAW.__added).forEach(([group, roles]) => add(group, roles));
+  Object.entries(RAW).forEach(([group, roles]) => roles.forEach((r) => {
+    const k = aliasKey(r);
+    if (out[k] && out[k] !== group) throw new Error(`roleGroups: "${r}" is listed under both ${out[k]} and ${group}`);
+    if (k) out[k] = group;
+  }));
   return out;
 })();
 
-/** The single role of one raw `relatedRole` entry, or undefined. */
+/** The group of one raw `relatedRole` entry, or undefined. */
 export function roleGroupOf(role) {
-  return ROLE_GROUP[key(role)];
+  return ROLE_GROUP[aliasKey(role)];
 }
 
 /**
