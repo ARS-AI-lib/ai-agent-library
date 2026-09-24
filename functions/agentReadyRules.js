@@ -149,7 +149,11 @@ function checkMarkReady({ agent, endpointUrl }) {
   // the client form: this callable is reachable directly by anyone who knows
   // its name, same reasoning as every other check in this file.
   const isNonReusable = agent.reusable === 'Non-reusable';
-  if (!endpoint && !hasFile && !isNonReusable) {
+  // T4 (Agent + External) is exempt too (user rule 2026-09-24). Mirrors
+  // getTier() in src/lib/tier.js, which functions cannot import:
+  // skill = aiAgent===false && skillMd===true; External = customerFacing===true.
+  const isT4 = !(agent.aiAgent === false && agent.skillMd === true) && agent.customerFacing === true;
+  if (!endpoint && !hasFile && !isNonReusable && !isT4) {
     return {
       code: 'failed-precondition',
       message: 'An endpoint URL or an uploaded file is required before progress can reach 100%.',

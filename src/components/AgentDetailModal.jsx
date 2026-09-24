@@ -200,6 +200,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // check (functions/agentReadyRules.js) — the server must not trust a value
   // it did not itself verify.
   const isNonReusable = agent.reusable === 'Non-reusable';
+  // T4 (Enterprise Agent = Agent + External) is exempt too (2026-09-24): the
+  // same rule markAgentReady applies server-side in agentReadyRules.js.
+  const linkExempt = isNonReusable || tier === 'T4';
   // A creator may ask to rename only once the thing is actually live — before
   // that the ordinary Edit form still lets them rename outright, no approval
   // needed, so offering a request flow there would be pure friction.
@@ -258,7 +261,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // Non-reusable agents/skills are exempt (see isNonReusable above) — a
       // tool built for one specific purpose has no "next user" to hand a
       // location to.
-      if (!isNonReusable && !hasEndpoint && !editEndpoint.trim() && !editFile) {
+      if (!linkExempt && !hasEndpoint && !editEndpoint.trim() && !editFile) {
         setSaveError('ต้องระบุ Endpoint URL หรืออัปโหลดไฟล์อย่างใดอย่างหนึ่งก่อน จึงจะปรับเป็น 100% ได้');
         return;
       }
@@ -692,14 +695,13 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   so demanding a location there would be noise. Hidden entirely
                   once one exists (URL or uploaded file): this is a requirement
                   to HAVE an endpoint, not to retype it every time. */}
-              {Number(editProgress) === 100 && !hasEndpoint && isNonReusable && (
+              {Number(editProgress) === 100 && !hasEndpoint && linkExempt && (
                 <div className="msg info" style={{ marginTop: 8, fontSize: 11 }}>
                   <span className="dot" style={{ background: '#4a6fa5' }} />
-                  Non-reusable — ไม่ต้องระบุ Endpoint หรืออัปโหลดไฟล์ก่อนปรับเป็น 100%
-                  (ถือเป็น Agent/Skill เฉพาะทาง ไม่ได้ให้ผู้อื่นนำไปใช้ต่อ)
+                  {isNonReusable ? 'Non-reusable' : 'T4 · Enterprise Agent'} — ไม่ต้องระบุ Endpoint หรืออัปโหลดไฟล์ก่อนปรับเป็น 100%
                 </div>
               )}
-              {Number(editProgress) === 100 && !hasEndpoint && !isNonReusable && (
+              {Number(editProgress) === 100 && !hasEndpoint && !linkExempt && (
                 <div className="fg" style={{ marginTop: 8, marginBottom: 0 }}>
                   <label>
                     Endpoint <span className="req">*</span>
