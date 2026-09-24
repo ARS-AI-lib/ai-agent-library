@@ -1,0 +1,33 @@
+/* Role Group Management modal (2026-09-24) — scoped .rgm- (CLAUDE.md §6). */
+.rgm .m-head p { margin: 2px 0 0; font-size: 12px; color: var(--mu); }
+.rgm-msg { margin: 10px 0 0; padding: 8px 12px; border-radius: 8px; font-size: 12.5px; }
+.rgm-msg.ok { background: var(--st-ru-bg); color: var(--st-ru-fg); }
+.rgm-msg.err { background: var(--tl-delay-bg); color: var(--tl-delay-fg); }
+.rgm-grid { display: grid; grid-template-columns: 240px 1fr; gap: 18px; margin-top: 14px; align-items: start; }
+.rgm-list { display: flex; flex-direction: column; gap: 3px; }
+.rgm-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
+.rgm-row.on { background: var(--accent-soft); }
+.rgm-pick { flex: 1; display: flex; justify-content: space-between; gap: 8px; padding: 7px 9px; border: none; background: none; font: inherit; font-size: 12.5px; color: var(--tx); text-align: left; cursor: pointer; border-radius: 8px; }
+.rgm-row.on .rgm-pick { font-weight: 700; color: var(--accent); }
+.rgm-pick em { font-style: normal; color: var(--mu); font-variant-numeric: tabular-nums; }
+.rgm-arrow { width: 22px; height: 24px; border: none; background: none; color: var(--mu); cursor: pointer; border-radius: 5px; font-size: 12px; }
+.rgm-arrow:hover:not(:disabled) { background: var(--sf2); color: var(--tx); }
+.rgm-arrow:disabled { opacity: .3; cursor: default; }
+.rgm-add { margin-top: 6px; padding: 8px 9px; border: 1px dashed var(--bd2); border-radius: 8px; background: none; font: inherit; font-size: 12.5px; color: var(--accent); cursor: pointer; text-align: left; }
+.rgm-add.on { background: var(--accent-soft); border-style: solid; }
+.rgm-edit .fg { margin-bottom: 12px; }
+.rgm-hint { margin: 4px 0 0; font-size: 11px; color: var(--mu); }
+.rgm-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.rgm-delete { margin-top: 12px; padding: 12px; border: 1px solid var(--clr-bd); border-radius: 10px; font-size: 12.5px; color: var(--tx2); }
+.rgm-delete p { margin: 0 0 8px; }
+.rgm-delete select, .rgm-item select { font: inherit; font-size: 12px; padding: 4px 8px; border: 1px solid var(--bd); border-radius: 6px; background: var(--sf); color: var(--tx); }
+.rgm-delete select { width: 100%; margin-bottom: 8px; }
+.rgm-items { margin-top: 16px; border-top: 1px solid var(--bd-soft); padding-top: 12px; }
+.rgm-items-h { font-size: 12px; font-weight: 700; color: var(--tx); margin-bottom: 6px; }
+.rgm-empty { font-size: 12px; color: var(--mu); }
+.rgm-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--bd-soft); font-size: 12.5px; }
+.rgm-item-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tx); }
+.rgm-tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: var(--sf2); color: var(--tx2); }
+@media (max-width: 700px) {
+  .rgm-grid { grid-template-columns: 1fr; }
+}

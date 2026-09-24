@@ -63,7 +63,8 @@ export function progressBucket(p) {
 // ── Human / AI level (2026-09-24) — AI-SDLC Blueprint only ──────────
 // How much of the work AI carries for one agent/skill, derived from the
 // same status bucket plus the stored `hml` (Human-in-the-Loop) flag:
-//   To Do                              → 'human'  (people still do the work)
+//   To Do                              → 'human'  (people still do the work;
+//                                         a process with NO agent is also 'human' — DashboardRoleView)
 //   In Progress / Pilot                → 'mixed'  (Gen AI + Human)
 //   Ready to Use with hml = true       → 'mixed'
 //   Ready to Use with hml = false      → 'ai'     (Gen AI, no human in the loop)

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, addDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill, getType } from '../lib/tier';
-import { ROLE_GROUP_ORDER, roleGroupLabel } from '../lib/roleGroups';
 import { splitRoles, uniq, pairedSubSkills, childSkillIdList, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditOwner, canEditReadyToUseFields, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
@@ -93,7 +92,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
       .filter(Boolean)
       .map((email) => ({ name: '', email })),
     owner: agent.owner || '',
-    roleGroup: agent.roleGroup || '',
     reusable: agent.reusable || '',
     reuseCondition: agent.reuseCondition || '',
     hml: !!agent.hml,
@@ -381,20 +379,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
       if (canSeeOwner && ownerNext !== (agent.owner || '')) {
         await updateDoc(doc(db, 'agents', agent.id), {
           owner: ownerNext,
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      // Write 2e — Role Group (2026-09-24): admin only. The primary group is
-      // normally filled by the classifyRoleGroup Cloud Function and AI never
-      // overwrites it; this is the manual correction path. Own updateDoc via
-      // the blanket isAdmin() branch (roleGroup is in no hasOnly() list), same
-      // reasoning as Write 2d. Marked 'admin' so the source is auditable.
-      if (isAdmin && form.roleGroup && form.roleGroup !== (agent.roleGroup || '')) {
-        await updateDoc(doc(db, 'agents', agent.id), {
-          roleGroup: form.roleGroup,
-          roleGroupSource: 'admin',
-          roleGroupAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
       }
@@ -792,18 +776,6 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
               options={ownerOptions}
               placeholder="ชื่อทีมที่ดูแล…"
             />
-          </div>
-        )}
-
-        {/* ── Role Group (2026-09-24) — admin only. Primary group on the
-            Dashboard's Role Coverage cards; AI fills it once, admin corrects. */}
-        {isAdmin && (
-          <div className="fg">
-            <label>Role Group <span className="hint">({agent.roleGroup ? (agent.roleGroupSource === 'admin' ? 'set by admin' : 'set by AI') : 'not classified yet'})</span></label>
-            <select value={form.roleGroup} onChange={(e) => setField('roleGroup', e.target.value)}>
-              {!form.roleGroup && <option value="">— not classified —</option>}
-              {ROLE_GROUP_ORDER.map((g) => <option key={g} value={g}>{roleGroupLabel(g)}</option>)}
-            </select>
           </div>
         )}
 

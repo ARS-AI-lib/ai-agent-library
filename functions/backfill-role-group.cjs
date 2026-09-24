@@ -8,20 +8,22 @@
 const { initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { GoogleGenAI } = require('@google/genai');
-const { ROLE_GROUP_KEYS, needsRoleGroup, classifyWithAi } = require('./roleGroupRules');
+const { loadRoleGroups, keysOf, needsRoleGroup, classifyWithAi } = require('./roleGroupRules');
 
 const APPLY = process.argv.includes('--apply');
 const db = getFirestore(initializeApp({ credential: applicationDefault(), projectId: 'wolfy-481609' }), 'ai-agent-lib');
 const ai = new GoogleGenAI({ vertexai: true, project: 'wolfy-481609', location: 'asia-southeast1' });
 
 (async () => {
+  const groups = await loadRoleGroups(db);
+  const ROLE_GROUP_KEYS = keysOf(groups);
   const all = (await db.collection('agents').get()).docs.map((d) => ({ id: d.id, ...d.data() }));
-  const targets = all.filter(needsRoleGroup);
+  const targets = all.filter((a) => needsRoleGroup(a, ROLE_GROUP_KEYS));
   const classified = all.filter((a) => a.roleGroup && !a.archived);
   console.log(`live needing a role group: ${targets.length} · already classified: ${classified.length}`);
   if (!targets.length) { console.log('nothing to do'); process.exit(0); }
 
-  const results = await classifyWithAi(ai, targets, classified);
+  const results = await classifyWithAi(ai, targets, classified, groups);
   const missing = targets.filter((t) => !results[t.id]);
 
   const tally = Object.fromEntries(ROLE_GROUP_KEYS.map((g) => [g, { agent: 0, skill: 0 }]));

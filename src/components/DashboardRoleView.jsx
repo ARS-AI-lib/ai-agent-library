@@ -2,14 +2,14 @@ import { useMemo, useState } from 'react';
 import { HITL_DEF, HITL_ORDER, hitlLevel } from '../lib/status';
 import { getType } from '../lib/tier';
 import { agentProcessIds, normalizeProgress } from '../lib/agentUtils';
-import { roleGroupsOf, roleGroupLabel, ROLE_GROUP_ORDER } from '../lib/roleGroups';
+import { useRoleGroups } from '../hooks/useRoleGroups';
 
 /**
  * Dashboard → "Role Coverage" (2026-09-23, reworked 2026-09-24).
  *
  * Left: the AI-SDLC blueprint — one square per sdlcProcesses doc, coloured by
  * how much of that capability's work AI carries (hitlLevel in status.js):
- * Human (To Do) · Gen AI + Human (In Progress, Pilot, Ready with hml) ·
+ * Human (no agent yet, or To Do) · Gen AI + Human (In Progress, Pilot, Ready with hml) ·
  * Gen AI (Ready without a human in the loop). The colours are the ones the
  * user specified for this view only — the rest of the Dashboard keeps ST_DEF.
  * A square takes the level MOST of its agents are at; ties lean to the more
@@ -35,13 +35,15 @@ const byProcessId = (a, b) => {
 };
 
 /** Stored primary group, else the alias fallback. `null` only if neither exists. */
-function primaryGroupOf(a) {
-  if (ROLE_GROUP_ORDER.includes(a.roleGroup)) return { group: a.roleGroup, fallback: false };
-  const g = roleGroupsOf(a)[0];
+function primaryGroupOf(a, rg) {
+  if (rg.has(a.roleGroup)) return { group: a.roleGroup, fallback: false };
+  const g = rg.groupsOf(a)[0];
   return g ? { group: g, fallback: true } : null;
 }
 
 export default function DashboardRoleView({ agents = [], processes = [], onProcClick, onRoleClick }) {
+  // Groups, labels, order and role aliases come from /config/roleGroups.
+  const rg = useRoleGroups();
   // ── Blueprint: per-process level ──
   // `list` keeps the actual agents behind each square so the click-through
   // opens the same set the count claims.
@@ -58,7 +60,8 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
     });
     return [...processes].sort(byProcessId).map((p) => {
       const e = byPid.get(p.id);
-      let lv = 'none';
+      // No agent yet = work is still fully human (user rule 2026-09-24).
+      let lv = 'human';
       if (e) {
         lv = HITL_ORDER.reduce((best, k) => (
           e.c[k] > e.c[best] || (e.c[k] === e.c[best] && TIE_RANK[k] > TIE_RANK[best]) ? k : best
@@ -78,7 +81,7 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
 
   const covered = squares.filter((s) => s.n > 0).length;
   const lvTally = useMemo(() => {
-    const t = { none: 0, human: 0, mixed: 0, ai: 0 };
+    const t = { human: 0, mixed: 0, ai: 0 };
     squares.forEach((s) => { t[s.lv] += 1; });
     return t;
   }, [squares]);
@@ -88,7 +91,7 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
     const m = new Map();
     let fb = 0;
     agents.forEach((a) => {
-      const pg = primaryGroupOf(a);
+      const pg = primaryGroupOf(a, rg);
       if (!pg) return;
       if (pg.fallback) fb += 1;
       const row = m.get(pg.group) || { group: pg.group, agents: 0, skills: 0, list: [] };
@@ -96,14 +99,14 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
       row.list.push(a);
       m.set(pg.group, row);
     });
-    const orderIdx = (g) => { const i = ROLE_GROUP_ORDER.indexOf(g); return i < 0 ? ROLE_GROUP_ORDER.length : i; };
+    const orderIdx = (g) => { const i = rg.order.indexOf(g); return i < 0 ? rg.order.length : i; };
     return {
       cards: [...m.values()]
         .map((r) => ({ ...r, total: r.agents + r.skills }))
         .sort((a, b) => orderIdx(a.group) - orderIdx(b.group)),
       pending: fb,
     };
-  }, [agents]);
+  }, [agents, rg]);
 
   const counted = cards.reduce((s, c) => s + c.total, 0);
 
@@ -113,7 +116,7 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
 
   const tileTitle = (s) => {
     const head = `${/^\d/.test(s.id) ? `${s.id} ` : ''}${s.name}`;
-    if (s.lv === 'none') return `${head} — No agent yet`;
+    if (!s.n) return `${head} — Human · no agent yet`;
     const split = HITL_ORDER.filter((k) => s.c[k]).map((k) => `${HITL_DEF[k].lb} ${s.c[k]}`).join(' · ');
     return `${head} — ${HITL_DEF[s.lv].lb} · ${s.n} agent${s.n > 1 ? 's' : ''} (${split})`;
   };
@@ -150,7 +153,6 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
           {HITL_ORDER.map((k) => (
             <span key={k} className="dash-bp-chip" data-lv={k}>{HITL_DEF[k].lb} <em>{lvTally[k]}</em></span>
           ))}
-          {!hideEmpty && <span className="dash-bp-chip" data-lv="none">No agent yet <em>{lvTally.none}</em></span>}
         </div>
       </div>
 
@@ -169,11 +171,11 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
               type="button"
               key={c.group}
               className="dash-rc"
-              onClick={() => onRoleClick?.(roleGroupLabel(c.group), c.list)}
-              title={`${roleGroupLabel(c.group)} — ${c.total} item${c.total > 1 ? 's' : ''}`}
+              onClick={() => onRoleClick?.(rg.labelOf(c.group), c.list)}
+              title={`${rg.labelOf(c.group)} — ${c.total} item${c.total > 1 ? 's' : ''}`}
             >
               <div className="dash-rc-t">
-                <div className="dash-rc-n">{roleGroupLabel(c.group)}</div>
+                <div className="dash-rc-n">{rg.labelOf(c.group)}</div>
                 <div className="dash-rc-b">{c.total}</div>
               </div>
               <div className="dash-rc-s">

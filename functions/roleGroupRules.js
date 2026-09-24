@@ -1,35 +1,43 @@
 // Role Group classification (2026-09-24) — the single place that decides HOW
 // an agent/skill gets its PRIMARY role group. Used by the classifyRoleGroup
-// callable and by backfill-role-group.cjs, so both run the exact same prompt
-// (same pattern as chatPrompt.js / agentReadyRules.js).
+// and manageRoleGroups callables and by backfill-role-group.cjs, so all run
+// the exact same prompt (same pattern as chatPrompt.js / agentReadyRules.js).
 //
 // ── Method: "v5", chosen after 5 read-only pilots on the live library ──
 // Evidence order: name > description (TBC -> name + relatedRole) >
 // relatedRole (confirms only) > output (confirms only). One PRIMARY group per
 // item = the people who run the tool day to day; SECONDARY = up to 2 groups
 // that benefit indirectly. Against the hand-made sheet this agreed 166/189
-// (88%), the best of the variants tried; putting relatedRole first or second
-// drifted back to "who built it" (e.g. customer chatbots tagged AI Engineer).
+// (88%), the best of the variants tried.
+//
+// ── Groups come from /config/roleGroups (Role Group Management UI) ──
+// The group keys, their definitions and the response enum are built from the
+// config at call time — nothing about the groups is hard-coded here any more.
+// DEFAULT_ROLE_GROUPS is only the fallback when the doc does not exist yet.
 //
 // ── Stability rules (user decision) ──
-// * A stored roleGroup is NEVER overwritten by AI — only filled when missing.
-//   An admin can change it by hand (roleGroupSource: 'admin').
+// * AI only fills a MISSING roleGroup; a stored one is never overwritten
+//   (the explicit "Re-classify this group" action clears AI-set ones first).
 // * Already-classified items are sent along as reference examples, so a new
 //   item lands consistently with how similar ones were already placed.
-// * The model can only answer with the 15 keys (responseSchema enum) — it
-//   cannot invent a group (CLAUDE.md §31).
-
-// Must equal ROLE_GROUP_ORDER in src/lib/roleGroups.js — functions cannot
-// import src/, so verify-role-group.cjs asserts the two lists match.
-const ROLE_GROUP_KEYS = [
-  'UX/UI', 'Software Engineer', 'Product owner', 'Operations', 'Support function',
-  'SIT', 'Business Users', 'Business Analyst', 'DevOps Engineer', 'Delivery Manager',
-  'System', 'UAT', 'System Architect', 'Analyst', 'Security Engineer',
-];
+// * The model can only answer with the configured keys (responseSchema enum)
+//   — it cannot invent a group (CLAUDE.md §31).
+const { DEFAULT_ROLE_GROUPS } = require('./roleGroupAdminRules');
 
 const ROLE_GROUP_MODEL = 'gemini-2.5-flash';
+const ROLE_GROUP_DOC = 'config/roleGroups';
 
-const ROLE_GROUP_SYSTEM = `You classify AI agents/skills in an internal bank AI library.
+async function loadRoleGroups(db) {
+  const snap = await db.doc(ROLE_GROUP_DOC).get();
+  const groups = snap.exists ? snap.data()?.groups : null;
+  return Array.isArray(groups) && groups.length ? groups : DEFAULT_ROLE_GROUPS;
+}
+
+const keysOf = (groups) => groups.map((g) => g.key);
+
+function buildSystem(groups) {
+  const keys = keysOf(groups);
+  return `You classify AI agents/skills in an internal bank AI library.
 Analyse each item in this STRICT order of evidence:
   1) name — the agent/skill name (strongest evidence of what it is and who it is for)
   2) description — what the tool actually does. If the description is "TBC" or empty, decide from name + relatedRole instead.
@@ -38,24 +46,28 @@ Analyse each item in this STRICT order of evidence:
 From the real capability, decide:
   - primary: the ONE group whose people run this tool / whose day-to-day job it is built for.
   - secondary: 0-2 other groups that benefit indirectly (they consume the output, review it, etc.). Never repeat primary.
-Allowed group keys (use exactly these): ${ROLE_GROUP_KEYS.join(' | ')}.
-Definitions: UX/UI = designers, UX writers, UX researchers. Software Engineer = developers of any stack, tech leads, AI engineers building software. Product owner = PO / product managers. Business Analyst = BA writing requirements, epics, user stories. SIT = system-integration testing; in this organisation the "Tester" role is the SIT-TQM team, so test-case/automation/defect tools for Testers are SIT. UAT = QA / user-acceptance / quality audits / PVT. Delivery Manager = project, delivery, scrum management. DevOps Engineer = CI/CD, deployment, infrastructure. System = platform-internal tools with no human end user. System Architect = solution/system architecture, API/HLD design. Analyst = credit, data, BI analysts. Business Users = business-side staff (investment, CRM, content, compliance) AND customer-facing business chatbots whose end users are bank customers. Support function = customer support, SME, marketing, AI creators. Operations = back-office document processing. Security Engineer = security.
+Allowed group keys (use exactly these): ${keys.join(' | ')}.
+Definitions: ${groups.map((g) => `${g.key} = ${g.definition}${g.roles?.length ? ` (typical roles: ${g.roles.join(', ')})` : ''}`).join('. ')}.
 If "Already-classified reference items" are given, stay consistent with them: a new item that does the same kind of job as a reference item should get the same primary group.
 reason: one short sentence citing the name/description evidence.`;
+}
 
-const ROLE_GROUP_SCHEMA = {
-  type: 'ARRAY',
-  items: {
-    type: 'OBJECT',
-    properties: {
-      id: { type: 'STRING' },
-      primary: { type: 'STRING', enum: ROLE_GROUP_KEYS },
-      secondary: { type: 'ARRAY', items: { type: 'STRING', enum: ROLE_GROUP_KEYS }, maxItems: 2 },
-      reason: { type: 'STRING' },
+function buildSchema(groups) {
+  const keys = keysOf(groups);
+  return {
+    type: 'ARRAY',
+    items: {
+      type: 'OBJECT',
+      properties: {
+        id: { type: 'STRING' },
+        primary: { type: 'STRING', enum: keys },
+        secondary: { type: 'ARRAY', items: { type: 'STRING', enum: keys }, maxItems: 2 },
+        reason: { type: 'STRING' },
+      },
+      required: ['id', 'primary', 'secondary', 'reason'],
     },
-    required: ['id', 'primary', 'secondary', 'reason'],
-  },
-};
+  };
+}
 
 const clip = (t, n) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, n);
 const roleList = (r) => (Array.isArray(r) ? r : String(r || '').split(/[,/]/))
@@ -65,11 +77,8 @@ function itemText(a) {
   return `id: ${a.id}\nname: ${clip(a.agentName, 160)}\nrelatedRole: ${roleList(a.relatedRole).join(', ')}\ndescription: ${clip(a.description, 500)}\noutput: ${clip(a.output, 200)}`;
 }
 
-/**
- * Baseline examples: up to `max` already-classified items most similar to the
- * targets (shared relatedRole / category), so new items follow precedent.
- */
-function pickExamples(targets, classified, max = 20) {
+/** Baseline examples: up to `max` already-classified items sharing a role/category with the targets. */
+function pickExamples(targets, classified, keys, max = 20) {
   const want = new Set();
   targets.forEach((t) => {
     roleList(t.relatedRole).forEach((r) => want.add(`r:${r.toLowerCase()}`));
@@ -77,7 +86,7 @@ function pickExamples(targets, classified, max = 20) {
   });
   const ids = new Set(targets.map((t) => t.id));
   return classified
-    .filter((a) => !ids.has(a.id) && ROLE_GROUP_KEYS.includes(a.roleGroup))
+    .filter((a) => !ids.has(a.id) && keys.includes(a.roleGroup))
     .map((a) => {
       let s = 0;
       roleList(a.relatedRole).forEach((r) => { if (want.has(`r:${r.toLowerCase()}`)) s += 2; });
@@ -99,41 +108,41 @@ function buildRoleGroupPrompt(targets, examples = []) {
 }
 
 /** Keep only well-formed answers for the requested ids. */
-function sanitizeResults(rows, targets) {
+function sanitizeResults(rows, targets, keys) {
   const ids = new Set(targets.map((t) => t.id));
   const out = {};
   (Array.isArray(rows) ? rows : []).forEach((r) => {
-    if (!r || !ids.has(r.id) || !ROLE_GROUP_KEYS.includes(r.primary)) return;
+    if (!r || !ids.has(r.id) || !keys.includes(r.primary)) return;
     const secondary = [...new Set((Array.isArray(r.secondary) ? r.secondary : [])
-      .filter((g) => ROLE_GROUP_KEYS.includes(g) && g !== r.primary))].slice(0, 2);
+      .filter((g) => keys.includes(g) && g !== r.primary))].slice(0, 2);
     out[r.id] = { primary: r.primary, secondary, reason: clip(r.reason, 300) };
   });
   return out;
 }
 
-/** True when this doc should be (re)considered by AI — never when already set. */
-function needsRoleGroup(agent) {
-  return agent?.approvalStatus === 'approved' && !agent?.archived && !ROLE_GROUP_KEYS.includes(agent?.roleGroup);
+/** True when AI should fill this doc — never when a valid roleGroup is already stored. */
+function needsRoleGroup(agent, keys) {
+  return agent?.approvalStatus === 'approved' && !agent?.archived && !keys.includes(agent?.roleGroup);
 }
 
-/**
- * Classify `targets` with Gemini in batches; returns { [id]: {primary, secondary, reason} }.
- * `ai` is a GoogleGenAI client. Missing ids are retried one by one once.
- */
-async function classifyWithAi(ai, targets, classified, { batch = 8 } = {}) {
+/** Classify `targets` in batches; returns { [id]: {primary, secondary, reason} }. */
+async function classifyWithAi(ai, targets, classified, groups, { batch = 8 } = {}) {
+  const keys = keysOf(groups);
+  const system = buildSystem(groups);
+  const schema = buildSchema(groups);
   const call = async (items) => {
     const r = await ai.models.generateContent({
       model: ROLE_GROUP_MODEL,
-      contents: [{ role: 'user', parts: [{ text: buildRoleGroupPrompt(items, pickExamples(items, classified)) }] }],
+      contents: [{ role: 'user', parts: [{ text: buildRoleGroupPrompt(items, pickExamples(items, classified, keys)) }] }],
       config: {
-        systemInstruction: ROLE_GROUP_SYSTEM,
+        systemInstruction: system,
         temperature: 0,
         responseMimeType: 'application/json',
-        responseSchema: ROLE_GROUP_SCHEMA,
+        responseSchema: schema,
         thinkingConfig: { thinkingBudget: 0 },
       },
     });
-    return sanitizeResults(JSON.parse(r.text || '[]'), items);
+    return sanitizeResults(JSON.parse(r.text || '[]'), items, keys);
   };
   const out = {};
   for (let i = 0; i < targets.length; i += batch) Object.assign(out, await call(targets.slice(i, i + batch)));
@@ -142,6 +151,6 @@ async function classifyWithAi(ai, targets, classified, { batch = 8 } = {}) {
 }
 
 module.exports = {
-  ROLE_GROUP_KEYS, ROLE_GROUP_MODEL, ROLE_GROUP_SYSTEM, ROLE_GROUP_SCHEMA,
+  ROLE_GROUP_MODEL, ROLE_GROUP_DOC, loadRoleGroups, keysOf, buildSystem, buildSchema,
   pickExamples, buildRoleGroupPrompt, sanitizeResults, needsRoleGroup, classifyWithAi,
 };

@@ -8,7 +8,7 @@ export default function Nav({
   agentCount, skillCount,
   user, onSignOut,
   activeTab, setActiveTab,
-  onOpenExport, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
+  onOpenExport, onOpenRoleGroups, canManageRoleGroups, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -123,6 +123,14 @@ export default function Nav({
               >
                 Export Data
               </button>
+              {canManageRoleGroups && (
+                <button
+                  type="button"
+                  onClick={() => { onOpenRoleGroups?.(); setMenuOpen(false); }}
+                >
+                  Role Group Management
+                </button>
+              )}
               {/* Attach a file to a deploy-approved agent's endpoint. Visible
                   to admin/staff/approver; the callable re-checks the role and
                   the Approve Area, so this is presentation only. */}

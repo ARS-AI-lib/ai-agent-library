@@ -25,6 +25,7 @@ import PendingApprovalModal from './components/PendingApprovalModal';
 import ChatAssistant from './components/ChatAssistant';
 import UserManagementModal from './components/UserManagementModal';
 import ExportDataModal from './components/ExportDataModal';
+import RoleGroupManagerModal from './components/RoleGroupManagerModal';
 import UploadEndpointFileModal from './components/UploadEndpointFileModal';
 import EditAgentModal from './components/EditAgentModal';
 import SDLCTab from './components/SDLCTab';
@@ -169,6 +170,7 @@ export default function App() {
   const [showPending, setShowPending] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [showRoleGroups, setShowRoleGroups] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [myAI, setMyAI] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
@@ -400,6 +402,8 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenExport={() => setShowExport(true)}
+        onOpenRoleGroups={() => setShowRoleGroups(true)}
+        canManageRoleGroups={isAdmin || isCommittee}
         onOpenUpload={() => setShowUpload(true)}
         canUploadFiles={canUploadFiles}
         canSeeTimeline={canSeeTimeline}
@@ -539,6 +543,10 @@ export default function App() {
 
       {showCategoryProposals && isAdmin && (
         <CategoryApprovalPanel onClose={() => setShowCategoryProposals(false)} user={user} />
+      )}
+
+      {showRoleGroups && (isAdmin || isCommittee) && (
+        <RoleGroupManagerModal onClose={() => setShowRoleGroups(false)} agents={agents} schema={schema} />
       )}
 
       {showExport && (

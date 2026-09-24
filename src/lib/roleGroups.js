@@ -143,3 +143,35 @@ export function roleGroupOf(role) {
 export function roleGroupsOf(agent) {
   return [...new Set(splitRoles(agent?.relatedRole).map(roleGroupOf).filter(Boolean))];
 }
+
+// ── Config-driven groups (2026-09-24) ─────────────────────────────────
+// Since Role Group Management, /config/roleGroups is the source of truth:
+// { groups: [{ key, label, roles, definition }] } in card order. Everything
+// above is now only the FALLBACK used until that doc loads (or if it is ever
+// missing) — the seed script wrote exactly these values. Read groups through
+// useRoleGroups() + buildRoleGroupIndex(); do not add groups here.
+export const FALLBACK_ROLE_GROUPS = ROLE_GROUP_ORDER.map((key) => ({
+  key,
+  label: roleGroupLabel(key),
+  roles: RAW[key] || [],
+}));
+
+/** Lookup helpers for one group list (config or fallback). */
+export function buildRoleGroupIndex(groups) {
+  const list = Array.isArray(groups) && groups.length ? groups : FALLBACK_ROLE_GROUPS;
+  const byRole = {};
+  const labels = {};
+  list.forEach((g) => {
+    labels[g.key] = g.label || g.key;
+    (g.roles || []).forEach((r) => { const k = aliasKey(r); if (k && !byRole[k]) byRole[k] = g.key; });
+  });
+  const order = list.map((g) => g.key);
+  return {
+    groups: list,
+    order,
+    has: (key) => order.includes(key),
+    labelOf: (key) => labels[key] || key,
+    groupOfRole: (role) => byRole[aliasKey(role)],
+    groupsOf: (agent) => [...new Set(splitRoles(agent?.relatedRole).map((r) => byRole[aliasKey(r)]).filter(Boolean))],
+  };
+}

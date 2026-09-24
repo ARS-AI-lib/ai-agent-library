@@ -1256,4 +1256,17 @@ banking chatbot ติด AI Engineer → Software Engineer)
 | `functions/verify-role-group.cjs` | **รันก่อน deploy** — 14 เคส offline รวม key ตรงกับ `src/lib/roleGroups.js` |
 | `functions/backfill-role-group.cjs` | เติมครั้งแรก (dry-run default) · เขียนเฉพาะที่ยังไม่มี |
 | `src/components/DashboardRoleView.jsx` | การ์ด Primary + Blueprint 3 สี |
-| deploy | `npx firebase-tools deploy --only functions:classifyRoleGroup` (scoped เสมอ §11) |
+| deploy | `npx firebase-tools deploy --only functions:classifyRoleGroup,manageRoleGroups` (scoped เสมอ §11) |
+
+### Role Group Management (2026-09-24, รอบ 2)
+- ⭐ **`/config/roleGroups` = source of truth ของกลุ่ม** `{groups:[{key,label,roles,definition}], history[]}`
+  ลำดับ array = ลำดับการ์ด · **`key` ห้ามเปลี่ยน** (เป็นค่าใน `agent.roleGroup`) แก้ได้แค่ `label`
+  · ⛔ **ห้าม hardcode กลุ่มในโค้ดอีก** — `ROLE_GROUP_ORDER`/`RAW` ใน `roleGroups.js` และ
+  `DEFAULT_ROLE_GROUPS` ใน `functions/roleGroupAdminRules.js` เหลือเป็น fallback + seed เท่านั้น
+- เมนู ☰ **Role Group Management** (admin + committee) → `RoleGroupManagerModal.jsx`
+  → callable **`manageRoleGroups`** (ไม่แก้ rules; `/config/{id}` client เขียนได้แค่ admin อยู่แล้ว)
+  action: `upsertGroup` · `reorder` · `deleteGroup {key, moveTo}` (บังคับเลือกปลายทาง) ·
+  `moveItem` (แก้รายตัว → `roleGroupSource:'admin'`) · `reclassifyGroup` (AI จัดใหม่ **เฉพาะ AI-set**)
+- แก้ role/definition ของกลุ่ม = มีผลกับการจำแนก **ของใหม่** (prompt สร้างจาก config) · ของเดิมไม่ขยับ
+- ช่อง Role Group ใน Edit form **ถูกเอาออกแล้ว** — แก้รายตัวผ่านหน้า Management เท่านั้น
+- `useRoleGroups()` (`src/hooks`) อ่าน config สด · `seed-role-groups.cjs` สร้าง doc ครั้งแรก (ไม่ทับของเดิม)

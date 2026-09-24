@@ -770,6 +770,7 @@ const RATE_LIMITS = {
   notifyEvent: 60,
   // One call per approve click (parent + siblings batched); runaway guard only.
   classifyRoleGroup: 30,
+  manageRoleGroups: 60,
 };
 
 async function enforceRateLimit(uid, fnName) {
@@ -1940,25 +1941,54 @@ exports.claimPendingRoleGrant = onCall(
 
 // ── Role Group classification (2026-09-24) ─────────────────────────────
 // Fills agent.roleGroup (PRIMARY role group, one per item) with the v5 prompt
-// in roleGroupRules.js. Called fire-and-forget from PendingApprovalModal
-// right after an approve, and by the admin "Classify Missing Role Groups"
-// menu ({ missingOnly: true }). NEVER overwrites a stored roleGroup — only
-// fills items that have none (user decision: numbers already analysed must
-// not move). Admin SDK write, so no firestore.rules change is needed.
-const { needsRoleGroup, classifyWithAi } = require('./roleGroupRules');
+// in roleGroupRules.js, using the groups configured in /config/roleGroups.
+// Called fire-and-forget from PendingApprovalModal right after an approve,
+// and by the admin "Classify Missing Role Groups" menu ({ missingOnly }).
+// NEVER overwrites a stored roleGroup — only fills items that have none.
+// Admin SDK writes, so no firestore.rules change is needed.
+const { loadRoleGroups, keysOf, needsRoleGroup, classifyWithAi, ROLE_GROUP_DOC } = require('./roleGroupRules');
+const { applyAction, reclassifyTargets } = require('./roleGroupAdminRules');
 const ROLE_GROUP_CALLER_ROLES = ['approver', 'committee', 'admin'];
+const ROLE_GROUP_MANAGER_ROLES = ['committee', 'admin'];
+
+async function roleGroupCaller(request, allowed) {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+  if (!isOrgEmail(request.auth.token?.email)) {
+    throw new HttpsError('permission-denied', 'Organisation account required.');
+  }
+  const role = (await db.collection('users').doc(request.auth.uid).get()).data()?.role;
+  if (!allowed.includes(role)) throw new HttpsError('permission-denied', 'Not allowed for your role.');
+  return role;
+}
+
+function roleGroupWrite(r, source) {
+  return {
+    roleGroup: r.primary,
+    roleGroupSecondary: r.secondary || [],
+    roleGroupReason: r.reason || '',
+    roleGroupSource: source,
+    roleGroupAt: FieldValue.serverTimestamp(),
+  };
+}
+
+// Classify every target and write the results (shared by classify + re-classify).
+async function classifyAndStore(targets, all, groups) {
+  if (!targets.length) return 0;
+  const classified = all.filter((a) => a.roleGroup && !a.archived && !targets.some((t) => t.id === a.id));
+  const results = await classifyWithAi(ai, targets.slice(0, 300), classified, groups);
+  const entries = Object.entries(results);
+  for (let i = 0; i < entries.length; i += 400) {
+    const batch = db.batch();
+    entries.slice(i, i + 400).forEach(([id, r]) => batch.update(db.collection('agents').doc(id), roleGroupWrite(r, 'ai')));
+    await batch.commit();
+  }
+  return entries.length;
+}
 
 exports.classifyRoleGroup = onCall(
   { cors: true, timeoutSeconds: 300 },
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
-    if (!isOrgEmail(request.auth.token?.email)) {
-      throw new HttpsError('permission-denied', 'Organisation account required.');
-    }
-    const role = (await db.collection('users').doc(request.auth.uid).get()).data()?.role;
-    if (!ROLE_GROUP_CALLER_ROLES.includes(role)) {
-      throw new HttpsError('permission-denied', 'Approver, committee or admin only.');
-    }
+    const role = await roleGroupCaller(request, ROLE_GROUP_CALLER_ROLES);
     await enforceRateLimit(request.auth.uid, 'classifyRoleGroup');
 
     const { agentIds, missingOnly } = request.data || {};
@@ -1966,29 +1996,74 @@ exports.classifyRoleGroup = onCall(
     if (!missingOnly && (!Array.isArray(agentIds) || !agentIds.length || agentIds.length > 20)) {
       throw new HttpsError('invalid-argument', 'agentIds must be 1-20 ids.');
     }
-
-    // One read of the library: the targets plus the already-classified baseline.
+    const groups = await loadRoleGroups(db);
+    const keys = keysOf(groups);
     const all = (await db.collection('agents').get()).docs.map((d) => ({ id: d.id, ...d.data() }));
     const wanted = missingOnly ? null : new Set(agentIds);
-    const targets = all.filter((a) => (!wanted || wanted.has(a.id)) && needsRoleGroup(a));
-    if (!targets.length) return { classified: 0, requested: 0 };
-
-    const classified = all.filter((a) => a.roleGroup && !a.archived);
-    const results = await classifyWithAi(ai, targets.slice(0, 300), classified);
-
-    const batch = db.batch();
-    let n = 0;
-    Object.entries(results).forEach(([id, r]) => {
-      batch.update(db.collection('agents').doc(id), {
-        roleGroup: r.primary,
-        roleGroupSecondary: r.secondary,
-        roleGroupReason: r.reason,
-        roleGroupSource: 'ai',
-        roleGroupAt: FieldValue.serverTimestamp(),
-      });
-      n += 1;
-    });
-    if (n) await batch.commit();
+    const targets = all.filter((a) => (!wanted || wanted.has(a.id)) && needsRoleGroup(a, keys));
+    const n = await classifyAndStore(targets, all, groups);
     return { classified: n, requested: targets.length };
+  },
+);
+
+// ── Role Group Management (2026-09-24) ─────────────────────────────────
+// Admin + committee edit /config/roleGroups from the ☰ menu. Every write goes
+// through here (validated in roleGroupAdminRules.js) so group edits and the
+// agent moves they imply land together, and firestore.rules stays untouched.
+//   upsertGroup {group} · reorder {keys} · deleteGroup {key, moveTo}
+//   moveItem {agentId, to} · reclassifyGroup {key}
+exports.manageRoleGroups = onCall(
+  { cors: true, timeoutSeconds: 300 },
+  async (request) => {
+    await roleGroupCaller(request, ROLE_GROUP_MANAGER_ROLES);
+    await enforceRateLimit(request.auth.uid, 'manageRoleGroups');
+    const action = request.data || {};
+    const by = request.auth.token?.email || request.auth.uid;
+    const current = await loadRoleGroups(db);
+    const keys = keysOf(current);
+    const configRef = db.doc(ROLE_GROUP_DOC);
+    const history = (type, detail) => FieldValue.arrayUnion({ type, detail, by, at: new Date().toISOString() });
+
+    if (action.type === 'moveItem') {
+      if (!keys.includes(action.to)) throw new HttpsError('invalid-argument', 'Unknown target group.');
+      const ref = db.collection('agents').doc(String(action.agentId || ''));
+      const snap = await ref.get();
+      if (!snap.exists) throw new HttpsError('not-found', 'Agent not found.');
+      await ref.update(roleGroupWrite({ primary: action.to, secondary: snap.data().roleGroupSecondary, reason: `Moved by ${by}` }, 'admin'));
+      await configRef.set({ history: history('moveItem', `${snap.data().agentName}: ${snap.data().roleGroup || '-'} → ${action.to}`) }, { merge: true });
+      return { ok: true };
+    }
+
+    if (action.type === 'reclassifyGroup') {
+      if (!keys.includes(action.key)) throw new HttpsError('invalid-argument', 'Unknown group.');
+      const all = (await db.collection('agents').get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+      const targets = reclassifyTargets(all, action.key);
+      // Cleared in memory only: classifyAndStore overwrites them in one pass, so
+      // a failure leaves the previous values in place instead of blanks.
+      const n = await classifyAndStore(targets.map((a) => ({ ...a, roleGroup: null })), all, current);
+      const skipped = all.filter((a) => a.roleGroup === action.key && a.roleGroupSource === 'admin').length;
+      await configRef.set({ history: history('reclassifyGroup', `${action.key}: ${n} re-classified, ${skipped} admin-set kept`) }, { merge: true });
+      return { reclassified: n, keptAdminSet: skipped };
+    }
+
+    const res = applyAction(current, action);
+    if (res.error) throw new HttpsError('invalid-argument', res.error);
+    if (res.moves) {
+      const snap = await db.collection('agents').where('roleGroup', '==', res.moves.from).get();
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const batch = db.batch();
+        snap.docs.slice(i, i + 400).forEach((d) => batch.update(d.ref, roleGroupWrite(
+          { primary: res.moves.to, secondary: d.data().roleGroupSecondary, reason: `Group "${res.moves.from}" deleted by ${by}` }, 'admin',
+        )));
+        await batch.commit();
+      }
+    }
+    await configRef.set({
+      groups: res.groups,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: by,
+      history: history(action.type, action.type === 'deleteGroup' ? `${action.key} → ${action.moveTo}` : (action.group?.label || action.keys?.join(', ') || '')),
+    }, { merge: true });
+    return { ok: true, groups: res.groups };
   },
 );
