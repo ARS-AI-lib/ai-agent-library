@@ -37,6 +37,7 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
   const [milestones, setMilestones] = useState([]);
   const [procModal, setProcModal] = useState(null); // { proc, agents } — blueprint tile click-through
   const [roleModal, setRoleModal] = useState(null); // { group, agents } — role card click-through
+  const [listModal, setListModal] = useState(null); // { sub, title, agents } — Needs Attention click-throughs
 
   useEffect(() => {
     let active = true;
@@ -129,7 +130,8 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
   // Non-reusable ones are exempt from needing a link/file (user rule
   // 2026-09-24; Non-reusable matches the 100% gate in §25).
   const linkExempt = (a) => getTier(a) === 'T4' || a.reusable === 'Non-reusable';
-  const missingLink = ru.filter((a) => !hasLink(a) && !linkExempt(a)).length;
+  const missingLinkList = ru.filter((a) => !hasLink(a) && !linkExempt(a));
+  const missingLink = missingLinkList.length;
   const tlCounts = useMemo(() => {
     const c = { done: 0, pilot: 0, ontime: 0, risk: 0, delay: 0 };
     tlOf.forEach((s) => { c[s] += 1; });
@@ -145,7 +147,8 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
     });
     return Object.keys(m).sort().map((k) => ({ key: k, ...m[k] }));
   }, [items, tlOf]);
-  const noLaunch = items.filter((it) => !it.launch).length;
+  const noLaunchList = items.filter((it) => !it.launch).map((it) => it._raw);
+  const noLaunch = noLaunchList.length;
 
   // ── Needs attention ──
   const delayed = useMemo(() => {
@@ -157,10 +160,16 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
   }, [items, tlOf]);
   const delayByTeam = useMemo(() => {
     const m = {};
-    delayed.forEach((it) => { const k = it.team || '—'; m[k] = (m[k] || 0) + 1; });
-    return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    delayed.forEach((it) => { const k = it.team || '—'; (m[k] = m[k] || []).push(it._raw); });
+    return Object.entries(m).map(([t, list]) => [t, list.length, list]).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [delayed]);
-  const noReusable = reuse.find((r) => r.key === '')?.n || 0;
+  const noReusableList = agents.filter((a) => !a.reusable);
+  // Data Quality rows with nothing to chase are hidden (user rule 2026-09-24).
+  const dqRows = [
+    { label: 'Ready to Use แต่ไม่มีลิงก์/ไฟล์', list: missingLinkList },
+    { label: 'ไม่มี Launch Date', list: noLaunchList },
+    { label: 'Reusable ว่าง', list: noReusableList },
+  ].filter((r) => r.list.length > 0);
 
   return (
     <div className="dash-page">
@@ -367,16 +376,21 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
         </div>
       </section>
 
-      {/* ── Needs Attention ── */}
+      {/* ── Needs Attention ── every row opens its list; anything at 0 is not shown. */}
+      {(delayed.length > 0 || dqRows.length > 0) && (
       <section className="dash-sec">
         <div className="dash-sec-h"><h2>Needs Attention</h2><span>สิ่งที่ต้องมีคนตามต่อ</span></div>
         <div className="dash-g2">
-          <div className="dash-card">
-            <div className="dash-card-title">Delayed — longest first</div>
-            <div className="dash-card-sub dash-mb">{delayed.length} รายการเลย launch date แล้วยังไม่ถึง Pilot</div>
-            {delayed.length === 0 ? (
-              <div className="dash-empty">ไม่มีรายการล่าช้า</div>
-            ) : (
+          {delayed.length > 0 && (
+            <div className="dash-card">
+              <div className="dash-card-title">Delayed — longest first</div>
+              <button
+                type="button"
+                className="dash-card-sub dash-mb dash-linkbtn"
+                onClick={() => setListModal({ sub: 'Needs Attention', title: 'Delayed', agents: delayed.map((it) => it._raw) })}
+              >
+                {delayed.length} รายการเลย launch date แล้วยังไม่ถึง Pilot · View all →
+              </button>
               <div className="dash-late">
                 {delayed.slice(0, 8).map((it) => (
                   <div key={it.id} onClick={() => onAgentClick?.(it._raw)}>
@@ -386,34 +400,55 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
           <div className="dash-col">
-            <div className="dash-card">
-              <div className="dash-card-title">Delayed by Owner Team</div>
-              <div className="dash-card-sub dash-mb">ใครต้องตามก่อน</div>
-              <div className="dash-bars">
-                {delayByTeam.map(([t, n]) => (
-                  <div key={t}>
-                    <span title={t}>{t}</span>
-                    <div className="dash-t"><i style={{ width: `${(n / (delayByTeam[0]?.[1] || 1)) * 100}%` }} /></div>
-                    <b>{n}</b>
-                  </div>
-                ))}
+            {delayByTeam.length > 0 && (
+              <div className="dash-card">
+                <div className="dash-card-title">Delayed by Owner Team</div>
+                <div className="dash-card-sub dash-mb">ใครต้องตามก่อน · คลิกเพื่อดูรายการ</div>
+                <div className="dash-bars">
+                  {delayByTeam.map(([t, n, list]) => (
+                    <button type="button" key={t} className="dash-rowbtn" onClick={() => setListModal({ sub: 'Delayed by Owner Team', title: t, agents: list })}>
+                      <span title={t}>{t}</span>
+                      <div className="dash-t"><i style={{ width: `${(n / (delayByTeam[0]?.[1] || 1)) * 100}%` }} /></div>
+                      <b>{n}</b>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="dash-card">
-              <div className="dash-card-title">Data Quality</div>
-              <div className="dash-card-sub dash-mb">ข้อมูลที่ยังไม่ครบ</div>
-              <div className="dash-dq">
-                <div><span><span className="dash-sev">Fix</span>Ready to Use แต่ไม่มีลิงก์/ไฟล์</span><b>{missingLink}</b></div>
-                <div><span><span className="dash-sev">Fix</span>ไม่มี Launch Date</span><b>{noLaunch}</b></div>
-                <div><span><span className="dash-sev">Fix</span>Reusable ว่าง</span><b>{noReusable}</b></div>
+            )}
+            {dqRows.length > 0 && (
+              <div className="dash-card">
+                <div className="dash-card-title">Data Quality</div>
+                <div className="dash-card-sub dash-mb">ข้อมูลที่ยังไม่ครบ · คลิกเพื่อดูรายการ</div>
+                <div className="dash-dq">
+                  {dqRows.map((r) => (
+                    <button type="button" key={r.label} className="dash-rowbtn" onClick={() => setListModal({ sub: 'Data Quality', title: r.label, agents: r.list })}>
+                      <span><span className="dash-sev">Fix</span>{r.label}</span><b>{r.list.length}</b>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </section>
+      )}
+
+      {listModal && (
+        <div className="sdlc-ovl" onClick={() => setListModal(null)}>
+          <div className="sdlc-mbox" onClick={(e) => e.stopPropagation()}>
+            <button className="sdlc-mclose" onClick={() => setListModal(null)}>✕</button>
+            <div className="sdlc-msub">{listModal.sub}</div>
+            <div className="sdlc-mtitle">{listModal.title}</div>
+            <div className="sdlc-msec">Agents &amp; Skills ({listModal.agents.length})</div>
+            {listModal.agents.map((a) => (
+              <AgentQuickCard key={a.id} agent={a} onClick={() => { setListModal(null); onAgentClick?.(a); }} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {procModal && (
         <div className="sdlc-ovl" onClick={() => setProcModal(null)}>

@@ -116,12 +116,15 @@
 .dash-late-m { font-size: 11.5px; color: var(--mu); }
 .dash-late-d { grid-row: span 2; align-self: center; font-size: 11.5px; font-weight: 700; color: var(--tl-delay-fg); background: var(--tl-delay-bg); padding: 3px 8px; border-radius: 12px; }
 .dash-bars { display: flex; flex-direction: column; gap: 7px; }
-.dash-bars > div { display: grid; grid-template-columns: 120px 1fr 26px; gap: 8px; align-items: center; font-size: 12px; color: var(--tx2); }
-.dash-bars > div > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-bars > * { display: grid; grid-template-columns: 120px 1fr 26px; gap: 8px; align-items: center; font-size: 12px; color: var(--tx2); }
+.dash-bars > * > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-bars .dash-t i { background: var(--tl-delay-bd); }
 .dash-bars b { text-align: right; color: var(--tx); }
+.dash-rowbtn { width: 100%; border: none; font: inherit; text-align: left; cursor: pointer; background: none; padding: 0; }
+.dash-bars > .dash-rowbtn:hover span, .dash-dq > .dash-rowbtn:hover span { color: var(--accent); }
+.dash-linkbtn { display: block; border: none; background: none; padding: 0; font: inherit; font-size: 11.5px; color: var(--accent); cursor: pointer; text-align: left; }
 .dash-dq { display: flex; flex-direction: column; gap: 8px; }
-.dash-dq > div { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 11px; background: var(--sf2); border-radius: 8px; font-size: 12.5px; color: var(--tx2); }
+.dash-dq > * { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 9px 11px; background: var(--sf2); border-radius: 8px; font-size: 12.5px; color: var(--tx2); }
 .dash-dq b { font-size: 15px; color: var(--tx); }
 .dash-sev { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: var(--tl-risk-bg); color: var(--tl-risk-fg); margin-right: 8px; }
 
@@ -180,7 +183,7 @@
   .dash-ustats { grid-template-columns: 1fr 1fr; }
   .dash-fn-r { grid-template-columns: 100px 1fr 36px; }
   .dash-rv-grid { grid-template-columns: 1fr; }
-  .dash-bp-sq { grid-template-columns: repeat(4, 1fr); }
+  .dash-bp-sq { grid-template-columns: repeat(6, 1fr); }
   /* 3 per row on phones (requested). At ~375px that is a ~105px card, so the
      text has to shrink and the Agents/Skills pair has to stack — otherwise
      "Business Analyst" / "System Architect" get squeezed. No nowrap: a name
