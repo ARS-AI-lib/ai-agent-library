@@ -125,7 +125,8 @@ async function getApproveAreaOptions() {
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'wolfy-481609';
 const LOCATION = 'asia-southeast1';
-const MODEL = 'gemini-2.5-flash';
+const { GEN_MODEL, THINK_OFF, CHAT_THINK, DUMMY_THOUGHT_SIGNATURE } = require('./modelConfig');
+const MODEL = GEN_MODEL;
 
 const ai = new GoogleGenAI({ vertexai: true, project: PROJECT_ID, location: LOCATION });
 const GENERATION_CONFIG = {
@@ -141,8 +142,8 @@ const GENERATION_CONFIG = {
   // alone can exhaust the budget, leaving an empty/truncated response
   // that fails to parse (the "unparseable output" 500). This isn't a
   // structured-output task that benefits from extended reasoning, so
-  // disable it entirely.
-  thinkingConfig: { thinkingBudget: 0 },
+  // disable it entirely. (Gemini 3: MINIMAL is the lowest level — modelConfig.js.)
+  thinkingConfig: THINK_OFF,
 };
 
 function buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions, categoryOptions, approveAreaOptions) {
@@ -440,7 +441,7 @@ exports.analyzeDuplicate = onCall(
 //   { type: 'tool_call', name, args }
 //   { type: 'answer', text }
 
-const CHAT_MODEL = 'gemini-2.5-flash';
+const CHAT_MODEL = GEN_MODEL;
 const CHAT_GENERATION_CONFIG = {
   // A bit more flexibility than the duplicate-checker's 0.1 — this is
   // conversational, not a scored judgement that needs to be reproducible.
@@ -461,7 +462,8 @@ const CHAT_GENERATION_CONFIG = {
   // and overly literal (a vague follow-up got a request for clarification
   // instead of an inference from context). Dynamic thinking lets the model
   // decide how much reasoning a given turn needs.
-  thinkingConfig: { thinkingBudget: -1 },
+  // Gemini 3 (2026-09-25): thinkingLevel replaces the budget — modelConfig.js.
+  thinkingConfig: CHAT_THINK,
 };
 
 // Tool shapes as presented to the LLM for the chat entry point. These are
@@ -487,8 +489,14 @@ function buildChatContents(history, message, toolResults) {
   if (message) {
     contents.push({ role: 'user', parts: [{ text: message }] });
   }
-  (toolResults || []).forEach(({ name, args, result }) => {
-    contents.push({ role: 'model', parts: [{ functionCall: { name, args } }] });
+  // Gemini 3 requires the model's thoughtSignature to come back with its
+  // functionCall, else 400. The client echoes the raw `modelParts` we returned;
+  // an older cached client doesn't, so fall back to the documented placeholder.
+  (toolResults || []).forEach(({ name, args, result, modelParts }) => {
+    const parts = Array.isArray(modelParts) && modelParts.some((p) => p?.functionCall)
+      ? modelParts
+      : [{ functionCall: { name, args }, thoughtSignature: DUMMY_THOUGHT_SIGNATURE }];
+    contents.push({ role: 'model', parts });
     contents.push({ role: 'user', parts: [{ functionResponse: { name, response: { result } } }] });
   });
   return contents;
@@ -528,7 +536,10 @@ exports.chatLibrary = onCall(
     if (Array.isArray(calls) && calls.length > 0) {
       const { name, args } = calls[0];
       bumpChatMetrics({ tool: name, intent: args?.intent });
-      return { type: 'tool_call', name, args: args || {} };
+      // Only the functionCall parts (with their signatures) — any text/thought
+      // parts are not needed to continue and would bloat the round trip.
+      const modelParts = (resp?.candidates?.[0]?.content?.parts || []).filter((p) => p?.functionCall);
+      return { type: 'tool_call', name, args: args || {}, modelParts };
     }
 
     const text = (resp?.text || '').trim();

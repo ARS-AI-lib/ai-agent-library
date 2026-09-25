@@ -771,7 +771,9 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
           }
           // capability_search / query_sdlc-analysis — loop back with the
           // result so the model can reason over it and compose the answer.
-          toolResults = [...toolResults, { name: data.name, args: data.args || {}, result }];
+          // modelParts carries Gemini 3's thoughtSignature — must be echoed back
+          // verbatim or the next call 400s (server falls back if missing).
+          toolResults = [...toolResults, { name: data.name, args: data.args || {}, result, modelParts: data.modelParts }];
         }
       }
 

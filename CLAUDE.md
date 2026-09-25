@@ -169,6 +169,8 @@ Tier:
 
 ## 7. AI Pre-Registration Feature (Locked Design)
 
+> **Model (2026-09-25):** every generative call (analyzeDuplicate, chatLibrary, classifyRoleGroup) uses `GEN_MODEL` from `functions/modelConfig.js` = `gemini-3.5-flash` (the only Gemini 3 model in asia-southeast1; 2.5 Flash stops 31 Mar 2027). Use `thinkingLevel`, not `thinkingBudget` — sending both gives a 400. Never hardcode a model string. Embeddings are separate (`embedText.js`).
+
 - Cloud Function → เรียก Vertex AI (Gemini 2.5 Flash, `thinkingBudget: 0`)
 - 3 features: **A + B + D** (รายละเอียด feature C ถูกตัดออก)
 - เป็น batch call, blocking UI, ตอบกลับเป็น structured JSON
@@ -343,6 +345,8 @@ grilling session เคาะทุกข้อที่เคยค้าง:
 ---
 
 ## 15. Chat Assistant "ALPHA" (v1 — Shipped 2026-07-02)
+
+> **Thought signatures (Gemini 3, 2026-09-25):** `chatLibrary` returns `modelParts` (the functionCall parts + `thoughtSignature`), and `ChatAssistant.jsx` must put them back into `toolResults` unchanged. If they're missing, `buildChatContents()` inserts `skip_thought_signature_validator`. A functionCall without a signature gets a 400 (tested). Chat thinking = LOW (regression 17/17 and 16/17, compared with 2.5 dynamic 14/17 and 17/17). A/B: `REG_MODEL=… REG_THINK=… node functions/regression.cjs`
 
 **Persona:** ชื่อ ALPHA, บุคลิกผู้ชาย พูดไทย ลงท้าย "ครับ" เท่านั้น, **ห้ามเอ่ยชื่อองค์กร/บริษัทในเครือเด็ดขาด** (แก้จากที่เคย mention Krungthai Group ไปแล้ว)
 

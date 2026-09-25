@@ -7,11 +7,20 @@ const { GoogleGenAI } = require('@google/genai');
 const { TOOL_DECLARATIONS, CHAT_SYSTEM_PROMPT } = require('./chatPrompt');
 
 const ai = new GoogleGenAI({ vertexai: true, project: 'wolfy-481609', location: 'asia-southeast1' });
-const CONFIG = { temperature: 0.4, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: -1 } };
+const { GEN_MODEL, CHAT_THINK, DUMMY_THOUGHT_SIGNATURE } = require('./modelConfig');
+// REG_MODEL / REG_THINK let you A/B without editing: REG_MODEL=gemini-2.5-flash REG_THINK=-1
+const REG_MODEL = process.env.REG_MODEL || GEN_MODEL;
+const REG_THINK = process.env.REG_THINK;
+const IS_V3 = !/^gemini-2\./.test(REG_MODEL);
+const THINK = REG_THINK === undefined ? CHAT_THINK
+  : (/^-?\d+$/.test(REG_THINK) ? { thinkingBudget: Number(REG_THINK) } : { thinkingLevel: REG_THINK });
+const CONFIG = { temperature: 0.4, maxOutputTokens: 2048, thinkingConfig: THINK };
+// Same placeholder the server uses for a functionCall without a kept signature.
+const fc = (name, args) => (IS_V3 ? { functionCall: { name, args }, thoughtSignature: DUMMY_THOUGHT_SIGNATURE } : { functionCall: { name, args } });
 
 async function turn(contents) {
   const resp = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: REG_MODEL,
     contents,
     config: { ...CONFIG, systemInstruction: { role: 'system', parts: [{ text: CHAT_SYSTEM_PROMPT }] }, tools: [{ functionDeclarations: TOOL_DECLARATIONS }] },
   });
@@ -22,7 +31,7 @@ async function turn(contents) {
 const userTurn = (t) => [{ role: 'user', parts: [{ text: t }] }];
 const withToolResult = (q, name, args, result) => [
   ...userTurn(q),
-  { role: 'model', parts: [{ functionCall: { name, args } }] },
+  { role: 'model', parts: [fc(name, args)] },
   { role: 'user', parts: [{ functionResponse: { name, response: { result } } }] },
 ];
 
@@ -33,7 +42,7 @@ const withToolResult = (q, name, args, result) => [
 const composeAfterHistory = (prior, q, name, args, result) => [
   ...prior,
   ...userTurn(q),
-  { role: 'model', parts: [{ functionCall: { name, args } }] },
+  { role: 'model', parts: [fc(name, args)] },
   { role: 'user', parts: [{ functionResponse: { name, response: { result } } }] },
 ];
 

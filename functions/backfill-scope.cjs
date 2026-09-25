@@ -28,7 +28,8 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 const APPLY = process.argv.includes('--apply');
 const PROJECT = 'wolfy-481609';
-const MODEL = 'gemini-2.5-flash';
+const { GEN_MODEL, THINK_OFF } = require('./modelConfig');
+const MODEL = GEN_MODEL;
 const BATCH_SIZE = 20;
 
 const app = initializeApp({ credential: applicationDefault(), projectId: PROJECT });
@@ -79,7 +80,7 @@ async function classifyBatch(agents) {
     contents: [{ role: 'user', parts: [{ text: buildBatchPrompt(agents) }] }],
     config: {
       temperature: 0.1, maxOutputTokens: 2048, responseMimeType: 'application/json',
-      thinkingConfig: { thinkingBudget: 0 },
+      thinkingConfig: THINK_OFF,
     },
   });
   const text = resp?.text || resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';

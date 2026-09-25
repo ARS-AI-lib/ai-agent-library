@@ -24,7 +24,8 @@
 //   — it cannot invent a group (CLAUDE.md §31).
 const { DEFAULT_ROLE_GROUPS } = require('./roleGroupAdminRules');
 
-const ROLE_GROUP_MODEL = 'gemini-2.5-flash';
+const { GEN_MODEL, THINK_OFF } = require('./modelConfig');
+const ROLE_GROUP_MODEL = GEN_MODEL;
 const ROLE_GROUP_DOC = 'config/roleGroups';
 
 async function loadRoleGroups(db) {
@@ -139,7 +140,7 @@ async function classifyWithAi(ai, targets, classified, groups, { batch = 8 } = {
         temperature: 0,
         responseMimeType: 'application/json',
         responseSchema: schema,
-        thinkingConfig: { thinkingBudget: 0 },
+        thinkingConfig: THINK_OFF,
       },
     });
     return sanitizeResults(JSON.parse(r.text || '[]'), items, keys);

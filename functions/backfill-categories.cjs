@@ -33,7 +33,8 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 const APPLY = process.argv.includes('--apply');
 const PROJECT = 'wolfy-481609';
-const MODEL = 'gemini-2.5-flash';
+const { GEN_MODEL, THINK_OFF } = require('./modelConfig');
+const MODEL = GEN_MODEL;
 const BATCH_SIZE = 25; // agents per Vertex call — keeps prompt+response comfortably under budget
 
 const app = initializeApp({ credential: applicationDefault(), projectId: PROJECT });
@@ -108,7 +109,7 @@ async function categorizeBatch(agents, categoryOptions) {
     contents: [{ role: 'user', parts: [{ text: buildBatchPrompt(agents, categoryOptions) }] }],
     config: {
       temperature: 0.1, maxOutputTokens: 4096, responseMimeType: 'application/json',
-      thinkingConfig: { thinkingBudget: 0 },
+      thinkingConfig: THINK_OFF,
     },
   });
   const text = resp?.text || resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';
