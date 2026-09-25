@@ -142,7 +142,6 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
   // ── Delivery ──
   const ru = agents.filter((a) => normalizeProgress(a.devProgress) >= 100);
   const hasLink = (a) => String(a.endpoint || '').trim() || a.endpointFile?.storagePath;
-  const accessible = ru.filter(hasLink).length;
   // Only items that are SUPPOSED to be reachable count as a gap: T4 and
   // Non-reusable ones are exempt from needing a link/file (user rule
   // 2026-09-24; Non-reusable matches the 100% gate in §25).
@@ -403,35 +402,18 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
         />
       </section>
 
-      {/* ── Delivery Health ── */}
+      {/* ── Delivery Health ── launch plan per month, full width. (The Status
+          card was removed 2026-09-25: every figure in it repeated the KPI row
+          or Data Quality.) */}
       <section className="dash-sec">
-        <div className="dash-sec-h"><h2>Delivery Health</h2><span>ของที่ลงทะเบียนไว้ ไปถึงมือคนใช้จริงแค่ไหน</span></div>
-        <div className="dash-g2">
-          <div className="dash-card">
-            <div className="dash-card-title">Status</div>
-            <div className="dash-card-sub dash-mb">Legend หลักของเว็บ · {total} รายการ</div>
-            <div className="dash-stack">
-              {ST_ORDER.map((k) => <i key={k} style={{ flex: st[k], background: ST_DEF[k].dot }} title={`${ST_DEF[k].lb} ${st[k]}`} />)}
-            </div>
-            <div className="dash-lg">
-              {ST_ORDER.map((k) => <span key={k}><b style={{ background: ST_DEF[k].dot }} />{ST_DEF[k].lb} <em>{st[k]}</em></span>)}
-            </div>
-            <div className="dash-fn">
-              <FunnelRow label="Registered" n={total} max={total} color="var(--mu2)" />
-              <FunnelRow label="Pilot or later" n={st.pilot + st.ru} max={total} color={ST_DEF.pilot.dot} />
-              <FunnelRow label="Ready to Use" n={ru.length} max={total} color={ST_DEF.ru.dot} />
-              <FunnelRow label="Accessible (link/file)" n={accessible} max={total} color={ST_DEF.ru.dot} />
-            </div>
-            {missingLink > 0 && <p className="dash-note">{missingLink} รายการขึ้น Ready to Use แล้ว แต่ยังไม่มีลิงก์หรือไฟล์ให้คนเข้าไปใช้ (ไม่นับ T4 และ Non-reusable ที่ไม่ต้องมี)</p>}
-          </div>
-          <div className="dash-card">
-            <div className="dash-card-title">Launch Plan by Month</div>
-            <div className="dash-card-sub dash-mb">สถานะเดียวกับหน้า Timeline — ตัวเลขตรงกันทุกเดือน</div>
-            <MonthChart months={months} />
-            <div className="dash-lg">
-              {TL_KEYS.map((k) => <span key={k}><b style={{ background: TL_COLOR[k] }} />{TL_ST[k].lb} <em>{tlCounts[k]}</em></span>)}
-              <span className="dash-lg-mu">· ไม่มี launch date {noLaunch} รายการ (ไม่อยู่ในกราฟ)</span>
-            </div>
+        <div className="dash-sec-h"><h2>Delivery Health</h2><span>แผน launch รายเดือน เทียบกับสถานะจริง</span></div>
+        <div className="dash-card">
+          <div className="dash-card-title">Launch Plan by Month</div>
+          <div className="dash-card-sub dash-mb">สถานะเดียวกับหน้า Timeline — ตัวเลขตรงกันทุกเดือน</div>
+          <div className="dash-mc-w"><MonthChart months={months} /></div>
+          <div className="dash-lg">
+            {TL_KEYS.map((k) => <span key={k}><b style={{ background: TL_COLOR[k] }} />{TL_ST[k].lb} <em>{tlCounts[k]}</em></span>)}
+            <span className="dash-lg-mu">· ไม่มี launch date {noLaunch} รายการ (ไม่อยู่ในกราฟ)</span>
           </div>
         </div>
       </section>
@@ -636,20 +618,10 @@ function CatBar({ label, n, max }) {
   );
 }
 
-function FunnelRow({ label, n, max, color }) {
-  return (
-    <div className="dash-fn-r">
-      <span>{label}</span>
-      <div className="dash-fn-t"><i style={{ width: `${max ? (n / max) * 100 : 0}%`, background: color }} /></div>
-      <b>{n}</b>
-    </div>
-  );
-}
-
 // Stacked bars per launch month, one y-scale; per-segment <title> tooltip.
 function MonthChart({ months }) {
   if (!months.length) return <div className="dash-empty">No launch dates yet</div>;
-  const W = 520; const H = 180; const pl = 30; const pr = 8; const pt = 14; const pb = 26;
+  const W = 1000; const H = 220; const pl = 30; const pr = 8; const pt = 14; const pb = 26;
   const max = Math.max(...months.map((m) => TL_KEYS.reduce((s, k) => s + m[k], 0)));
   const step = max > 50 ? 20 : max > 20 ? 10 : 5;
   const yMax = Math.max(step, Math.ceil(max / step) * step);
@@ -667,7 +639,7 @@ function MonthChart({ months }) {
         </g>
       ))}
       {months.map((m, i) => {
-        const x = pl + i * bw + bw * 0.2; const w = bw * 0.6;
+        const x = pl + i * bw + bw * 0.25; const w = bw * 0.5;
         const segs = TL_KEYS.filter((k) => m[k]);
         let acc = 0;
         return (
