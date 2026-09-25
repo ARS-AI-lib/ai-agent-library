@@ -88,8 +88,8 @@ export default function UsageReportPage() {
     downloadCsv(
       filtered.map((r) => ({ ...r, adoptedDate: r.adoptedAt ? new Date(r.adoptedAt).toISOString().slice(0, 10) : '' })),
       `agent-usage-${new Date().toISOString().slice(0, 10)}.csv`,
-      ['agentName', 'owner', 'area', 'category', 'adopterName', 'adopterEmail', 'adoptedDate'],
-      ['Agent Name', 'Owner', 'Area', 'Category', 'Adopter', 'Adopter Email', 'Adopted Date'],
+      ['agentName', 'owner', 'area', 'category', 'adopterName', 'adopterEmail', 'source', 'project', 'adoptedDate'],
+      ['Agent Name', 'Owner', 'Area', 'Category', 'Adopter', 'Adopter Email', 'Source', 'Project / Task', 'Adopted Date'],
     );
   }
 
@@ -124,6 +124,10 @@ export default function UsageReportPage() {
       <td>
         <div className="usage-strong">{r.adopterName || '—'}</div>
         <div className="usage-dim">{r.adopterEmail}</div>
+      </td>
+      <td>
+        <div>{r.source || 'Library'}</div>
+        {r.project && <div className="usage-dim">{r.project}</div>}
       </td>
       <td className="usage-mono">{r.adoptedAt ? fmtDate(new Date(r.adoptedAt)) : '—'}</td>
     </tr>
@@ -233,19 +237,19 @@ export default function UsageReportPage() {
                   <thead>
                     <tr>
                       <th>Agent Name</th><th>Owner</th><th>Area</th>
-                      <th>Category</th><th>Adopter</th><th>Adopted Date</th>
+                      <th>Category</th><th>Adopter</th><th>Source</th><th>Adopted Date</th>
                     </tr>
                   </thead>
                   {groupByOwner ? grouped.map(([g, list]) => (
                     <tbody key={g}>
                       <tr className="usage-group">
-                        <td colSpan={6}>{g}<span className="usage-badge">{list.length}</span></td>
+                        <td colSpan={7}>{g}<span className="usage-badge">{list.length}</span></td>
                       </tr>
-                      {list.map((r) => <Row key={`${r.agentId}__${r.adopterEmail}`} r={r} />)}
+                      {list.map((r) => <Row key={r.rowKey || `${r.agentId}__${r.adopterEmail}`} r={r} />)}
                     </tbody>
                   )) : (
                     <tbody>
-                      {filtered.map((r) => <Row key={`${r.agentId}__${r.adopterEmail}`} r={r} />)}
+                      {filtered.map((r) => <Row key={r.rowKey || `${r.agentId}__${r.adopterEmail}`} r={r} />)}
                     </tbody>
                   )}
                 </table>

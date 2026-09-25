@@ -1518,8 +1518,10 @@ exports.usageReport = onCall(
     const fullAccess = role === 'admin' || role === 'committee';
     const myAreas = new Set(Array.isArray(userDoc.approveAreas) ? userDoc.approveAreas : []);
 
-    const [evSnap, agentSnap, userSnap] = await Promise.all([
+    const [evSnap, taskSnap, agentSnap, userSnap] = await Promise.all([
       db.collection('agentEvents').where('kind', '==', 'endpoint').get(),
+      // Portfolio task links (2026-09-25) — one row per task, see portfolioAdoption.js.
+      db.collection('agentEvents').where('kind', '==', 'task').get(),
       db.collection('agents').get(),
       db.collection('users').get(),
     ]);
@@ -1558,11 +1560,67 @@ exports.usageReport = onCall(
         adopterName: u.displayName || '',
         adopterEmail: u.email || '',
         adoptedAt: at || null,
+        source: 'Library',
+        project: '',
       });
     }
 
+    taskSnap.docs.forEach((d) => {
+      const e = d.data() || {};
+      const a = agents.get(e.agentId);
+      if (!a) return;
+      const areas = Array.isArray(a.approveArea) ? a.approveArea : [];
+      if (!fullAccess && !areas.some((x) => myAreas.has(x))) return;
+      rows.push({
+        agentId: e.agentId,
+        agentName: a.agentName || '',
+        owner: a.owner || '',
+        area: areas.join(', '),
+        category: (Array.isArray(a.category) ? a.category : []).join(', '),
+        // Task PIC is a display name picked in Portfolio, not an account.
+        adopterName: e.adopter || '',
+        adopterEmail: '',
+        adoptedAt: e.createdAt?.toMillis ? e.createdAt.toMillis() : null,
+        source: 'Portfolio',
+        project: [e.projectName, e.taskName].filter(Boolean).join(' · '),
+        rowKey: d.id,
+      });
+    });
+
     rows.sort((x, y) => (y.adoptedAt || 0) - (x.adoptedAt || 0));
     return { rows, scoped: !fullAccess };
+  },
+);
+
+// ── Portfolio task links → adoption (2026-09-25) ─────────────────────
+// A Portfolio task that links a Library Agent/Skill (task.agents/.skills,
+// plain names — NOT task.contribute) counts as ONE adoption per (task, agent),
+// merged into agentStats.endpointClicks; unlink or task delete takes it back.
+// Lives in THIS codebase because it writes Library stats; it only reads the
+// `portfolio` DB. Deploy scoped: functions:syncPortfolioAdoption.
+const { onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { linksChanged } = require('./portfolioAdoptionRules');
+const { loadNameIndex, reconcileTask } = require('./portfolioAdoption');
+const portfolioDb = getFirestore(adminApp, 'portfolio');
+
+exports.syncPortfolioAdoption = onDocumentWritten(
+  { database: 'portfolio', document: 'projects/{projectId}/tasks/{taskId}', region: 'asia-southeast1' },
+  async (event) => {
+    const before = event.data?.before?.exists ? event.data.before.data() : null;
+    const after = event.data?.after?.exists ? event.data.after.data() : null;
+    if (!linksChanged(before, after)) return;
+    const { projectId, taskId } = event.params;
+    const [nameIndex, projSnap] = await Promise.all([
+      loadNameIndex(db),
+      portfolioDb.collection('projects').doc(projectId).get(),
+    ]);
+    const res = await reconcileTask(db, {
+      projectId, taskId, task: after, nameIndex,
+      projectName: projSnap.exists ? (projSnap.data().name || '') : '',
+    });
+    if (res.add.length || res.remove.length || res.ambiguous.length) {
+      console.log('portfolio adoption', projectId, taskId, JSON.stringify(res));
+    }
   },
 );
 
@@ -1746,7 +1804,9 @@ exports.decideRenameRequest = onCall(
     children.forEach((d) => {
       batch.update(d.ref, { matchingAgent: newName, updatedAt: FieldValue.serverTimestamp() });
     });
-    batch.update(reqRef, { ...stamp, appliedName: newName, childrenUpdated: children.length });
+    // previousName lets Portfolio task links that still hold the old name keep
+    // counting as adoption (portfolioAdoption.js loadNameIndex).
+    batch.update(reqRef, { ...stamp, appliedName: newName, previousName: oldName, childrenUpdated: children.length });
     await batch.commit();
 
     return { ok: true, verdict, childrenUpdated: children.length };

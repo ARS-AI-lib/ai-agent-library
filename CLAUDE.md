@@ -1276,3 +1276,14 @@ banking chatbot ติด AI Engineer → Software Engineer)
 - แก้ role/definition ของกลุ่ม = มีผลกับการจำแนก **ของใหม่** (prompt สร้างจาก config) · ของเดิมไม่ขยับ
 - ช่อง Role Group ใน Edit form **ถูกเอาออกแล้ว** — แก้รายตัวผ่านหน้า Management เท่านั้น
 - `useRoleGroups()` (`src/hooks`) อ่าน config สด · `seed-role-groups.cjs` สร้าง doc ครั้งแรก (ไม่ทับของเดิม)
+
+---
+
+## Portfolio task links = Adoption (2026-09-25)
+
+- Portfolio task `agents[]`/`skills[]` (these hold **names**, not ids) are counted as adoption: **1 task + 1 agent = 1**, added into `agentStats.endpointClicks`. Removing the link or deleting the task subtracts it. **`task.contribute` does not count.**
+- Trigger `syncPortfolioAdoption` (Library `functions/index.js`) watches the `portfolio` DB and reads only. Markers are stored in `agentEvents/{agentId}__task__{projectId}__{taskId}` (`kind:'task'`). The counter moves only when a marker is created or deleted, inside the same transaction.
+- Rules: `functions/portfolioAdoptionRules.js` (checked by `verify-portfolio-adoption.cjs`). Reconcile: `portfolioAdoption.js`. Backfill: `backfill-portfolio-adoption.cjs` (dry-run by default, `--apply`).
+- Name matching: only approved agents, case/space folded. A name shared by 2 or more agents is skipped. Renames approved after 2026-09-25 store `previousName` so the old name still matches; older renames have no alias.
+- Usage Report shows these rows with Source = Portfolio, Adopter = the task PIC, and the project/task name.
+
