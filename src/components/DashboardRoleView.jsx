@@ -79,7 +79,9 @@ export default function DashboardRoleView({ agents = [], processes = [], onProcC
     });
   }, [agents, processes]);
 
-  const covered = squares.filter((s) => s.n > 0).length;
+  // "covered" = capabilities where AI is already working alongside people
+  // (the Gen AI + Human / orange level) — user rule 2026-09-25.
+  const covered = squares.filter((s) => s.lv === 'mixed').length;
   const lvTally = useMemo(() => {
     const t = { human: 0, mixed: 0, ai: 0 };
     squares.forEach((s) => { t[s.lv] += 1; });
