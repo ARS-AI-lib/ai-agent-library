@@ -1300,5 +1300,10 @@ banking chatbot ติด AI Engineer → Software Engineer)
   - Creator/requester notifications go to the **real** people.
   - `teamsDomains` = `arise.tech`, `infinitaskt.com` (krungthai.com not tested yet, so it is not included). `allowRecipients` is empty.
   - Do not remove `approverOverride` or change `teamsDomains` yourself.
+- **Email via the same Flow (2026-09-28):** `/config/mail.emailEnabled: true`. Every recipient (any domain, including krungthai.com) gets an email; Teams is sent only within `teamsDomains`. The payload carries `teams`/`email`/`html` for each recipient.
+  - The flow checks each flag with `string(triggerBody()?['email'])` compared to the text `true`. Comparing against a boolean ends up false.
+  - Email is sent with "Send an email (V2)", From (Send as) = `ai.agent.library.group@infinitaskt.com`. This is a **Microsoft 365 Group, not a shared mailbox**: "Send from a shared mailbox" fails with `ErrorGroupIsUsedInNonGroupURI`.
+  - The Teams branch has run-after set to success/failed/skipped, so if email fails Teams still sends.
+  - To stop only email: `emailEnabled: false`.
 - The card gets a deep link: approver events → `/?view=pending`, other events → `/?agent=<id>`. `App.jsx` opens it after login, then strips the params. Ready to Use with an http endpoint also gets an "Open Endpoint" button. Test: `node functions/verify-teams.cjs`.
 
