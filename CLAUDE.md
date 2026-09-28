@@ -571,6 +571,12 @@ npx firebase-tools hosting:channel:deploy test-migration   # preview ไม่�
 `analyzeDuplicate` คืน `suggested_approve_area` (จำกัดตาม `/config/schema.approveArea`)
 → `PreRegModal` เขียนลง `approveArea` ตอน submit เลย
 
+### 🔴 Bug 2026-08-10 → 2026-09-28: the form never saved approveArea
+`PreRegModal` computed `inheritedFromAgent.approveArea` but **did not include it in either `addDoc`**, so every submission had no stored area. It went unnoticed for a month because the web UI's resolver fills the gap, but everything server-side (notifications, upload/mark-ready permissions, Usage Report scoping) reads **stored values only**. It was found when Teams cards showed "Approve Area ไม่ระบุ".
+- Fixed: the field is written for both the parent agent and sub-skills.
+- Backfill with `functions/backfill-missing-approve-area.cjs`: 67 docs (54 from the AI suggestion in `analysisRuns`, 13 from the resolver). Afterwards, 0 docs lack an area.
+- ⛔ Do not rerun `backfill-approve-area.cjs`. It still asserts the old 12-area list.
+
 ### Scope (Internal/External) ≠ SDLC — แยกกันเด็ดขาด (แก้ 2026-08-11)
 เคยมีบั๊ก: `EditAgentModal`/`PreRegModal` เขียน `sdlcStage/sdlcProcessMapping/useCase` เป็น `[]`
 เมื่อ scope = External **และซ่อน field ทิ้ง** → agent External ที่มีข้อมูล SDLC จะ**โดนลบข้อมูลเงียบๆ

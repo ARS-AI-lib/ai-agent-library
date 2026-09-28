@@ -506,6 +506,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         // proposes a brand-new one below — so this agent is never left
         // uncategorized while a proposal awaits admin approval.
         category: inheritedFromAgent.category,
+        // 2026-09-28 fix: computed since 2026-08-10 but never written, so every
+        // new submission had no stored area (server-side routing reads only this).
+        approveArea: inheritedFromAgent.approveArea,
         input: form.input.trim(),
         output: form.output.trim(),
         compatibleAgents: form.type === 'Skill' ? form.compatibleAgents : [],
@@ -644,6 +647,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             sdlcProcessMapping: [...form.sdlcProcessMapping],
             useCase: [...form.useCase],
             category: inheritedFromAgent.category,
+            approveArea: inheritedFromAgent.approveArea,
             input: s.input.trim(),
             output: s.output.trim(),
             businessValue: inheritedFromAgent.businessValue,
