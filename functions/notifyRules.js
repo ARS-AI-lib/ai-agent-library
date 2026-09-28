@@ -162,8 +162,7 @@ const EVENT_TYPES = Object.keys(EVENTS);
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-function shell(bodyHtml, agentIdForLink) {
-  const link = agentIdForLink ? `${APP_URL}/` : `${APP_URL}/`;
+function shell(bodyHtml, link = `${APP_URL}/`) {
   return `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.65;color:#1f2937;max-width:560px">
 ${bodyHtml}
 <p style="margin:22px 0 0"><a href="${link}" style="display:inline-block;background:#2f6bff;color:#fff;text-decoration:none;padding:9px 16px;border-radius:6px;font-weight:600">เปิด AI Agent Library</a></p>
@@ -300,7 +299,19 @@ ${row('บทบาท', doc.role || 'user')}${row('Approve Area', (doc.approveA
       return null;
   }
 
-  const html = shell(body);
+  // Teams card extras (2026-09-28). `title` is the plain subject; `link` deep-
+  // links to where the recipient acts (App.jsx reads ?agent / ?view); an
+  // http(s) endpoint on Ready to Use becomes its own button.
+  const QUEUE = new Set(['agent.pending', 'deploy.requested', 'rename.requested']);
+  const agentId = def.scope === 'agent' ? doc.id : (agent || {}).id;
+  let link = `${APP_URL}/`;
+  if (QUEUE.has(type)) link = `${APP_URL}/?view=pending`;
+  else if (agentId && type !== 'user.roleChanged') link = `${APP_URL}/?agent=${encodeURIComponent(agentId)}`;
+  else if (type === 'user.roleChanged' && ['approver', 'committee', 'admin', 'staff'].includes(doc.role)) link = `${APP_URL}/?view=pending`;
+  const endpoint = type === 'agent.ready' && /^https?:\/\//i.test(String(a.endpoint || '').trim()) ? String(a.endpoint).trim() : '';
+
+  // Same deep link as the Teams card button.
+  const html = shell(body, link);
   // Plain-text alternative: strip tags and collapse blank lines. Some clients
   // (and most mail-security scanners) prefer a real text/plain part.
   const text = `${subject}\n\n${body
@@ -312,17 +323,6 @@ ${row('บทบาท', doc.role || 'user')}${row('Approve Area', (doc.approveA
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()}\n\n${APP_URL}`;
-
-  // Teams card extras (2026-09-28). `title` is the plain subject; `link` deep-
-  // links to where the recipient acts (App.jsx reads ?agent / ?view); an
-  // http(s) endpoint on Ready to Use becomes its own button.
-  const QUEUE = new Set(['agent.pending', 'deploy.requested', 'rename.requested']);
-  const agentId = def.scope === 'agent' ? doc.id : (agent || {}).id;
-  let link = `${APP_URL}/`;
-  if (QUEUE.has(type)) link = `${APP_URL}/?view=pending`;
-  else if (agentId && type !== 'user.roleChanged') link = `${APP_URL}/?agent=${encodeURIComponent(agentId)}`;
-  else if (type === 'user.roleChanged' && ['approver', 'committee', 'admin', 'staff'].includes(doc.role)) link = `${APP_URL}/?view=pending`;
-  const endpoint = type === 'agent.ready' && /^https?:\/\//i.test(String(a.endpoint || '').trim()) ? String(a.endpoint).trim() : '';
 
   return { subject: `[AI Library] ${subject}`, text, html, to, title: subject, link, endpoint };
 }

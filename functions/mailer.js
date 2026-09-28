@@ -53,6 +53,8 @@ async function loadConfig(db) {
       approverOverride: Array.isArray(d.approverOverride)
         ? d.approverOverride.map((e) => String(e || '').toLowerCase()).filter(Boolean)
         : [],
+      // Email through the same Flow (shared mailbox). Off until the flow has the email branch.
+      emailEnabled: d.emailEnabled === true,
       teamsDomains: Array.isArray(d.teamsDomains)
         ? d.teamsDomains.map((x) => String(x || '').toLowerCase().replace(/^@/, '')).filter(Boolean)
         : DEFAULT_CONFIG.teamsDomains,
@@ -163,6 +165,24 @@ function buildTeamsCard({ subject, title, text, link, endpoint }) {
   };
 }
 
+/**
+ * Per-recipient channels for the Flow (2026-09-28). Teams only inside
+ * teamsDomains (Flow bot is tenant-bound); email, when enabled, to everyone —
+ * the flow sends it from the shared mailbox. Recipients with neither channel
+ * are returned as `skipped` (same as before email existed).
+ */
+function planFlowDeliveries(to, teamsDomains, emailEnabled) {
+  const { send } = splitTeamsRecipients(to, teamsDomains);
+  const inTeams = new Set(send);
+  const deliveries = [];
+  const skipped = [];
+  to.forEach((recipient) => {
+    const d = { recipient, teams: inTeams.has(recipient), email: !!emailEnabled };
+    if (d.teams || d.email) deliveries.push(d); else skipped.push(recipient);
+  });
+  return { deliveries, skipped };
+}
+
 /** Split recipients into those Teams can reach and those it can't. */
 function splitTeamsRecipients(to, domains) {
   const ok = new Set((domains || []).map((d) => d.toLowerCase()));
@@ -172,21 +192,22 @@ function splitTeamsRecipients(to, domains) {
   return { send, skipped };
 }
 
-async function sendViaTeamsFlow({ to, subject, title, text, link, endpoint }) {
+async function sendViaTeamsFlow({ deliveries, subject, title, text, html, link, endpoint }) {
   const url = process.env.TEAMS_FLOW_URL;
   if (!url) throw new Error('TEAMS_FLOW_URL secret is not set');
   const card = buildTeamsCard({ subject, title, text, link, endpoint });
   const results = [];
-  for (const recipient of to) {
+  for (const { recipient, teams, email } of deliveries) {
     try {
       const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipient, subject, card }),
+        // teams/email tell the Flow which branch to run for this person.
+        body: JSON.stringify({ recipient, subject, card, teams, email, html: email ? html : '' }),
       });
-      results.push({ email: recipient, http: r.status });
+      results.push({ email: recipient, http: r.status, viaTeams: teams, viaEmail: email });
     } catch (e) {
-      results.push({ email: recipient, http: 0, error: String(e?.message || e).slice(0, 200) });
+      results.push({ email: recipient, http: 0, viaTeams: teams, viaEmail: email, error: String(e?.message || e).slice(0, 200) });
     }
   }
   return results;
@@ -227,13 +248,13 @@ async function sendMail(db, { to, subject, text, html, title, link, endpoint }) 
       return { status: 'sent', provider: cfg.provider, to: finalTo, heldFrom: held, subject, messageId: r.id || '' };
     }
     if (cfg.provider === 'teams-flow') {
-      const { send, skipped } = splitTeamsRecipients(finalTo, cfg.teamsDomains);
-      if (!send.length) {
+      const { deliveries, skipped } = planFlowDeliveries(finalTo, cfg.teamsDomains, cfg.emailEnabled);
+      if (!deliveries.length) {
         return { status: 'skipped-domain', provider: cfg.provider, to: finalTo, skippedDomain: skipped, heldFrom: held, subject };
       }
-      const teams = await sendViaTeamsFlow({ to: send, subject, title, text, link, endpoint });
+      const teams = await sendViaTeamsFlow({ deliveries, subject, title, text, html, link, endpoint });
       const allOk = teams.every((x) => x.http >= 200 && x.http < 300);
-      return { status: allOk ? 'sent' : 'error', provider: cfg.provider, to: send, skippedDomain: skipped, heldFrom: held, subject, teams };
+      return { status: allOk ? 'sent' : 'error', provider: cfg.provider, to: deliveries.map((d) => d.recipient), skippedDomain: skipped, heldFrom: held, subject, teams };
     }
     // smtp-relay / resend are declared in PROVIDERS so the config can be set
     // ahead of time, but are not implemented yet — fail loudly rather than
@@ -244,4 +265,4 @@ async function sendMail(db, { to, subject, text, html, title, link, endpoint }) 
   }
 }
 
-module.exports = { PROVIDERS, DEFAULT_CONFIG, loadConfig, buildRawMessage, sendMail, buildTeamsCard, splitTeamsRecipients };
+module.exports = { PROVIDERS, DEFAULT_CONFIG, loadConfig, buildRawMessage, sendMail, buildTeamsCard, splitTeamsRecipients, planFlowDeliveries };

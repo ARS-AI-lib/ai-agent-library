@@ -35,5 +35,14 @@ ok(N.buildNotification({ type: 'agent.approved', doc: { ...ag, approvalStatus: '
 ok(N.buildNotification({ type: 'agent.ready', doc: ag, agent: ag, users: users2, approverOverride: ov }).to.sort().join() === 'maker@infinitaskt.com,tinnapat.p@arise.tech', 'mixed event → creator + override (no real approvers)');
 ok(N.buildNotification({ type: 'agent.pending', doc: { ...ag, approvalStatus: 'pending' }, agent: ag, users: users2 }).to.length === 2, 'no override → normal area routing');
 
+// Email via the Flow (planFlowDeliveries).
+const to3 = ['a@arise.tech', 'k@krungthai.com'];
+const off = M.planFlowDeliveries(to3, ['arise.tech'], false);
+ok(off.deliveries.length === 1 && off.deliveries[0].teams && !off.deliveries[0].email && off.skipped.join() === 'k@krungthai.com', 'emailEnabled off → same as before (Teams only, others skipped)');
+const on = M.planFlowDeliveries(to3, ['arise.tech'], true);
+ok(on.deliveries.find((d) => d.recipient === 'a@arise.tech')?.teams === true && on.deliveries.find((d) => d.recipient === 'a@arise.tech')?.email === true, 'Teams domain → Teams + email');
+ok(on.deliveries.find((d) => d.recipient === 'k@krungthai.com')?.teams === false && on.deliveries.find((d) => d.recipient === 'k@krungthai.com')?.email === true && !on.skipped.length, 'other domain → email only');
+ok(N.buildNotification({ type: 'agent.approved', doc: { ...base, approvalStatus: 'approved' }, agent: base, users }).html.includes('/?agent=AG1'), 'email button uses the same deep link');
+
 console.log(fail ? `\n${fail} failed` : '\nall passed');
 process.exit(fail ? 1 : 0);
