@@ -403,6 +403,15 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
         />
       </section>
 
+      {/* ── Team Progress ── one row per team (owner), top 8 + View all. */}
+      <section className="dash-sec">
+        <div className="dash-sec-h"><h2>Team Progress</h2><span>ความคืบหน้าของ AI แยกตามทีม</span></div>
+        <DashboardTeamProgress
+          agents={agents}
+          onOpenTeam={(team, list) => setListModal({ sub: 'Team Progress', title: team, agents: list })}
+        />
+      </section>
+
       {/* ── Delivery Health ── launch plan per month, full width. (The Status
           card was removed 2026-09-25: every figure in it repeated the KPI row
           or Data Quality.) */}
@@ -417,15 +426,6 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
             <span className="dash-lg-mu">· ไม่มี launch date {noLaunch} รายการ (ไม่อยู่ในกราฟ)</span>
           </div>
         </div>
-      </section>
-
-      {/* ── Team Progress ── one row per team (owner), top 8 + View all. */}
-      <section className="dash-sec">
-        <div className="dash-sec-h"><h2>Team Progress</h2><span>ความคืบหน้าของ AI แยกตามทีม</span></div>
-        <DashboardTeamProgress
-          agents={agents}
-          onOpenTeam={(team, list) => setListModal({ sub: 'Team Progress', title: team, agents: list })}
-        />
       </section>
 
       {/* ── Needs Attention ── every row opens its list; anything at 0 is not shown. */}
