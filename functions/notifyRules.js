@@ -77,6 +77,17 @@ function emailsOf(users) {
 }
 
 /**
+ * Approver-side recipients. `ctx.approverOverride` (from /config/mail, set
+ * 2026-09-28) REPLACES the area routing with a fixed list — the user asked
+ * that approver notifications go only to them until they say otherwise.
+ * Creator-side recipients are never affected.
+ */
+function approverEmails(agent, users, ctx) {
+  const o = Array.isArray(ctx?.approverOverride) ? ctx.approverOverride.filter(Boolean) : [];
+  return o.length ? o : emailsOf(areaApprovers(agent, users));
+}
+
+/**
  * The event catalog. `verify` is the guard that makes forged events inert —
  * it re-reads the real doc and asks "does it actually say this happened?"
  */
@@ -84,7 +95,7 @@ const EVENTS = {
   'agent.pending': {
     scope: 'agent',
     verify: (a) => a.approvalStatus === 'pending',
-    to: (a, users) => emailsOf(areaApprovers(a, users)),
+    to: (a, users, ctx) => approverEmails(a, users, ctx),
   },
   'agent.approved': {
     scope: 'agent',
@@ -99,7 +110,7 @@ const EVENTS = {
   'deploy.requested': {
     scope: 'agent',
     verify: (a) => a.deploymentStatus === 'requested',
-    to: (a, users) => emailsOf(areaApprovers(a, users)),
+    to: (a, users, ctx) => approverEmails(a, users, ctx),
   },
   'deploy.approved': {
     scope: 'agent',
@@ -119,12 +130,12 @@ const EVENTS = {
   'agent.ready': {
     scope: 'agent',
     verify: (a) => progressOf(a.devProgress) === 100,
-    to: (a, users) => [...creatorAddresses(a), ...emailsOf(areaApprovers(a, users))],
+    to: (a, users, ctx) => [...creatorAddresses(a), ...approverEmails(a, users, ctx)],
   },
   'rename.requested': {
     scope: 'renameRequest',
     verify: (r) => r.status === 'pending',
-    to: (r, users, ctx) => emailsOf(areaApprovers(ctx.agent || {}, users)),
+    to: (r, users, ctx) => approverEmails(ctx.agent || {}, users, ctx),
   },
   'rename.decided': {
     scope: 'renameRequest',
@@ -173,7 +184,7 @@ const quote = (s) => `<blockquote style="margin:10px 0;padding:10px 14px;backgro
  * Build the full notification, or null when nothing should be sent.
  * Returns { subject, text, html, to[] }.
  */
-function buildNotification({ type, doc, agent, users = [], subSkillCount = 0 }) {
+function buildNotification({ type, doc, agent, users = [], subSkillCount = 0, approverOverride = [] }) {
   const def = EVENTS[type];
   if (!def) return null;
   if (!doc) return null;
@@ -182,7 +193,7 @@ function buildNotification({ type, doc, agent, users = [], subSkillCount = 0 }) 
   // One email per logical action: a cascaded sub-skill is never its own event.
   if (def.scope === 'agent' && doc.matchingAgent) return null;
 
-  const ctx = { agent };
+  const ctx = { agent, approverOverride };
   const to = [...new Set((def.to(doc, users, ctx) || [])
     .map((e) => String(e || '').trim().toLowerCase())
     .filter(Boolean))];

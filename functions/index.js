@@ -1834,7 +1834,7 @@ exports.decideRenameRequest = onCall(
 // that is not true, so it resolves to no recipients and dies here.
 
 const { buildNotification, EVENT_TYPES } = require('./notifyRules');
-const { sendMail } = require('./mailer');
+const { sendMail, loadConfig } = require('./mailer');
 
 // TEAMS_FLOW_URL: Power Automate webhook for provider 'teams-flow' (mailer.js).
 const { defineSecret } = require('firebase-functions/params');
@@ -1892,7 +1892,9 @@ exports.notifyEvent = onCall(
       subSkillCount = kids.size;
     }
 
-    const note = buildNotification({ type, doc, agent, users, subSkillCount });
+    // approverOverride: approver-side routing replaced by a fixed list (rollout).
+    const { approverOverride } = await loadConfig(db);
+    const note = buildNotification({ type, doc, agent, users, subSkillCount, approverOverride });
     if (!note) return { ok: false, reason: 'no-recipients-or-unverified' };
 
     const result = await sendMail(db, note);

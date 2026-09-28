@@ -1295,5 +1295,10 @@ banking chatbot ติด AI Engineer → Software Engineer)
 - Path: `notifyEvent` → `buildNotification` (same routing as email) → one POST per recipient to a Teams Workflow ("When a Teams webhook request is received" → "Post card in a chat or channel", Flow bot, Chat with Flow bot, Recipient = `triggerBody()?['recipient']`, Card = `triggerBody()?['card']`).
 - The webhook URL is stored **only** in Secret Manager `TEAMS_FLOW_URL`. Never put it in Firestore, git or chat.
 - `/config/mail.teamsDomains`: only these domains are sent to (the Flow bot can DM only people in the flow owner's tenant). Everyone else is logged in mailLog as `skippedDomain`. `allowRecipients` is the rollout guard.
+- ⛔ **Approver notifications go only to `tinnapat.p@arise.tech` — user order 2026-09-28. Keep it this way until the user says to change it.**
+  - This is set in `/config/mail.approverOverride: ['tinnapat.p@arise.tech']`. It replaces the approver side of every event: `agent.pending`, `deploy.requested`, `rename.requested`, and the approver half of `agent.ready`.
+  - Creator/requester notifications go to the **real** people.
+  - `teamsDomains` = `arise.tech`, `infinitaskt.com` (krungthai.com not tested yet, so it is not included). `allowRecipients` is empty.
+  - Do not remove `approverOverride` or change `teamsDomains` yourself.
 - The card gets a deep link: approver events → `/?view=pending`, other events → `/?agent=<id>`. `App.jsx` opens it after login, then strips the params. Ready to Use with an http endpoint also gets an "Open Endpoint" button. Test: `node functions/verify-teams.cjs`.
 

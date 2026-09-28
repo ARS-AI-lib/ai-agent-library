@@ -50,6 +50,9 @@ async function loadConfig(db) {
       allowRecipients: Array.isArray(d.allowRecipients)
         ? d.allowRecipients.map((e) => String(e || '').toLowerCase()).filter(Boolean)
         : [],
+      approverOverride: Array.isArray(d.approverOverride)
+        ? d.approverOverride.map((e) => String(e || '').toLowerCase()).filter(Boolean)
+        : [],
       teamsDomains: Array.isArray(d.teamsDomains)
         ? d.teamsDomains.map((x) => String(x || '').toLowerCase().replace(/^@/, '')).filter(Boolean)
         : DEFAULT_CONFIG.teamsDomains,
