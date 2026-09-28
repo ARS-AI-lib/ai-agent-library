@@ -249,3 +249,41 @@
   .dash-rv-right .dash-rc-b { font-size: 13px; min-width: 28px; padding: 2px 6px; border-radius: 7px; }
   .dash-rv-right .dash-rc-s { margin-top: 6px; font-size: 11px; }
 }
+
+/* ── Team Progress (2026-09-28) — DashboardTeamProgress.jsx ── */
+.dash-tp { display: flex; flex-direction: column; }
+.dash-tp-head, .dash-tp-row {
+  display: grid; grid-template-columns: minmax(120px, 190px) 52px 52px minmax(0, 1fr) 84px 84px;
+  gap: 10px; align-items: center;
+}
+.dash-tp-head { font-size: 11px; font-weight: 600; color: var(--mu); text-transform: uppercase; letter-spacing: .03em; padding: 0 6px 6px; border-bottom: 1px solid var(--bd); }
+.dash-tp-head span:nth-child(2), .dash-tp-head span:nth-child(3) { text-align: center; }
+.dash-tp-head span:nth-child(5), .dash-tp-head span:nth-child(6) { text-align: right; }
+.dash-tp-row {
+  width: 100%; background: none; border: none; border-bottom: 1px solid var(--bd); padding: 9px 6px;
+  font: inherit; color: var(--tx); text-align: left; cursor: pointer; border-radius: 6px;
+}
+.dash-tp-row:hover { background: var(--sf2, rgba(0,0,0,.03)); }
+.dash-tp-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-tp-num { text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.dash-tp-pct { text-align: right; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dash-tp-pct em { display: none; font-style: normal; font-weight: 500; color: var(--mu); margin-right: 4px; }
+.dash-tp-bar { display: flex; gap: 2px; height: 22px; min-width: 0; }
+.dash-tp-bar i {
+  flex-basis: 0; min-width: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  font-style: normal; font-size: 11px; font-weight: 700; color: #fff; overflow: hidden; white-space: nowrap;
+}
+.dash-tp-bar i[data-s="ip"], .dash-tp-bar i[data-s="td"] { color: #1f2937; }
+.dash-more { margin-top: 10px; background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--accent); cursor: pointer; }
+.dash-tp-note { margin-top: 6px; font-size: 11.5px; color: var(--mu); }
+.dash-tp-modal { max-width: 980px; width: min(980px, 94vw); }
+@media (max-width: 700px) {
+  .dash-tp-head { display: none; }
+  .dash-tp-row { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "name pp pc" "bar bar bar"; row-gap: 6px; }
+  .dash-tp-name { grid-area: name; }
+  .dash-tp-num { display: none; }
+  .dash-tp-bar { grid-area: bar; }
+  .dash-tp-pct:nth-of-type(5) { grid-area: pp; }
+  .dash-tp-pct:last-child { grid-area: pc; }
+  .dash-tp-pct em { display: inline; }
+}

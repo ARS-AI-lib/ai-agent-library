@@ -9,6 +9,7 @@ import { VERTICAL_CATEGORIES } from '../lib/approveAreas';
 import { readStats, demandScore, isUntouched } from '../lib/agentStats';
 import { useAgentStats } from '../hooks/useAgentStats';
 import DashboardRoleView from './DashboardRoleView';
+import DashboardTeamProgress from './DashboardTeamProgress';
 import '../styles/SDLCTab.css';
 import '../styles/DashboardTab.css';
 
@@ -416,6 +417,15 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
             <span className="dash-lg-mu">· ไม่มี launch date {noLaunch} รายการ (ไม่อยู่ในกราฟ)</span>
           </div>
         </div>
+      </section>
+
+      {/* ── Team Progress ── one row per team (owner), top 8 + View all. */}
+      <section className="dash-sec">
+        <div className="dash-sec-h"><h2>Team Progress</h2><span>ความคืบหน้าของ AI แยกตามทีม</span></div>
+        <DashboardTeamProgress
+          agents={agents}
+          onOpenTeam={(team, list) => setListModal({ sub: 'Team Progress', title: team, agents: list })}
+        />
       </section>
 
       {/* ── Needs Attention ── every row opens its list; anything at 0 is not shown. */}
