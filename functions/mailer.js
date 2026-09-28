@@ -20,7 +20,8 @@
  * should be able to send mail as the sender.
  */
 
-const PROVIDERS = ['none', 'gmail-oauth', 'smtp-relay', 'resend'];
+const PROVIDERS = ['none', 'gmail-oauth', 'smtp-relay', 'resend', 'teams-flow'];
+const APP_URL = 'https://wolfy-ai-library.web.app';
 
 const DEFAULT_CONFIG = {
   // Ships OFF and dry-run. Every event is verified in this mode — recipients
@@ -30,6 +31,10 @@ const DEFAULT_CONFIG = {
   from: 'AI Agent Library <tinnapat.p@arise.tech>',
   replyTo: 'tinnapat.p@arise.tech',
   allowRecipients: [],
+  // teams-flow only: recipients outside these domains are skipped, because the
+  // Flow bot can only chat with people in the Flow owner's Teams tenant and a
+  // cross-tenant failure is invisible to us (the webhook answers 202 first).
+  teamsDomains: ['arise.tech'],
 };
 
 async function loadConfig(db) {
@@ -45,6 +50,9 @@ async function loadConfig(db) {
       allowRecipients: Array.isArray(d.allowRecipients)
         ? d.allowRecipients.map((e) => String(e || '').toLowerCase()).filter(Boolean)
         : [],
+      teamsDomains: Array.isArray(d.teamsDomains)
+        ? d.teamsDomains.map((x) => String(x || '').toLowerCase().replace(/^@/, '')).filter(Boolean)
+        : DEFAULT_CONFIG.teamsDomains,
     };
   } catch {
     // A missing or unreadable config must never turn into "send to everyone".
@@ -122,12 +130,71 @@ async function sendViaGmailOAuth({ from, replyTo, to, subject, text, html }) {
   return { id: body.id };
 }
 
+// ── Microsoft Teams via Power Automate "Flow bot" (2026-09-28) ─────────
+// A Teams Workflow ("When a Teams webhook request is received" → "Post card in
+// a chat or channel", Post in: Chat with Flow bot, Recipient =
+// triggerBody()?['recipient'], Card = triggerBody()?['card']) turns one POST
+// into a 1:1 chat for that person. Same technique as the daily-scrum skill's
+// channel card, pointed at a person instead. The webhook URL can post as the
+// bot, so it is a Secret Manager value (TEAMS_FLOW_URL), never Firestore/git.
+
+/** Adaptive Card 1.4 for one notification — pure, checked by verify-teams.cjs. */
+function buildTeamsCard({ subject, title, text, link, endpoint }) {
+  // `text` (from notifyRules) opens with the subject line and then the email's
+  // <h2> heading — both repeat the title, so the first two lines are dropped.
+  // The trailing app URL is replaced by the button.
+  const lines = String(text || '').split('\n').filter((l) => l.trim()).slice(2)
+    .filter((l) => l.trim() !== APP_URL);
+  const actions = [{ type: 'Action.OpenUrl', title: 'Open AI Library', url: link || `${APP_URL}/` }];
+  if (endpoint) actions.push({ type: 'Action.OpenUrl', title: 'Open Endpoint', url: endpoint });
+  return {
+    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+    type: 'AdaptiveCard',
+    version: '1.4',
+    body: [
+      { type: 'TextBlock', text: 'AI Agent Library', size: 'Small', isSubtle: true },
+      { type: 'TextBlock', text: title || String(subject || '').replace(/^\[AI Library\]\s*/, ''), weight: 'Bolder', size: 'Medium', wrap: true },
+      ...lines.map((l) => ({ type: 'TextBlock', text: l, wrap: true, spacing: 'Small' })),
+    ],
+    actions,
+  };
+}
+
+/** Split recipients into those Teams can reach and those it can't. */
+function splitTeamsRecipients(to, domains) {
+  const ok = new Set((domains || []).map((d) => d.toLowerCase()));
+  const send = [];
+  const skipped = [];
+  to.forEach((e) => (ok.has(String(e).toLowerCase().split('@')[1] || '') ? send : skipped).push(e));
+  return { send, skipped };
+}
+
+async function sendViaTeamsFlow({ to, subject, title, text, link, endpoint }) {
+  const url = process.env.TEAMS_FLOW_URL;
+  if (!url) throw new Error('TEAMS_FLOW_URL secret is not set');
+  const card = buildTeamsCard({ subject, title, text, link, endpoint });
+  const results = [];
+  for (const recipient of to) {
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient, subject, card }),
+      });
+      results.push({ email: recipient, http: r.status });
+    } catch (e) {
+      results.push({ email: recipient, http: 0, error: String(e?.message || e).slice(0, 200) });
+    }
+  }
+  return results;
+}
+
 /**
  * Send one notification. Returns a result object that is ALWAYS written to
  * /mailLog, including for dry runs and failures — the log is the audit trail
  * and the thing verification reads.
  */
-async function sendMail(db, { to, subject, text, html }) {
+async function sendMail(db, { to, subject, text, html, title, link, endpoint }) {
   const cfg = await loadConfig(db);
 
   if (!cfg.enabled) {
@@ -156,6 +223,15 @@ async function sendMail(db, { to, subject, text, html }) {
       const r = await sendViaGmailOAuth({ ...cfg, to: finalTo, subject, text, html });
       return { status: 'sent', provider: cfg.provider, to: finalTo, heldFrom: held, subject, messageId: r.id || '' };
     }
+    if (cfg.provider === 'teams-flow') {
+      const { send, skipped } = splitTeamsRecipients(finalTo, cfg.teamsDomains);
+      if (!send.length) {
+        return { status: 'skipped-domain', provider: cfg.provider, to: finalTo, skippedDomain: skipped, heldFrom: held, subject };
+      }
+      const teams = await sendViaTeamsFlow({ to: send, subject, title, text, link, endpoint });
+      const allOk = teams.every((x) => x.http >= 200 && x.http < 300);
+      return { status: allOk ? 'sent' : 'error', provider: cfg.provider, to: send, skippedDomain: skipped, heldFrom: held, subject, teams };
+    }
     // smtp-relay / resend are declared in PROVIDERS so the config can be set
     // ahead of time, but are not implemented yet — fail loudly rather than
     // silently pretending to have sent.
@@ -165,4 +241,4 @@ async function sendMail(db, { to, subject, text, html }) {
   }
 }
 
-module.exports = { PROVIDERS, DEFAULT_CONFIG, loadConfig, buildRawMessage, sendMail };
+module.exports = { PROVIDERS, DEFAULT_CONFIG, loadConfig, buildRawMessage, sendMail, buildTeamsCard, splitTeamsRecipients };

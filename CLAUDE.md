@@ -1287,3 +1287,13 @@ banking chatbot ติด AI Engineer → Software Engineer)
 - Name matching: only approved agents, case/space folded. A name shared by 2 or more agents is skipped. Renames approved after 2026-09-25 store `previousName` so the old name still matches; older renames have no alias.
 - Usage Report shows these rows with Source = Portfolio, Adopter = the task PIC, and the project/task name.
 
+---
+
+## Microsoft Teams notifications (2026-09-28)
+
+- Provider `teams-flow` (`functions/mailer.js`) **replaces email**. It is switched in `/config/mail.provider`, so no redeploy is needed. Rollback: set `provider: 'none'`.
+- Path: `notifyEvent` → `buildNotification` (same routing as email) → one POST per recipient to a Teams Workflow ("When a Teams webhook request is received" → "Post card in a chat or channel", Flow bot, Chat with Flow bot, Recipient = `triggerBody()?['recipient']`, Card = `triggerBody()?['card']`).
+- The webhook URL is stored **only** in Secret Manager `TEAMS_FLOW_URL`. Never put it in Firestore, git or chat.
+- `/config/mail.teamsDomains`: only these domains are sent to (the Flow bot can DM only people in the flow owner's tenant). Everyone else is logged in mailLog as `skippedDomain`. `allowRecipients` is the rollout guard.
+- The card gets a deep link: approver events → `/?view=pending`, other events → `/?agent=<id>`. `App.jsx` opens it after login, then strips the params. Ready to Use with an http endpoint also gets an "Open Endpoint" button. Test: `node functions/verify-teams.cjs`.
+

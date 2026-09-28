@@ -302,7 +302,18 @@ ${row('บทบาท', doc.role || 'user')}${row('Approve Area', (doc.approveA
     .replace(/\n{3,}/g, '\n\n')
     .trim()}\n\n${APP_URL}`;
 
-  return { subject: `[AI Library] ${subject}`, text, html, to };
+  // Teams card extras (2026-09-28). `title` is the plain subject; `link` deep-
+  // links to where the recipient acts (App.jsx reads ?agent / ?view); an
+  // http(s) endpoint on Ready to Use becomes its own button.
+  const QUEUE = new Set(['agent.pending', 'deploy.requested', 'rename.requested']);
+  const agentId = def.scope === 'agent' ? doc.id : (agent || {}).id;
+  let link = `${APP_URL}/`;
+  if (QUEUE.has(type)) link = `${APP_URL}/?view=pending`;
+  else if (agentId && type !== 'user.roleChanged') link = `${APP_URL}/?agent=${encodeURIComponent(agentId)}`;
+  else if (type === 'user.roleChanged' && ['approver', 'committee', 'admin', 'staff'].includes(doc.role)) link = `${APP_URL}/?view=pending`;
+  const endpoint = type === 'agent.ready' && /^https?:\/\//i.test(String(a.endpoint || '').trim()) ? String(a.endpoint).trim() : '';
+
+  return { subject: `[AI Library] ${subject}`, text, html, to, title: subject, link, endpoint };
 }
 
 module.exports = {

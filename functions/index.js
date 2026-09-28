@@ -1836,8 +1836,12 @@ exports.decideRenameRequest = onCall(
 const { buildNotification, EVENT_TYPES } = require('./notifyRules');
 const { sendMail } = require('./mailer');
 
+// TEAMS_FLOW_URL: Power Automate webhook for provider 'teams-flow' (mailer.js).
+const { defineSecret } = require('firebase-functions/params');
+const TEAMS_FLOW_URL = defineSecret('TEAMS_FLOW_URL');
+
 exports.notifyEvent = onCall(
-  { cors: true, timeoutSeconds: 60 },
+  { cors: true, timeoutSeconds: 60, secrets: [TEAMS_FLOW_URL] },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
     if (!isOrgEmail(request.auth.token?.email)) {
@@ -1906,6 +1910,9 @@ exports.notifyEvent = onCall(
       provider: result.provider,
       error: result.error || null,
       heldFrom: result.heldFrom || [],
+      // teams-flow: per-recipient HTTP results + who was outside teamsDomains.
+      teams: result.teams || null,
+      skippedDomain: result.skippedDomain || [],
       triggeredBy: request.auth.uid,
       createdAt: FieldValue.serverTimestamp(),
     });

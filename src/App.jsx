@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { useAuth } from './hooks/useAuth';
@@ -173,6 +173,24 @@ export default function App() {
   const [showRoleGroups, setShowRoleGroups] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [myAI, setMyAI] = useState(false);
+
+  // Deep links from Teams notifications (2026-09-28): ?agent=<id> opens that
+  // agent's detail, ?view=pending opens the approval queue. Consumed once after
+  // agents load, then stripped so a refresh doesn't re-open it. An id that is
+  // not in the library (still pending) falls back to the queue.
+  const deepLinkDone = useRef(false);
+  useEffect(() => {
+    if (deepLinkDone.current || !role || agentsLoading) return;
+    deepLinkDone.current = true;
+    const q = new URLSearchParams(window.location.search);
+    const id = q.get('agent');
+    const view = q.get('view');
+    if (!id && !view) return;
+    const hit = id ? (allAgents || []).find((a) => a.id === id) : null;
+    if (hit) setSelectedAgent(hit);
+    else if (view === 'pending' || id) setShowPending(true);
+    window.history.replaceState(null, '', window.location.pathname);
+  }, [role, agentsLoading, allAgents]);
   const [editingAgent, setEditingAgent] = useState(null);
   const [activeTab, setActiveTab] = useState('lib');
   const [signInError, setSignInError] = useState('');
