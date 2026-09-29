@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ST_DEF, ST_ORDER, progressBucket } from '../lib/status';
 import { getType } from '../lib/tier';
 import { normalizeProgress } from '../lib/agentUtils';
+import TagMultiSelect from './TagMultiSelect';
 
 /**
  * Dashboard → "Team Progress" (2026-09-28).
@@ -22,6 +23,9 @@ const sliceDef = (k) => (k === 'dp' ? DP : ST_DEF[k]);
 const TOP = 8;
 const NO_TEAM = '(No team)';
 
+/** Team key used by the rows AND the Dashboard-wide team filter — one definition. */
+export const teamOf = (a) => String(a?.owner || '').trim() || NO_TEAM;
+
 function sliceOf(a) {
   if (a.deploymentStatus === 'requested') return 'dp';
   return progressBucket(normalizeProgress(a.devProgress));
@@ -30,7 +34,7 @@ function sliceOf(a) {
 export function teamRows(agents) {
   const m = new Map();
   agents.forEach((a) => {
-    const team = String(a.owner || '').trim() || NO_TEAM;
+    const team = teamOf(a);
     const r = m.get(team) || { team, agents: 0, skills: 0, sum: 0, list: [], c: Object.fromEntries(SLICES.map((k) => [k, 0])) };
     if (getType(a) === 'skill') r.skills += 1; else r.agents += 1;
     r.sum += normalizeProgress(a.devProgress);
@@ -80,7 +84,7 @@ function Table({ rows, onOpen }) {
   );
 }
 
-export default function DashboardTeamProgress({ agents = [], onOpenTeam }) {
+export default function DashboardTeamProgress({ agents = [], onOpenTeam, teamOptions = [], selectedTeams, onTeamsChange }) {
   const [showAll, setShowAll] = useState(false);
   const rows = useMemo(() => teamRows(agents), [agents]);
   const used = SLICES.filter((k) => rows.some((r) => r.c[k] > 0));
@@ -88,7 +92,14 @@ export default function DashboardTeamProgress({ agents = [], onOpenTeam }) {
 
   return (
     <div className="dash-card">
-      <div className="dash-card-title">Team Progress</div>
+      <div className="dash-tp-top">
+        <div className="dash-card-title">Team Progress</div>
+        {onTeamsChange && (
+          <div className="dash-tp-filter">
+            <TagMultiSelect label="Filter teams…" options={teamOptions} selected={selectedTeams} onChange={onTeamsChange} allowNew={false} />
+          </div>
+        )}
+      </div>
       <div className="dash-card-sub dash-mb">AI ของแต่ละทีม แยกตามสถานะ · กดแถวเพื่อดูรายการ</div>
       <Table rows={rows.slice(0, TOP)} onOpen={open} />
       {rows.length > TOP && (

@@ -287,3 +287,18 @@
   .dash-tp-pct:last-child { grid-area: pc; }
   .dash-tp-pct em { display: inline; }
 }
+
+/* ── Team filter (2026-09-29) ── */
+.dash-filterbar {
+  position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 8px 16px; margin-bottom: 14px; padding: 9px 14px; border-radius: 10px;
+  background: var(--accent); color: #fff; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+.dash-filterbar b { font-weight: 700; }
+.dash-filterbar em { font-style: normal; opacity: .85; }
+.dash-filterbar button { background: rgba(255,255,255,.18); color: #fff; border: 1px solid rgba(255,255,255,.5); border-radius: 6px; padding: 3px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+.dash-filterbar button:hover { background: rgba(255,255,255,.3); }
+.dash-tp-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.dash-tp-filter { flex: 0 1 380px; min-width: 220px; }
+.dash-tp-filter .tms-box { min-height: 34px; }
+@media (max-width: 700px) { .dash-tp-filter { flex-basis: 100%; } }

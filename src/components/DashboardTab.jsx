@@ -9,7 +9,7 @@ import { VERTICAL_CATEGORIES } from '../lib/approveAreas';
 import { readStats, demandScore, isUntouched } from '../lib/agentStats';
 import { useAgentStats } from '../hooks/useAgentStats';
 import DashboardRoleView from './DashboardRoleView';
-import DashboardTeamProgress from './DashboardTeamProgress';
+import DashboardTeamProgress, { teamOf } from './DashboardTeamProgress';
 import '../styles/SDLCTab.css';
 import '../styles/DashboardTab.css';
 
@@ -32,7 +32,21 @@ const DAY = 864e5;
  * Colours are the site's own tokens (ST_DEF dots, --tier-*, --tl-*, --ag/--sk,
  * categoryColor) — this page introduces no palette of its own.
  */
-export default function DashboardTab({ agents = [], onAgentClick }) {
+export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
+  // Team filter (2026-09-29): chosen in the Team Progress card, applies to the
+  // WHOLE page — every section below reads `agents`, so filtering it here is
+  // the single switch. Options come from the unfiltered list so a selection
+  // never removes its own choices. Not persisted (same as VIEW/SORT).
+  const [teams, setTeams] = useState(() => new Set());
+  const agents = useMemo(
+    () => (teams.size ? allAgents.filter((a) => teams.has(teamOf(a))) : allAgents),
+    [allAgents, teams],
+  );
+  const teamOptions = useMemo(() => {
+    const n = new Map();
+    allAgents.forEach((a) => n.set(teamOf(a), (n.get(teamOf(a)) || 0) + 1));
+    return [...n].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).map(([t]) => t);
+  }, [allAgents]);
   const statsById = useAgentStats(true);
   const [processes, setProcesses] = useState([]);
   const [milestones, setMilestones] = useState([]);
@@ -190,6 +204,14 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
 
   return (
     <div className="dash-page">
+      {/* Sticky reminder whenever the team filter is on — the control lives in
+          Team Progress (mid-page), so KPI readers must still see it. */}
+      {teams.size > 0 && (
+        <div className="dash-filterbar" role="status">
+          <span>Filtered by team: <b>{[...teams].join(', ')}</b> <em>({agents.length} items)</em></span>
+          <button type="button" onClick={() => setTeams(new Set())}>Clear</button>
+        </div>
+      )}
       {/* ── Headline counters ── */}
       <section className="dash-kpis" aria-label="Headline">
         <div className="dash-kpi hero">
@@ -409,6 +431,9 @@ export default function DashboardTab({ agents = [], onAgentClick }) {
         <DashboardTeamProgress
           agents={agents}
           onOpenTeam={(team, list) => setListModal({ sub: 'Team Progress', title: team, agents: list })}
+          teamOptions={teamOptions}
+          selectedTeams={teams}
+          onTeamsChange={setTeams}
         />
       </section>
 

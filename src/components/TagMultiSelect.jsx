@@ -14,7 +14,9 @@ function splitTokens(raw) {
  * `options` are reported via `onAddNew(newValues)` so the caller can persist
  * them to the shared list (see useConfigSchema.addRelatedRoles).
  */
-export default function TagMultiSelect({ label, options = [], selected, onChange, onAddNew }) {
+// allowNew=false (2026-09-29, Dashboard team filter): pick-only — typing just
+// filters the options; Enter takes the first match; nothing new is ever added.
+export default function TagMultiSelect({ label, options = [], selected, onChange, onAddNew, allowNew = true }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const wrapRef = useRef(null);
@@ -62,6 +64,11 @@ export default function TagMultiSelect({ label, options = [], selected, onChange
 
   function commitQuery() {
     if (!query.trim()) return;
+    if (!allowNew) {
+      if (filtered[0]) toggleOption(filtered[0]);
+      setQuery('');
+      return;
+    }
     addTokens(splitTokens(query));
     setQuery('');
   }
@@ -78,7 +85,7 @@ export default function TagMultiSelect({ label, options = [], selected, onChange
     const v = e.target.value;
     // Comma/slash typed directly (not just pasted) commits everything before
     // it immediately, so multi-role paste/typing splits as you go.
-    if (/[,/]$/.test(v)) {
+    if (allowNew && /[,/]$/.test(v)) {
       addTokens(splitTokens(v));
       setQuery('');
       return;
@@ -117,13 +124,13 @@ export default function TagMultiSelect({ label, options = [], selected, onChange
               {opt}
             </div>
           ))}
-          {q && !exactMatch && (
+          {allowNew && q && !exactMatch && (
             <div className="tms-item tms-add" onMouseDown={(e) => { e.preventDefault(); commitQuery(); }}>
               + Add "{query.trim()}"
             </div>
           )}
-          {!filtered.length && !q && (
-            <div className="tms-item" style={{ color: 'var(--mu2)', cursor: 'default' }}>(no options)</div>
+          {!filtered.length && (!q || !allowNew) && (
+            <div className="tms-item" style={{ color: 'var(--mu2)', cursor: 'default' }}>{q ? '(no match)' : '(no options)'}</div>
           )}
         </div>
       )}
