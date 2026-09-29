@@ -255,6 +255,12 @@ Tier:
 - แนะนำ deploy preview channel ก่อน promote เมื่ออยากชัวร์: `npx firebase-tools hosting:channel:deploy <name> --project wolfy-481609` (ได้ URL ชั่วคราว ไม่แตะ live) แล้วค่อย deploy จริง
 - เปลี่ยนแค่รูป/asset ใน `public/` โดยชื่อไฟล์เดิม ก็ต้อง rebuild + deploy hosting ใหม่เสมอ (CDN cache ตามชื่อไฟล์)
 
+**📅 Upcoming platform dates (Google notices; no action needed yet):**
+- **2027-03-28 — Cloud Build release channels:** the default for worker VMs becomes `regular` (Docker/Debian on the build host update faster).
+  - We have no cloudbuild.yaml or Dockerfile. Cloud Build is used only behind the scenes by `firebase deploy --only functions:…` (Google's standard buildpacks), and Firebase Functions has no setting to choose a channel.
+  - **After that date, watch the first functions deploy.** If you get `Build failed`, investigate. The old function keeps running until the new deploy succeeds, so users see no outage. Hosting is unaffected (Vite builds locally).
+- **2027-03-31 — gemini-2.5-flash shuts down (asia-southeast1):** we already moved to `gemini-3.5-flash` on 2026-09-25 (see §7), so nothing is pending.
+
 **⚠️ กฎเหล็ก — โปรเจกต์ `wolfy-481609` แชร์กับแอป Portfolio:** ทั้ง 2 แอปอยู่ GCP project เดียวกัน
 - **ห้ามรัน `firebase deploy` เปล่าๆ หรือ `--only functions` เปล่าๆ เด็ดขาด**
   **ตัวเลขจริง (ยืนยันด้วย `npx firebase-tools functions:list` เมื่อ 2026-08-20 (นับใหม่รอบบ่าย)):**
