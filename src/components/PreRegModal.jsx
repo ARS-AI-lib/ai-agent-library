@@ -362,6 +362,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       archived: m.existing.archived === true,
       archiveReason: m.existing.archiveReason || '',
       ruleConfidence: Math.round(m.confidence),
+      // How the library already files it (2026-09-29): team + placement, so
+      // the AI stays consistent with the draft's team family.
+      owner: m.existing.owner || '',
+      approveArea: Array.isArray(m.existing.approveArea) ? m.existing.approveArea : [],
+      category: Array.isArray(m.existing.category) ? m.existing.category : [],
     }));
     const connectionCandidates = conns.map((c) => ({
       agentName: c.target,
@@ -378,6 +383,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         type: form.type,
         scope: form.scope,
         description: draft.description,
+        // Team — the server builds the team context from Firestore itself.
+        owner: form.owner.trim(),
         ability: draft.coreAbility,
         input: draft.input,
         output: draft.output,
@@ -526,6 +533,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               // signal in the pending queue so a human can gate what the AI only warns on.
               overlapAgents: aiStats?.overlapAgents ?? 0,
               breadthFlag,
+              // Why this area/category (esp. when it departs from the team's usual).
+              approveAreaReason: aiResult.approve_area_reason || '',
+              categoryReason: aiResult.category_reason || '',
             }
           : null,
         developmentPhase: 'To Do',
@@ -598,6 +608,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 suggested_matching_agent: aiResult.suggested_matching_agent || null,
                 suggested_ability: aiResult.suggested_ability || null,
                 suggested_approve_area: aiResult.suggested_approve_area || [],
+                approve_area_reason: aiResult.approve_area_reason || '',
+                category_reason: aiResult.category_reason || '',
               },
               outcome: 'pending',   // ← becomes approved/rejected when a reviewer acts
               createdBy,
@@ -1091,6 +1103,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                       {aiResult.suggested_matching_agent && <div>ควรผูกเป็น Skill/Agent คู่กับ: <strong>{aiResult.suggested_matching_agent}</strong></div>}
                       {abilityDiffers && <div>แนะนำ Core Ability: <strong>{aiResult.suggested_ability}</strong></div>}
                       {areas.length > 0 && <div>สายงานที่จะเป็นผู้อนุมัติ: <strong>{areas.join(' + ')}</strong></div>}
+                      {areas.length > 0 && aiResult.approve_area_reason && <div style={{ color: 'var(--mu)', fontSize: 12 }}>{aiResult.approve_area_reason}</div>}
                     </div>
                   );
                 })()}

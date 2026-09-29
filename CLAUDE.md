@@ -171,6 +171,13 @@ Tier:
 
 > **Model (2026-09-25):** every generative call (analyzeDuplicate, chatLibrary, classifyRoleGroup) uses `GEN_MODEL` from `functions/modelConfig.js` = `gemini-3.5-flash` (the only Gemini 3 model in asia-southeast1; 2.5 Flash stops 31 Mar 2027). Use `thinkingLevel`, not `thinkingBudget` — sending both gives a 400. Never hardcode a model string. Embeddings are separate (`embedText.js`).
 
+> **Library context (2026-09-29):** the prompt lives in `functions/duplicatePrompt.js` (moved out of index.js so the eval runs the real prompt).
+> - The server builds a **Team context** from Firestore, using `draft.owner` → `summarizeTeam()` in `functions/libraryContextRules.js`. It is never taken from the client.
+> - Candidates also carry `owner`, `approveArea` and `category`.
+> - Rules: the team's dominant area/category (≥60%) is the default. The AI may depart from it only when the content clearly differs, and must then fill `approve_area_reason` / `category_reason`. Product tags still need evidence in the content itself. A same-team candidate with overlapping work is flagged as a possible new version.
+> - Leave-one-out measurement (`eval-library-context.cjs`, 40 items): Approve Area 68%→90%, Category 63%→70%. The 3 duplicate test cases still come out clear_duplicate at 98.
+> - Tests: `verify-library-context.cjs` (offline).
+
 - Cloud Function → เรียก Vertex AI (Gemini 2.5 Flash, `thinkingBudget: 0`)
 - 3 features: **A + B + D** (รายละเอียด feature C ถูกตัดออก)
 - เป็น batch call, blocking UI, ตอบกลับเป็น structured JSON
