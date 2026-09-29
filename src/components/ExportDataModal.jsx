@@ -154,6 +154,11 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
   // rather than a permanent per-button policy — unchecked means active-only.
   const [includeInactive, setIncludeInactive] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
+  // Period (2026-09-29): filters EVERY export by created date (createdAt),
+  // inclusive, local days. Empty = no limit on that side. Items without a
+  // createdAt (old CSV imports) drop out only while a period is set.
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   useEscapeKey(onClose);
   // See PendingApprovalModal for why this wrapper exists — live
   // category->area overrides from CategoryApprovalPanel must apply here too,
@@ -177,10 +182,18 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
     return () => { alive = false; };
   }, []);
 
-  const allAgents = useMemo(
-    () => [...approvedAgents, ...pending, ...rejected],
-    [approvedAgents, pending, rejected]
-  );
+  const allAgents = useMemo(() => {
+    const pool = [...approvedAgents, ...pending, ...rejected];
+    if (!fromDate && !toDate) return pool;
+    const lo = fromDate ? new Date(`${fromDate}T00:00:00`).getTime() : -Infinity;
+    const hi = toDate ? new Date(`${toDate}T23:59:59.999`).getTime() : Infinity;
+    return pool.filter((a) => {
+      const v = a.createdAt;
+      const d = v?.toDate ? v.toDate() : (v ? new Date(v) : null);
+      const t = d && !isNaN(d) ? d.getTime() : null;
+      return t != null && t >= lo && t <= hi;
+    });
+  }, [approvedAgents, pending, rejected, fromDate, toDate]);
 
   // Active = approved and not archived. My AI / My Area's AI always stay
   // active-only — the includeInactive/includeArchived checkboxes are scoped
@@ -240,6 +253,23 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
           <div className="empty-state">Loading…</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+            <div className="mac" style={{ border: '1px solid var(--bd-soft)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
+                <span className="macname" style={{ marginRight: 4 }}>Period</span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>From
+                  <input type="date" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} style={{ font: 'inherit', padding: '3px 6px', border: '1px solid var(--bd)', borderRadius: 6 }} />
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>To
+                  <input type="date" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} style={{ font: 'inherit', padding: '3px 6px', border: '1px solid var(--bd)', borderRadius: 6 }} />
+                </label>
+                {(fromDate || toDate) && (
+                  <button type="button" onClick={() => { setFromDate(''); setToDate(''); }} style={{ font: 'inherit', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0 }}>Clear</button>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 5 }}>
+                {fromDate || toDate ? 'กรองตามวันที่สร้างรายการ (Created Date) — มีผลกับทุกปุ่มด้านล่าง' : 'ไม่กำหนด = ดึงข้อมูลทั้งหมด'}
+              </div>
+            </div>
             {/* .mac reused as a clickable option row (2026-08-08) — was a plain
                 one-line button; each download is now a small card with a count
                 badge, matching the redesign's treatment of every other
