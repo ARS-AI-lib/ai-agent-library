@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { getType } from '../lib/tier';
 import { addDoc, doc, setDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
@@ -122,6 +123,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const [ranked, setRanked] = useState(null);   // rule-based top-N (for fallback display)
   const [connections, setConnections] = useState([]);  // rule-based directional connections
   const [aiResult, setAiResult] = useState(null);
+  // Opt-in (default on) to REQUEST the AI-suggested link; a person still confirms it.
+  const [requestLink, setRequestLink] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -474,6 +477,12 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         approveArea: Array.isArray(aiResult?.suggested_approve_area) ? aiResult.suggested_approve_area : [],
       };
 
+      // Resolve the AI suggestion to a real approved Agent (by exact name)
+      // only for a Skill the submitter chose to request a link for.
+      const linkTarget = (form.type === 'Skill' && requestLink && aiResult?.suggested_matching_agent)
+        ? (approvedAgents || []).find((a) => a.agentName === aiResult.suggested_matching_agent && getType(a) === 'agent') || null
+        : null;
+
       const agentRef = await addDoc(collection(db, 'agents'), {
         agentName,
         description: form.description.trim(),
@@ -520,7 +529,12 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         output: form.output.trim(),
         compatibleAgents: form.type === 'Skill' ? form.compatibleAgents : [],
         businessValue: inheritedFromAgent.businessValue,
-        matchingAgent: aiResult?.suggested_matching_agent || '',
+        // 2026-09-30: the AI's suggested parent is NO LONGER written here —
+        // that silent write is how skills got linked to other teams' agents.
+        // A Skill with a suggestion carries it as a pending link request,
+        // confirmed in the Pending queue (functions/linkRules.js).
+        matchingAgent: '',
+        ...(linkTarget ? { linkSuggestion: { agentId: linkTarget.id, agentName: linkTarget.agentName, status: 'pending', source: 'ai' } } : {}),
         // Snapshot of the duplicate-check result at submit time, so the
         // Pending Approval queue can show reviewers the same risk signal
         // without re-running the check.
@@ -697,6 +711,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // filed as separate docs but reviewed as a package, and the notifier
       // skips anything carrying matchingAgent for exactly that reason.
       notifyEvent('agent.pending', { agentId: agentRef.id });
+      if (linkTarget) notifyEvent('link.requested', { agentId: agentRef.id });
 
       // Analysis is now committed to the KB — drop the transient session cache
       // so nothing lingers post-submit (per the "clear cache after submit" rule).
@@ -1100,7 +1115,12 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                   if (!showBlock) return null;
                   return (
                     <div className="msg info" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-                      {aiResult.suggested_matching_agent && <div>ควรผูกเป็น Skill/Agent คู่กับ: <strong>{aiResult.suggested_matching_agent}</strong></div>}
+                      {aiResult.suggested_matching_agent && form.type === 'Skill' && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={requestLink} onChange={(e) => setRequestLink(e.target.checked)} />
+                          <span>Request link to <strong>{aiResult.suggested_matching_agent}</strong> <span style={{ color: 'var(--mu)' }}>(ต้องมีคนยืนยันก่อนผูกจริง)</span></span>
+                        </label>
+                      )}
                       {abilityDiffers && <div>แนะนำ Core Ability: <strong>{aiResult.suggested_ability}</strong></div>}
                       {areas.length > 0 && <div>สายงานที่จะเป็นผู้อนุมัติ: <strong>{areas.join(' + ')}</strong></div>}
                       {areas.length > 0 && aiResult.approve_area_reason && <div style={{ color: 'var(--mu)', fontSize: 12 }}>{aiResult.approve_area_reason}</div>}

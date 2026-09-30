@@ -1326,3 +1326,21 @@ banking chatbot ติด AI Engineer → Software Engineer)
   - To stop only email: `emailEnabled: false`.
 - The card gets a deep link: approver events → `/?view=pending`, other events → `/?agent=<id>`. `App.jsx` opens it after login, then strips the params. Ready to Use with an http endpoint also gets an "Open Endpoint" button. Test: `node functions/verify-teams.cjs`.
 
+---
+
+## Skill → Agent link requests (2026-09-30)
+
+- **Cause of wrong links:** `PreRegModal` used to write the AI's `suggested_matching_agent` straight into `matchingAgent` at submit, and **nobody confirmed it** (e.g. Deck Builder → JO Deck Generator, another team's agent).
+- **Now:**
+  - Only a Skill whose submitter ticks "Request link to …" gets `linkSuggestion: {agentId, agentName, status:'pending', source:'ai'}`. `matchingAgent` stays empty.
+  - The request waits in the Pending queue, section **Link Request**.
+  - Accept = callable `decideLinkSuggestion` → adds the skill to `target.childSkillIds` (a doc-ID link, §27).
+  - While it waits, the skill stays an independent item.
+- **Who may decide:** admin · staff · approver of the **target agent's** area (stored `approveArea`) · creator of **either side**. Committee is not included.
+  - Server: `functions/linkRules.js` (`verify-link-rules.cjs` 10/10). Client mirror: `canDecideLink()` in `pendingQueue.js`. Counts toward the badge.
+- **Notifications:** `link.requested` → creators of the target agent + approvers (approverOverride applies). `link.decided` → creators of the skill.
+- **Display:** the "Agent" row on a skill = `agentsOfSkill(skill, allAgents)` = union of `matchingAgent` (only names that still exist) + parents that link by `childSkillIds`.
+- **Data cleaned 2026-09-30:**
+  - 7 parent names that no longer existed: `CA: Fraud Detection` → `Fraud Detection`, `Nok - Compliance` → `นกลงทุน - Compliance`, `CA: Income reconcile` → cleared.
+  - 3 Tech Innovation `.md` files: Guardrail Agent → `VA Agent (Orchestrator Agent)`.
+

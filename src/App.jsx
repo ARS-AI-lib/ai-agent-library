@@ -243,8 +243,8 @@ export default function App() {
   // the badge was counting other areas' work (2026-08-12). Both now derive
   // from src/lib/pendingQueue.js rather than each filtering on their own.
   const queueViewerCtx = useMemo(
-    () => queueViewer({ isAdmin, isCommittee, role, approveAreas, uid: user?.uid, categoryAreaMap: schema.categoryAreaMap }),
-    [isAdmin, isCommittee, role, approveAreas, user?.uid, schema.categoryAreaMap]
+    () => queueViewer({ isAdmin, isCommittee, role, approveAreas, uid: user?.uid, email: user?.email, categoryAreaMap: schema.categoryAreaMap }),
+    [isAdmin, isCommittee, role, approveAreas, user?.uid, user?.email, schema.categoryAreaMap]
   );
   // Rename requests are the third queue and were missing from this count
   // entirely (2026-08-20) — a request appeared inside the modal with no badge

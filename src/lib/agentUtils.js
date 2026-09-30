@@ -370,8 +370,17 @@ export function skillsOfAgent(agent, allAgents) {
     .map((s) => s.agentName);
 }
 
-export function agentsOfSkill(skill) {
-  return matchingAgentNames(skill);
+// Parent agents of a skill, by name. Union of the two link kinds (2026-09-30):
+// matchingAgent (a stored NAME) and parent.childSkillIds (a doc ID — the one
+// the Edit form writes). Reading only matchingAgent left ID-linked skills with
+// an empty "Agent" row. With `allAgents`, names that no longer resolve (a
+// renamed/removed parent) are dropped instead of shown as if they existed.
+export function agentsOfSkill(skill, allAgents) {
+  const names = matchingAgentNames(skill);
+  if (!Array.isArray(allAgents) || !allAgents.length) return names;
+  const live = new Set(allAgents.map((a) => a.agentName));
+  const byId = allAgents.filter((a) => getType(a) === 'agent' && childSkillIdList(a).includes(skill?.id)).map((a) => a.agentName);
+  return [...new Set([...names.filter((n) => live.has(n)), ...byId])];
 }
 
 // ── Paired sub-skill lock (2026-07-06) ───────────────────────────────
@@ -493,7 +502,7 @@ export function cascadeTargets(agent, allAgents) {
 
 export function relationshipLabel(agent, allAgents) {
   if (getType(agent) === 'skill') {
-    const n = agentsOfSkill(agent).length;
+    const n = agentsOfSkill(agent, allAgents).length;
     return n > 0 ? { count: n, label: n === 1 ? '1 Agent' : `${n} Agents` } : null;
   }
   const n = skillsOfAgent(agent, allAgents).length;

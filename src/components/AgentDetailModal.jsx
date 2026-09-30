@@ -142,7 +142,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const progress = typeof agent.devProgress === 'number' ? agent.devProgress : 0;
   const deploymentStatus = agent.deploymentStatus || 'none';
 
-  const related = type === 'skill' ? agentsOfSkill(agent) : skillsOfAgent(agent, allAgents);
+  const related = type === 'skill' ? agentsOfSkill(agent, allAgents) : skillsOfAgent(agent, allAgents);
   const role = Array.isArray(agent.relatedRole) ? agent.relatedRole.join(', ') : agent.relatedRole;
   const ability = Array.isArray(agent.coreAbility) ? agent.coreAbility.join(', ') : agent.coreAbility;
   // Re-sanitised at render even though writes are already sanitised — docs

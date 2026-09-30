@@ -23,11 +23,12 @@ import { isPairedSubSkill, canDecideRename } from './agentUtils';
  *                  brand-new category routes correctly before approveAreas.js's
  *                  code-level table is updated.
  */
-export function queueViewer({ isAdmin, isCommittee, role, approveAreas = [], uid, categoryAreaMap }) {
+export function queueViewer({ isAdmin, isCommittee, role, approveAreas = [], uid, email, categoryAreaMap }) {
   return {
     fullAccess: !!(isAdmin || isCommittee),
     areas: new Set(approveAreas || []),
     uid: uid || null,
+    email: String(email || '').trim().toLowerCase(),
     categoryAreaMap,
     // Rename decisions use a NARROWER set than fullAccess — admin or an
     // approver of the area, never committee and never staff (canDecideRename,
@@ -101,9 +102,33 @@ export function visibleRenameRequests(renameReqs, agents, v) {
     ));
 }
 
+/**
+ * Skill → Agent link requests (2026-09-30). A skill whose AI-suggested parent
+ * awaits confirmation carries linkSuggestion.status === 'pending'. Mirror of
+ * functions/linkRules.js checkLinkDecider (server is authoritative):
+ * admin · staff · approver of the TARGET's area · a creator of either side.
+ * `pool` = approved + pending docs (a new skill is usually still pending).
+ * Returns [{ skill, target }].
+ */
+export function canDecideLink(v, skill, target) {
+  if (v.isAdmin || v.role === 'admin' || v.role === 'staff') return true;
+  const mine = (d) => (Array.isArray(d?.creatorEmails) ? d.creatorEmails : []).some((e) => String(e || '').toLowerCase() === v.email);
+  if (v.email && (mine(skill) || mine(target))) return true;
+  const areas = Array.isArray(target?.approveArea) ? target.approveArea : [];
+  return v.role === 'approver' && areas.some((a) => v.areaList.includes(a));
+}
+export function visibleLinkRequests(pool, v) {
+  const list = pool || [];
+  return list
+    .filter((s) => s?.linkSuggestion?.status === 'pending' && s.approvalStatus !== 'rejected')
+    .map((skill) => ({ skill, target: list.find((a) => a.id === skill.linkSuggestion.agentId) }))
+    .filter(({ skill, target }) => !!target && canDecideLink(v, skill, target));
+}
+
 /** The number the Pending badge shows — exactly what the modal will list. */
 export function pendingBadgeCount(pending, deployRequests, renameReqs, agents, v) {
   return visiblePending(pending, v).length
     + visibleDeployRequests(deployRequests, agents, v).length
-    + visibleRenameRequests(renameReqs, agents, v).length;
+    + visibleRenameRequests(renameReqs, agents, v).length
+    + visibleLinkRequests([...(agents || []), ...(pending || [])], v).length;
 }

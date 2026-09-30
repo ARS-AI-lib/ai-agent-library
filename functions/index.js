@@ -1718,6 +1718,16 @@ exports.notifyEvent = onCall(
         const as = await db.collection('agents').doc(doc.agentId).get();
         agent = as.exists ? { id: as.id, ...as.data() } : null;
       }
+    } else if (type.startsWith('link.')) {
+      // doc = the SKILL carrying linkSuggestion; agent = the TARGET agent.
+      if (!agentId) throw new HttpsError('invalid-argument', 'agentId is required.');
+      const ss = await db.collection('agents').doc(agentId).get();
+      doc = ss.exists ? { id: ss.id, ...ss.data() } : null;
+      const tid = doc?.linkSuggestion?.agentId;
+      if (tid) {
+        const ts = await db.collection('agents').doc(tid).get();
+        agent = ts.exists ? { id: ts.id, ...ts.data() } : null;
+      }
     } else if (type === 'user.roleChanged') {
       if (!targetUid) throw new HttpsError('invalid-argument', 'targetUid is required.');
       const us = await db.collection('users').doc(targetUid).get();
@@ -1869,6 +1879,49 @@ exports.claimPendingRoleGrant = onCall(
 
     await grantRef.delete();
     return { granted: true, role };
+  },
+);
+
+// ── Skill → Agent link requests (2026-09-30) ──────────────────────────
+// The AI's suggested parent is no longer written at submit; it waits as
+// skill.linkSuggestion until someone allowed by checkLinkDecider() decides.
+// Accept = add the skill to the target's childSkillIds (link by doc ID, §27).
+// A callable because the skill's creator usually cannot write the target
+// agent's doc under firestore.rules, and area checks need the stored field.
+const { checkLinkDecider } = require('./linkRules');
+exports.decideLinkSuggestion = onCall(
+  { cors: true, timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    assertOrgEmail(request);
+    const { skillId, verdict } = request.data || {};
+    if (!skillId || !['accepted', 'rejected'].includes(verdict)) {
+      throw new HttpsError('invalid-argument', 'skillId and verdict (accepted|rejected) are required.');
+    }
+    const me = (await db.collection('users').doc(request.auth.uid).get()).data() || {};
+    const skillRef = db.collection('agents').doc(skillId);
+    const skillSnap = await skillRef.get();
+    const skill = skillSnap.exists ? { id: skillSnap.id, ...skillSnap.data() } : null;
+    const tid = skill?.linkSuggestion?.agentId;
+    const targetSnap = tid ? await db.collection('agents').doc(tid).get() : null;
+    const target = targetSnap?.exists ? { id: targetSnap.id, ...targetSnap.data() } : null;
+    const chk = checkLinkDecider({
+      role: me.role, isAdmin: me.role === 'admin', email: request.auth.token?.email,
+      userAreas: Array.isArray(me.approveAreas) ? me.approveAreas : [], skill, target,
+    });
+    if (!chk.ok) throw new HttpsError(chk.code, chk.message);
+    const batch = db.batch();
+    batch.update(skillRef, {
+      'linkSuggestion.status': verdict,
+      'linkSuggestion.decidedBy': request.auth.uid,
+      'linkSuggestion.decidedAt': FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (verdict === 'accepted') {
+      batch.update(targetSnap.ref, { childSkillIds: FieldValue.arrayUnion(skillId), updatedAt: FieldValue.serverTimestamp() });
+    }
+    await batch.commit();
+    return { ok: true, verdict };
   },
 );
 

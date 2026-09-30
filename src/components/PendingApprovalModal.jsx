@@ -4,7 +4,8 @@ import { db } from '../lib/firebase';
 import { getTier, TIER_DEF } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
 import { matchingAgentNames, pairedSubSkills, agentTypeLabel, fmtDate, categoryColor } from '../lib/agentUtils';
-import { queueViewer, visiblePending, visibleDeployRequests, visibleRenameRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
+import { queueViewer, visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { decideRenameRequest } from '../lib/endpointFiles';
 import { notifyEvent } from '../lib/notify';
 import { classifyRoleGroups } from '../lib/roleGroupClassify';
@@ -192,8 +193,8 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
   // App.jsx counts EXACTLY what this list renders (2026-08-12 — they had
   // drifted: badge counted every pending item regardless of area).
   const viewer = useMemo(
-    () => queueViewer({ isAdmin, isCommittee, role: userRole, approveAreas, uid: user?.uid, categoryAreaMap: schema.categoryAreaMap }),
-    [isAdmin, isCommittee, userRole, approveAreas, user?.uid, schema.categoryAreaMap],
+    () => queueViewer({ isAdmin, isCommittee, role: userRole, approveAreas, uid: user?.uid, email: user?.email, categoryAreaMap: schema.categoryAreaMap }),
+    [isAdmin, isCommittee, userRole, approveAreas, user?.uid, user?.email, schema.categoryAreaMap],
   );
 
   const visible = useMemo(() => visiblePending(pending, viewer), [pending, viewer]);
@@ -212,6 +213,25 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
     () => visibleRenameRequests(renameReqs, agents, viewer),
     [renameReqs, agents, viewer],
   );
+
+  // Link requests (2026-09-30): AI-suggested Skill → Agent pairings wait here
+  // for a creator of either side / area approver / staff / admin.
+  const visibleLinks = useMemo(
+    () => visibleLinkRequests([...agents, ...pending], viewer),
+    [agents, pending, viewer],
+  );
+  async function decideLink(skillId, verdict) {
+    setBusyId(skillId);
+    setError('');
+    try {
+      await httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'decideLinkSuggestion')({ skillId, verdict });
+      notifyEvent('link.decided', { agentId: skillId });
+    } catch (e) {
+      setError(e?.message || 'ตัดสินคำขอผูกไม่สำเร็จ');
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function decideRename(reqId, verdict) {
     setBusyId(reqId);
@@ -600,6 +620,38 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
               </div>
             );
           })
+        )}
+
+        <div className="sec-title" style={{ marginTop: 16 }}>Link Request</div>
+        <div className="msub">{visibleLinks.length} รายการ · AI แนะนำให้ผูก Skill เข้ากับ Agent ต้องยืนยันก่อน</div>
+        {visibleLinks.length === 0 ? (
+          <div className="empty-state">ไม่มีคำขอผูกรออนุมัติ</div>
+        ) : (
+          visibleLinks.map(({ skill, target }) => (
+            <div className="queue-row" key={skill.id}>
+              <div className="queue-content">
+                <div className="dup-name">
+                  <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }} onClick={() => setDetailAgent(skill)} title="คลิกเพื่อดูรายละเอียด">{skill.agentName}</span>
+                  {' → '}
+                  <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }} onClick={() => setDetailAgent(target)} title="คลิกเพื่อดูรายละเอียด">{target.agentName}</span>
+                </div>
+                <div className="queue-meta">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
+                    <span>Skill team: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{skill.owner || '—'}</strong></span>
+                    <span>Agent team: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{target.owner || '—'}</strong></span>
+                    {skill.approvalStatus === 'pending' && <span style={{ color: 'var(--msg-warn-fg)' }}>Skill ยังรออนุมัติ</span>}
+                    {(skill.owner || '') !== (target.owner || '') && <span style={{ color: 'var(--msg-warn-fg)' }}>⚠ ต่างทีม</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="queue-actions">
+                <button className="btn-sm rej" disabled={busyId === skill.id} onClick={() => decideLink(skill.id, 'rejected')}>Reject</button>
+                <button className="btn-sm appr" disabled={busyId === skill.id} onClick={() => decideLink(skill.id, 'accepted')}>
+                  {busyId === skill.id ? '…' : 'Link'}
+                </button>
+              </div>
+            </div>
+          ))
         )}
 
         {myRejected.length > 0 && (

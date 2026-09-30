@@ -142,6 +142,18 @@ const EVENTS = {
     verify: (r) => r.status === 'approved' || r.status === 'rejected',
     to: (r) => [r.createdByEmail].filter(Boolean),
   },
+  // Skill → Agent link requests (2026-09-30). doc = the skill, ctx.agent = target.
+  'link.requested': {
+    scope: 'link',
+    verify: (s) => s?.linkSuggestion?.status === 'pending',
+    // Creators of the TARGET agent + its area approvers (approverOverride applies).
+    to: (s, users, ctx) => [...creatorAddresses(ctx.agent || {}), ...approverEmails(ctx.agent || {}, users, ctx)],
+  },
+  'link.decided': {
+    scope: 'link',
+    verify: (s) => ['accepted', 'rejected'].includes(s?.linkSuggestion?.status),
+    to: (s) => creatorAddresses(s),
+  },
   'user.roleChanged': {
     scope: 'user',
     // Nothing to verify against a previous state — the app stores no role
@@ -288,6 +300,25 @@ ${row('ชื่อเดิม (ยังใช้อยู่)', doc.currentNa
       }
       break;
 
+    case 'link.requested': {
+      const t = agent || {};
+      subject = `ขอผูก Skill เข้ากับ Agent: ${doc.agentName} → ${t.agentName || doc.linkSuggestion?.agentName || ''}`;
+      body = `<h2 style="font-size:17px;margin:0 0 12px">ขอผูก Skill เข้ากับ Agent</h2>
+${row('Skill', doc.agentName)}${row('ทีมของ Skill', doc.owner || '—')}${row('Agent', t.agentName || '—')}${row('ทีมของ Agent', t.owner || '—')}
+<p style="margin:14px 0 0">AI แนะนำการผูกนี้ตอนลงทะเบียน · ยืนยันหรือปฏิเสธได้ในหน้ารออนุมัติ (Link Requests)</p>`;
+      break;
+    }
+
+    case 'link.decided': {
+      const ok = doc.linkSuggestion?.status === 'accepted';
+      const tn = (agent || {}).agentName || doc.linkSuggestion?.agentName || '';
+      subject = ok ? `ผูก Skill กับ Agent แล้ว: ${doc.agentName} → ${tn}` : `ไม่ผูก Skill กับ Agent: ${doc.agentName}`;
+      body = `<h2 style="font-size:17px;margin:0 0 12px">${ok ? 'ผูก Skill กับ Agent แล้ว' : 'คำขอผูกไม่ผ่าน'}</h2>
+${row('Skill', doc.agentName)}${row('Agent', tn || '—')}${row('ตัดสินโดย', nameOf(doc.linkSuggestion?.decidedBy, users))}
+${ok ? '<p style="margin:14px 0 0">Progress และ Deploy ของ Skill นี้จะขยับตาม Agent หลักต่อจากนี้</p>' : '<p style="margin:14px 0 0;color:#6b7280">Skill ยังเป็นรายการอิสระเหมือนเดิม</p>'}`;
+      break;
+    }
+
     case 'user.roleChanged':
       subject = 'สิทธิ์ของคุณใน AI Agent Library ถูกปรับ';
       body = `<h2 style="font-size:17px;margin:0 0 12px">สิทธิ์ของคุณถูกปรับ</h2>
@@ -302,8 +333,8 @@ ${row('บทบาท', doc.role || 'user')}${row('Approve Area', (doc.approveA
   // Teams card extras (2026-09-28). `title` is the plain subject; `link` deep-
   // links to where the recipient acts (App.jsx reads ?agent / ?view); an
   // http(s) endpoint on Ready to Use becomes its own button.
-  const QUEUE = new Set(['agent.pending', 'deploy.requested', 'rename.requested']);
-  const agentId = def.scope === 'agent' ? doc.id : (agent || {}).id;
+  const QUEUE = new Set(['agent.pending', 'deploy.requested', 'rename.requested', 'link.requested']);
+  const agentId = (def.scope === 'agent' || def.scope === 'link') ? doc.id : (agent || {}).id;
   let link = `${APP_URL}/`;
   if (QUEUE.has(type)) link = `${APP_URL}/?view=pending`;
   else if (agentId && type !== 'user.roleChanged') link = `${APP_URL}/?agent=${encodeURIComponent(agentId)}`;
