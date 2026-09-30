@@ -10,7 +10,7 @@ import { reindexAgent } from '../lib/reindex';
 import { uniq, splitRoles, extractProcessId, processLabel, agentUseCaseNames } from '../lib/agentUtils';
 import { notifyEvent } from '../lib/notify';
 import { isInternalToolName } from '../lib/internalTool';
-import useEscapeKey from '../hooks/useEscapeKey';
+import useCloseGuard from '../hooks/useCloseGuard';
 import ComboInput from './ComboInput';
 import MultiSelect from './MultiSelect';
 import TagMultiSelect from './TagMultiSelect';
@@ -131,7 +131,6 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const [useCases, setUseCases] = useState([]);   // full sdlcUseCases docs (processId, name)
   const [processes, setProcesses] = useState([]);
   const [detailAgent, setDetailAgent] = useState(null);   // click-through preview from analysis results
-  useEscapeKey(onClose);
 
   // In-memory, session-only analysis cache: keyed on the exact payload sent to
   // the AI. Re-running the check on an UNCHANGED draft returns the same result
@@ -780,10 +779,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     onClose();
   }
 
+  // Only ✕ / Cancel / Escape close this form, with a discard prompt if
+  // anything changed (2026-09-30) — a stray backdrop click used to wipe it.
+  const { requestClose, arm, confirmDialog } = useCloseGuard([form, requestLink], handleClose);
+
   return (
-    <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && handleClose()}>
-      <div className="mbox wide" style={{ padding: 0 }}>
-        <button className="mclose" onClick={handleClose} style={{ zIndex: 1 }}>✕</button>
+    <div className="mov open">
+      <div className="mbox wide" style={{ padding: 0 }} onPointerDownCapture={arm} onKeyDownCapture={arm}>
+        <button className="mclose" onClick={requestClose} style={{ zIndex: 1 }}>✕</button>
 
         <div className="tabs">
           <button className={`tab-btn ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>
@@ -1259,6 +1262,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
           isAdmin={false}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }
