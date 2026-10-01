@@ -28,6 +28,7 @@ export default function ControlBar({
   reusableOptions, reusable, setReusable,
   hasEndpoint, setHasEndpoint,
   onClear,
+  layout, setLayout,
 }) {
   return (
     <div className="cbar">
@@ -93,6 +94,17 @@ export default function ControlBar({
       </button>
 
       <button className="btnclr" title="Clear filters" onClick={onClear}>✕ Clear</button>
+
+      {setLayout && (
+        <div className="v7-layout" role="group" aria-label="Layout">
+          {[['cards', 'Cards', 'M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v5H4zM13 14h7v5h-7z'], ['list', 'List', 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01']].map(([k, label, d]) => (
+            <button key={k} type="button" aria-pressed={layout === k} className={layout === k ? 'active' : ''} onClick={() => setLayout(k)}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

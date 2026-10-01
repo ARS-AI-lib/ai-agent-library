@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import Term from './Term';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
@@ -550,9 +551,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
 
         <div className="mbadges">
           <span className={`tb ${type === 'agent' ? 'tbag' : 'tbsk'}`}>{type === 'agent' ? 'AGENT' : 'SKILL'}</span>
-          <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
+          <Term k={tier}><span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
             {tier} · {tierDef.label.split(' · ')[1] || tierDef.label}
-          </span>
+          </span></Term>
           <span className="ac-scope" style={{ margin: 0, color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
             {scope === 'External' ? (
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -641,7 +642,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           <div className="mrow"><span className="mk">Phase</span>
             <span className="status-pill" style={{ color: sd.color, background: sd.bg }}>
               <span className="status-dot" style={{ background: sd.dot || sd.color }} />
-              {sd.lb}
+              <Term k={sd.lb}>{sd.lb}</Term>
             </span>
           </div>
 

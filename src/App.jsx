@@ -21,6 +21,8 @@ import CardGrid from './components/CardGrid';
 import CategoryApprovalPanel from './components/CategoryApprovalPanel';
 import AgentDetailModal from './components/AgentDetailModal';
 import PreRegModal from './components/PreRegModal';
+import MySubmissionsModal from './components/MySubmissionsModal';
+import GlossaryModal from './components/GlossaryModal';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import ChatAssistant from './components/ChatAssistant';
 import UserManagementModal from './components/UserManagementModal';
@@ -117,6 +119,11 @@ export default function App() {
 
   const [search, setSearch] = useState('');
   const [view, setView] = useState('by-category');
+  // V7 Cards/List — a per-viewer convenience, so localStorage (default Cards).
+  const [layout, setLayoutState] = useState(() => {
+    try { return localStorage.getItem('aal.layout') === 'list' ? 'list' : 'cards'; } catch { return 'cards'; }
+  });
+  const setLayout = (v) => { setLayoutState(v); try { localStorage.setItem('aal.layout', v); } catch { /* ignore */ } };
   const [sort, setSort] = useState('created'); // reset on reload, same as view — not persisted (locked 2026-08-20)
   const [owner, setOwner] = useState(new Set());
   const [role_, setRole_] = useState(new Set());
@@ -167,6 +174,8 @@ export default function App() {
 
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [showPreReg, setShowPreReg] = useState(false);
+  const [showMySubs, setShowMySubs] = useState(false);
+  const [showGlossary, setShowGlossary] = useState(false);
   const [showPending, setShowPending] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -414,6 +423,8 @@ export default function App() {
         search={search}
         setSearch={setSearch}
         role={role}
+        onOpenMySubmissions={() => setShowMySubs(true)}
+        onOpenGlossary={() => setShowGlossary(true)}
         agentCount={navAgentCount}
         skillCount={navSkillCount}
         user={user}
@@ -448,6 +459,7 @@ export default function App() {
             reusableOptions={reusableOptions} reusable={reusable} setReusable={setReusable}
             hasEndpoint={hasEndpoint} setHasEndpoint={setHasEndpoint}
             onClear={clearFilters}
+            layout={layout} setLayout={setLayout}
           />
 
           <div className="main-row">
@@ -467,7 +479,7 @@ export default function App() {
               {agentsLoading ? (
                 <div className="empty-state">Loading…</div>
               ) : (
-                <CardGrid agents={filtered} allAgents={agents} view={view} sort={sort} onCardClick={setSelectedAgent} statsById={statsById} />
+                <CardGrid agents={filtered} allAgents={agents} view={view} sort={sort} onCardClick={setSelectedAgent} statsById={statsById} layout={layout} search={search} onClear={clearFilters} onNew={() => setShowPreReg(true)} />
               )}
             </div>
           </div>
@@ -533,6 +545,18 @@ export default function App() {
           onSubmitted={() => {}}
           onAddRelatedRole={addRelatedRoles}
           onAddTeam={addTeams}
+        />
+      )}
+
+      {showGlossary && <GlossaryModal onClose={() => setShowGlossary(false)} />}
+
+      {showMySubs && (
+        <MySubmissionsModal
+          user={user}
+          allAgents={allAgents}
+          pending={pending}
+          onOpenAgent={(a) => { setShowMySubs(false); setSelectedAgent(a); }}
+          onClose={() => setShowMySubs(false)}
         />
       )}
 

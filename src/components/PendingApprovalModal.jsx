@@ -110,6 +110,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
   // ever updated. Falls back to the code-level table alone if schema hasn't
   // loaded yet — same as calling resolveAreas() with no overrides.
   const resolveAreas = (a) => agentApproveAreas(a, schema.categoryAreaMap);
+  const [kind, setKind] = useState('all'); // V7 Inbox type filter — presentation only
   const [rejectModal, setRejectModal] = useState(null); // { agent, reason } | null — approver reject-with-reason
   const [myRejected, setMyRejected] = useState([]);      // creator's own items rejected WITH a reason (feature B)
   useEscapeKey(onClose);
@@ -252,6 +253,21 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
     if (fullAccess) return true;
     return mine.size > 0 && resolveAreas(agent).some((area) => mine.has(area));
   }
+  // V7 "Why you" chip — explains which existing rule put this row in YOUR
+  // queue. It reads the same inputs canApprove uses; it grants nothing.
+  function whyYou(agent) {
+    if (isAdmin) return 'Admin';
+    if (isCommittee) return 'Committee';
+    const hit = resolveAreas(agent).find((area) => mine.has(area));
+    if (hit) return `Your area: ${hit}`;
+    if (agent.createdBy === user?.uid) return 'Your submission';
+    return '';
+  }
+  const WhyChip = ({ agent }) => {
+    const w = whyYou(agent);
+    return w ? <span className="v7-why">Why you · {w}</span> : null;
+  };
+
   function canReject(agent) {
     if (fullAccess) return true;
     if (canApprove(agent)) return true;
@@ -402,7 +418,22 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
           </div>
           <div>
             <h2 className="mtitle">Pending Approval</h2>
+            <div className="msub" style={{ margin: 0 }}>รายการที่รอให้คุณตัดสิน</div>
           </div>
+        </div>
+
+        <div className="v7-inbox-filter" role="tablist" aria-label="Request type">
+          {[
+            ['all', 'All', visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length],
+            ['new', 'New Entry', visible.length],
+            ['deploy', 'Deploy', visibleDeploy.length],
+            ['rename', 'Rename', visibleRenames.length],
+            ['link', 'Link', visibleLinks.length],
+          ].map(([k, label, n]) => (
+            <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'active' : ''} onClick={() => setKind(k)}>
+              {label}<span>{n}</span>
+            </button>
+          ))}
         </div>
 
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
@@ -413,6 +444,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
           </div>
         )}
 
+        {(kind === 'all' || kind === 'new') && (<>
         <div className="sec-title" style={{ marginTop: 4 }}>New Entry</div>
         <div className="msub">
           {visible.length} รายการ
@@ -439,6 +471,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                     <span>Created by: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{primaryCreatorName(agent)}</strong></span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                    <WhyChip agent={agent} />
                     <AreaChips areas={resolveAreas(agent)} />
                     <span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                     {/* Clickable since 2026-08-20: the risk level alone told an
@@ -455,7 +488,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                         style={{ cursor: 'pointer' }}
                         title="กดเพื่อดูว่าคล้ายกับ Agent ตัวไหนบ้าง"
                       >
-                        เสี่ยงทับซ้อน/คล้าย:{' '}
+                        AI check · overlap:{' '}
                         <span style={{ color: RISK_COLOR[risk] || 'var(--mu)', fontWeight: 700, textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
                           {RISK_LABEL[risk] || risk}
                         </span>
@@ -487,6 +520,32 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                     "{agent.analysisResult.summary}"
                   </div>
                 )}
+                {/* V7: reject reason is written inline under the row (was a
+                    second modal). Same rejectModal state, same handleReject. */}
+                {rejectModal?.agent.id === agent.id && (
+                  <div className="v7-inline-reject">
+                    <label htmlFor={`rej-${agent.id}`}>Reject Reason</label>
+                    <textarea
+                      id={`rej-${agent.id}`}
+                      rows={3}
+                      autoFocus
+                      value={rejectModal.reason}
+                      onChange={(e) => setRejectModal((m) => ({ ...m, reason: e.target.value }))}
+                      placeholder="ระบุเหตุผลให้ creator ทราบ เช่น ทับซ้อนกับ Agent เดิม / ขอบเขตยังไม่ชัด…"
+                    />
+                    <div className="queue-actions">
+                      <button className="btn-sm rej" disabled={busyId === agent.id} onClick={() => setRejectModal(null)}>Cancel</button>
+                      <button
+                        className="btn-sm appr"
+                        style={{ background: 'var(--clr-fg)', borderColor: 'var(--clr-fg)' }}
+                        disabled={busyId === agent.id || !rejectModal.reason.trim()}
+                        onClick={() => handleReject(rejectModal.agent, rejectModal.reason)}
+                      >
+                        {busyId === agent.id ? 'กำลังบันทึก…' : 'Confirm Reject'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="queue-actions">
                 {canReject(agent) && (
@@ -509,6 +568,9 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
           })
         )}
 
+        </>)}
+
+        {(kind === 'all' || kind === 'deploy') && (<>
         <div className="sec-title" style={{ marginTop: 16 }}>Deployment Request</div>
         <div className="msub">
           {visibleDeploy.length} รายการ
@@ -538,6 +600,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                       <span>Created by: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{primaryCreatorName(agent)}</strong></span>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                      <WhyChip agent={agent} />
                       <AreaChips areas={resolveAreas(agent)} />
                       <span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                       <span>Progress: <strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{agent.devProgress}%</strong></span>
@@ -564,6 +627,9 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
           })
         )}
 
+        </>)}
+
+        {(kind === 'all' || kind === 'rename') && (<>
         {/* Rename requests (2026-08-19) — third queue. Approving one is not a
             field edit: decideRenameRequest also rewrites matchingAgent on every
             paired sub-skill in the same batch, because pairing is by NAME and a
@@ -622,6 +688,9 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
           })
         )}
 
+        </>)}
+
+        {(kind === 'all' || kind === 'link') && (<>
         <div className="sec-title" style={{ marginTop: 16 }}>Link Request</div>
         <div className="msub">{visibleLinks.length} รายการ · AI แนะนำให้ผูก Skill เข้ากับ Agent ต้องยืนยันก่อน</div>
         {visibleLinks.length === 0 ? (
@@ -654,7 +723,9 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
           ))
         )}
 
-        {myRejected.length > 0 && (
+        </>)}
+
+        {kind === 'all' && myRejected.length > 0 && (
           <>
             <div className="sec-title" style={{ marginTop: 16 }}>ถูก Reject (ของฉัน)</div>
             <div className="msub">{myRejected.length} รายการ · เหตุผลจากผู้ตรวจ</div>
@@ -677,35 +748,6 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
           </>
         )}
       </div>
-
-      {rejectModal && (
-        <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setRejectModal(null)}>
-          <div className="mbox" style={{ padding: 18, maxWidth: 440 }}>
-            <button className="mclose" onClick={() => setRejectModal(null)}>✕</button>
-            <h3 style={{ fontSize: 15, marginBottom: 4 }}>เหตุผลในการ Reject</h3>
-            <div style={{ fontSize: 12, color: 'var(--mu)', marginBottom: 10 }}>{rejectModal.agent.agentName}</div>
-            <textarea
-              rows={4}
-              autoFocus
-              value={rejectModal.reason}
-              onChange={(e) => setRejectModal((m) => ({ ...m, reason: e.target.value }))}
-              placeholder="ระบุเหตุผลให้ creator ทราบ เช่น ทับซ้อนกับ Agent เดิม / ขอบเขตยังไม่ชัด…"
-              style={{ width: '100%', resize: 'vertical' }}
-            />
-            <div className="btn-row" style={{ marginTop: 12 }}>
-              <button className="btn-sm rej" disabled={busyId === rejectModal.agent.id} onClick={() => setRejectModal(null)}>Cancel</button>
-              <button
-                className="btn-sm appr"
-                style={{ background: 'var(--clr-fg)', borderColor: 'var(--clr-fg)' }}
-                disabled={busyId === rejectModal.agent.id || !rejectModal.reason.trim()}
-                onClick={() => handleReject(rejectModal.agent, rejectModal.reason)}
-              >
-                {busyId === rejectModal.agent.id ? 'กำลังบันทึก…' : 'Confirm Reject'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {overlapFor && (
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setOverlapFor(null)}>

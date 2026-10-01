@@ -1,4 +1,6 @@
 import AgentCard from './AgentCard';
+import AgentListTable from './AgentListTable';
+import EmptyResults from './EmptyResults';
 import { groupAgents, categoryColor, sortAgents, agentCategories } from '../lib/agentUtils';
 import { demandScore } from '../lib/agentStats';
 
@@ -9,7 +11,19 @@ import { demandScore } from '../lib/agentStats';
 // put as data changes (same helper and same reasoning as the sidebar dots).
 
 
-export default function CardGrid({ agents, allAgents, view, sort = 'name', onCardClick, statsById }) {
+export default function CardGrid({ agents, allAgents, view, sort = 'name', onCardClick, statsById, layout = 'cards', search, onClear, onNew }) {
+  // Cards and List show the same groups in the same order; only the body of
+  // each group changes.
+  const body = (list, groupKey) => (layout === 'list'
+    ? <AgentListTable agents={list} onClick={onCardClick} statsById={statsById} />
+    : (
+      <div className="agrid">
+        {list.map((a) => (
+          <AgentCard key={a.id} agent={a} allAgents={allAgents} onClick={onCardClick} groupKey={groupKey} stats={statsById?.get(a.id)} />
+        ))}
+      </div>
+    ));
+  const empty = <EmptyResults search={search} onClear={onClear} onNew={onNew} />;
   // Popularity is a SORT, not a grouping like the other views — an agent has
   // one owner but no natural "popularity bucket". So it renders one flat,
   // ranked list. Ordering is by raw event counts (demandScore); no average is
@@ -18,7 +32,7 @@ export default function CardGrid({ agents, allAgents, view, sort = 'name', onCar
     const ranked = [...agents].sort(
       (x, y) => demandScore(statsById?.get(y.id)) - demandScore(statsById?.get(x.id))
     );
-    if (!ranked.length) return <div className="empty-state">No data matching filters</div>;
+    if (!ranked.length) return empty;
     return (
       <div className="sb">
         <div className="sh">
@@ -26,11 +40,7 @@ export default function CardGrid({ agents, allAgents, view, sort = 'name', onCar
           <span className="sname">Popularity</span>
           <span className="sbadge">{ranked.length}</span>
         </div>
-        <div className="agrid">
-          {ranked.map((a) => (
-            <AgentCard key={a.id} agent={a} allAgents={allAgents} onClick={onCardClick} stats={statsById?.get(a.id)} />
-          ))}
-        </div>
+        {body(ranked)}
       </div>
     );
   }
@@ -53,7 +63,7 @@ export default function CardGrid({ agents, allAgents, view, sort = 'name', onCar
       : [];
 
   if (groups.length === 0 && unassigned.length === 0) {
-    return <div className="empty-state">No data matching filters</div>;
+    return empty;
   }
 
   return (
@@ -68,11 +78,7 @@ export default function CardGrid({ agents, allAgents, view, sort = 'name', onCar
               <span className="sname">{g}</span>
               <span className="sbadge">{gAgents.length}</span>
             </div>
-            <div className="agrid">
-              {gAgents.map((a) => (
-                <AgentCard key={a.id} agent={a} allAgents={allAgents} onClick={onCardClick} groupKey={key} stats={statsById?.get(a.id)} />
-              ))}
-            </div>
+            {body(gAgents, key)}
           </div>
         );
       })}
@@ -83,11 +89,7 @@ export default function CardGrid({ agents, allAgents, view, sort = 'name', onCar
             <span className="sname" style={{ color: 'var(--mu)' }}>(unassigned)</span>
             <span className="sbadge">{unassigned.length}</span>
           </div>
-          <div className="agrid">
-            {unassigned.map((a) => (
-              <AgentCard key={a.id} agent={a} allAgents={allAgents} onClick={onCardClick} groupKey={key} stats={statsById?.get(a.id)} />
-            ))}
-          </div>
+          {body(unassigned, key)}
         </div>
       )}
     </>

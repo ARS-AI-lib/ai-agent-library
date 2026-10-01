@@ -19,6 +19,7 @@ const ICON = {
   roles: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21c1-4 4-6 8-6s7 2 8 6',
   reindex: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5',
   subs: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 14l2 2 4-4',
+  help: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
   out: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
 };
 
@@ -42,7 +43,7 @@ export default function Nav({
   user, role, onSignOut,
   activeTab, setActiveTab,
   onOpenExport, onOpenRoleGroups, canManageRoleGroups, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
-  onOpenMySubmissions,
+  onOpenMySubmissions, onOpenGlossary,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -187,6 +188,11 @@ export default function Nav({
 
               {admin.length > 0 && <div className="v7-menu-head">Admin</div>}
               {admin.map((r) => <Item key={r.k} {...r} />)}
+
+              {onOpenGlossary && (<>
+                <div className="v7-menu-head">Help</div>
+                <Item k="help" label="Glossary" on={() => { onOpenGlossary(); close(); }} />
+              </>)}
 
               <div className="v7-menu-head">Appearance</div>
               <ThemeToggle />

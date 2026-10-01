@@ -1,6 +1,7 @@
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { fmtDate, safeEndpointUrl } from '../lib/agentUtils';
+import Term from './Term';
 import { recordAgentEvent } from '../lib/agentEvents';
 import { handleEndpointClick } from '../lib/endpointFiles';
 import { readStats, ratingDisplay } from '../lib/agentStats';
@@ -56,9 +57,9 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
     >
       <div className="ac-eyebrow">
         <span className={`tb ${type === 'agent' ? 'tbag' : 'tbsk'}`}>{type === 'agent' ? 'AGENT' : 'SKILL'}</span>
-        <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
+        <Term k={tier}><span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
           {tier}
-        </span>
+        </span></Term>
         {/* .ac-scope + .ac-link (when present) form ONE trailing group, right-
             aligned as a unit via margin-left:auto on .ac-scope — not two
             independently-positioned icons. That is what keeps .ac-scope
