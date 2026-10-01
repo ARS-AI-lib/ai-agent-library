@@ -65,9 +65,13 @@ import { isInternalOrExternal } from './tier';
 // won first. Nulling CATEGORY_AREA['Software Development'] (see layer 5)
 // forces all of them through the role layer now, fixing this as a side
 // effect of the split rather than a separate task.
+// 2026-10-01: the old governance/risk/procurement area was split in two —
+// every item it held was compliance work, none procurement, so approvers
+// could not tell what they were signing off on. Holders got both new areas.
 export const AREA_ORDER = [
   'Business & Product',
-  'Governance, Risk & Procurement',
+  'Governance & Compliance',
+  'Procurement',
   'Delivery Management',
   'Business Analysis',
   'UX Research',
@@ -100,10 +104,10 @@ export const PROCESS_AREA = {
   // Initiation
   '1.1': 'Business & Product',                    // owner: Business
   '1.2': 'Business & Product',                    // owner: Business
-  '1.3': 'Governance, Risk & Procurement',        // owner: Procurement
-  '1.4': 'Governance, Risk & Procurement',        // owner: Legal & Compliance
+  '1.3': 'Procurement',                           // owner: Procurement
+  '1.4': 'Governance & Compliance',               // owner: Legal & Compliance
   '1.5': 'Business & Product',                    // owner: Product Owner
-  '1.6': 'Governance, Risk & Procurement',        // owner: Project Review Committee, BU Lead, Platform Lead
+  '1.6': 'Governance & Compliance',               // owner: Project Review Committee, BU Lead, Platform Lead
   // Discovery
   '2.1': 'Business Analysis',                     // owner: Product Owner, Business Analyst
   '2.2': 'Business Analysis',                     // owner: Business Analyst
@@ -265,13 +269,13 @@ export const CATEGORY_AREA = {
   // literally "pinned to the top of the Agent Library sidebar". Moving this
   // line moves the sidebar entry.
   //
-  // Area: there is no conversational-AI area in AREA_ORDER, and adding a 17th
+  // Area: there is no conversational-AI area in AREA_ORDER, and adding another
   // area would re-route approvals system-wide. Platform, DevOps & Operations
   // is what 22 of the 28 docs in this category already carry. This mapping is
   // layer 5 anyway — every one of those 28 has a stored approveArea (layer 1),
   // so it only ever applies to future agents.
   'Virtual Assistant': 'Platform, DevOps & Operations',          // added 2026-09-23
-  'Compliance & Governance': 'Governance, Risk & Procurement',
+  'Compliance & Governance': 'Governance & Compliance',
   'Project & Delivery': 'Delivery Management',
   'Requirements & Product': 'Business Analysis',
   'UX Research': 'UX Research',
@@ -310,8 +314,8 @@ export const ROLE_AREA = {
   'Customer Support': 'Business & Product',
   'Support Manager': 'Business & Product',
   // Governance
-  'Compliance Officer': 'Governance, Risk & Procurement',
-  'CIO': 'Governance, Risk & Procurement',
+  'Compliance Officer': 'Governance & Compliance',
+  'CIO': 'Governance & Compliance',
   // Delivery
   'Delivery Manager': 'Delivery Management',
   // Business Analysis

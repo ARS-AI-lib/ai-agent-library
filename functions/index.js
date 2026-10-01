@@ -97,14 +97,14 @@ async function getCategoryOptions() {
   return categoryCache;
 }
 
-// The 12 approver areas (2026-08-10). Mirrors AREA_ORDER in
+// The approver areas (2026-08-10; 17 since the 2026-10-01 governance split). Mirrors AREA_ORDER in
 // src/lib/approveAreas.js — Cloud Functions cannot import the client ESM
 // module, so this is the one unavoidable copy. It is only ever a FALLBACK:
 // /config/schema.approveArea is the live list and is seeded from AREA_ORDER
 // by functions/seed-approve-area-schema.cjs, so the two can only diverge if
 // the config doc is missing entirely.
 const FALLBACK_APPROVE_AREA = [
-  'Business & Product', 'Governance, Risk & Procurement', 'Delivery Management',
+  'Business & Product', 'Governance & Compliance', 'Procurement', 'Delivery Management',
   'Business Analysis', 'UX Research', 'UI & Visual Design', 'Content & UX Writing',
   'Architecture', 'Development', 'SIT', 'QA', 'Security',
   'Platform, DevOps & Operations', 'SRE & Reliability',
