@@ -1344,3 +1344,19 @@ banking chatbot ติด AI Engineer → Software Engineer)
   - 7 parent names that no longer existed: `CA: Fraud Detection` → `Fraud Detection`, `Nok - Compliance` → `นกลงทุน - Compliance`, `CA: Income reconcile` → cleared.
   - 3 Tech Innovation `.md` files: Guardrail Agent → `VA Agent (Orchestrator Agent)`.
 
+---
+
+## Users reset to role "user" by themselves (incident 2026-10-01)
+
+- **Symptom:** tanyarat.r@infinitaskt.com went from Committee to user and lost all 16 Approve Areas. An admin restored her at 08:39.
+- **Cause (two bugs together):**
+  1. `useAuth.js` provisioned whenever the `/users/{uid}` snapshot said the doc was missing. A **cache-only** snapshot during a network blip says exactly that.
+  2. `claimPendingRoleGrant` then ran `userRef.set({role:'user'...})` **without merge**. The Admin SDK bypasses rules, so it overwrote the real doc.
+  - Evidence: Auth account since 2026-07-01, but users `createdAt` = 2026-10-01 06:39, which matches a claim call at 06:39 in Cloud Logging.
+- **Others affected:** these docs were recreated by the same bug: jaruwat.w (09-28), titiphong.t (09-29), supitchaya.w (09-22). They were already `user`, so the user confirmed nothing needs changing. Detection = users `createdAt` much later than the Auth `creationTime`. PITR is off (retention 1h), so previous roles cannot be read back.
+- **Fix:**
+  - The server is create-only: `functions/userProvision.js` `createUserDocOnce()` uses `.create()` and does nothing if the doc exists.
+  - The client ignores a `fromCache` missing doc (`includeMetadataChanges`).
+  - New trigger `auditUserRole` writes every role/approveAreas change to `/userRoleAudit`. `source` is admin-ui / provision / delete / other. UserManagementModal stamps `updatedBy`.
+  - No alert and no PITR (user decision).
+- Test: `node functions/verify-user-provision.cjs` (9 cases).

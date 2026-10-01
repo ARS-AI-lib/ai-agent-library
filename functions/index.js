@@ -1805,6 +1805,23 @@ exports.notifyEvent = onCall(
  * propagate BEFORE the delete, so the grant survives for a harmless retry on
  * the next login instead of silently losing the intended team membership.
  */
+const { createUserDocOnce } = require('./userProvision');
+// Every role/approveAreas change on /users is recorded (2026-10-01, after a
+// committee member was silently reset). Audit only — no alert, by decision.
+const { roleAuditEntry } = require('./userProvision');
+exports.auditUserRole = onDocumentWritten(
+  { database: 'ai-agent-lib', document: 'users/{uid}', region: 'asia-southeast1' },
+  async (event) => {
+    const entry = roleAuditEntry(
+      event.params.uid,
+      event.data?.before?.exists ? event.data.before.data() : null,
+      event.data?.after?.exists ? event.data.after.data() : null,
+    );
+    if (!entry) return;
+    await db.collection('userRoleAudit').add({ ...entry, at: FieldValue.serverTimestamp() });
+  },
+);
+
 exports.claimPendingRoleGrant = onCall(
   { cors: true, timeoutSeconds: 30 },
   async (request) => {
@@ -1836,28 +1853,32 @@ exports.claimPendingRoleGrant = onCall(
 
     const grantRef = db.collection('pendingRoleGrants').doc(emailLower);
     const grantSnap = await grantRef.get();
+    // create-only (see userProvision.js): an existing /users doc is never
+    // touched, even if the client wrongly thought it was missing.
     if (!grantSnap.exists) {
-      // No grant on file -> today's exact default-provision behavior.
-      await userRef.set({
+      const { created } = await createUserDocOnce(userRef, {
         role: 'user',
         email,
         displayName,
         approveAreas: [],
         createdAt: FieldValue.serverTimestamp(),
       });
-      return { granted: false };
+      return { granted: false, existing: !created };
     }
 
     const grant = grantSnap.data() || {};
     const { role, teamNumber } = grant;
 
-    await userRef.set({
+    const { created } = await createUserDocOnce(userRef, {
       role,
       email,
       displayName,
       approveAreas: [],
       createdAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    });
+    // Already provisioned: leave the doc AND the grant alone (an admin can
+    // apply the grant by hand; silently re-applying it could downgrade).
+    if (!created) return { granted: false, existing: true };
 
     if (role === 'workshop' && teamNumber) {
       const teamQuery = await db.collection('workshopTeams')

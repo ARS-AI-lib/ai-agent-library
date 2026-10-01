@@ -79,9 +79,16 @@ export function useAuth() {
       attempts += 1;
       unsub = onSnapshot(
         ref,
+        // Needed so a cache-only "missing" is followed by the server's
+        // confirmation even when the data itself doesn't change.
+        { includeMetadataChanges: true },
         (snap) => {
           if (cancelled) return;
           attempts = 0; // a successful read means auth is settled
+          // A cache-only snapshot (network blip) reports "missing" for a doc
+          // that exists on the server. Provisioning on that reset a committee
+          // member to "user" on 2026-10-01 — wait for the server's answer.
+          if (!snap.exists() && snap.metadata.fromCache) return;
           if (!snap.exists()) {
             // First sign-in for an allowed-domain account. Route through the
             // claimPendingRoleGrant callable so a pre-seeded role/team (from

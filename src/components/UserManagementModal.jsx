@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { notifyEvent } from '../lib/notify';
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { getDirectoryMeta, syncDirectoryToFirestore } from '../lib/directory';
 import MultiSelect from './MultiSelect';
 import Dropdown from './Dropdown';
@@ -103,6 +103,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
         role: d.role,
         approveAreas: [...d.approveAreas],
         updatedAt: serverTimestamp(),
+        updatedBy: auth.currentUser?.uid || null, // read by the userRoleAudit trigger
       });
       // Being granted an Approve Area silently changes what lands in your
       // queue, so the person it happens TO is told. The email deliberately

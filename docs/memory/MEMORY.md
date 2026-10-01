@@ -11,3 +11,4 @@
 - [Approve Area taxonomy](project_approve_area_taxonomy.md) — approver routing = 16 disciplines (NOT SDLC stage) since 2026-08-10; single source of truth in src/lib/approveAreas.js, admin/staff-only field, scope≠SDLC — read before touching approver scoping
 - [English headers rule](feedback_english_headers.md) — labels/headers always English, Thai only for explanatory copy — applies everywhere in the app
 - [Chat regression suite is flaky](feedback_regression_flaky.md) — ~16/17 with a rotating failure; always baseline before blaming a prompt edit
+- [Redesign v4 approved](project_redesign_v4.md) — UI mockup approved 2026-10-01, not implemented yet; link + locked decisions
