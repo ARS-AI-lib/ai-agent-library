@@ -1,12 +1,17 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/theme.css'
+import './styles/v7.css'
+
 import App from './App.jsx'
 import TimelinePage from './components/TimelinePage.jsx'
 import FileDownloadPage from './components/FileDownloadPage.jsx'
 import UsageReportPage from './components/UsageReportPage.jsx'
 import WorkshopPage from './components/WorkshopPage.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+
+// V7 look is scoped under body.v7 (see styles/v7.css).
+document.body.classList.add('v7');
 
 // Lightweight path routing (no router lib): the SPA serves every path via the
 // Firebase rewrite, so we pick the root component by pathname. /timeline is a

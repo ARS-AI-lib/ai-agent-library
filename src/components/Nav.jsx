@@ -2,12 +2,47 @@ import { useEffect, useRef, useState } from 'react';
 import { rebuildAllVectors } from '../lib/reindex';
 import ThemeToggle from './ThemeToggle';
 
+// V7 header (2026-10-01). Same items and the same role conditions as before —
+// only the layout changed: segmented tabs with icons, and the ☰ menu grouped
+// into Data / Reports / Admin / Appearance. A group heading renders only when
+// at least one of its items is visible to this user.
+
+const ICON = {
+  lib: 'M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v5H4zM13 14h7v5h-7z',
+  sdlc: 'M4 6h16M4 12h16M4 18h10',
+  dash: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  export: 'M12 4v12M7 11l5 5 5-5M4 20h16',
+  attach: 'M21 12l-9 9a6 6 0 0 1-8-8l9-9a4 4 0 0 1 6 6l-9 9a2 2 0 0 1-3-3l8-8',
+  timeline: 'M4 6h10M4 12h16M4 18h7',
+  usage: 'M4 20V10M10 20V4M16 20v-7',
+  workshop: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+  roles: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21c1-4 4-6 8-6s7 2 8 6',
+  reindex: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5',
+  subs: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 14l2 2 4-4',
+  out: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+};
+
+function Ic({ d, size = 15 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
+function initials(user) {
+  const full = (user?.displayName || user?.email || '?').trim();
+  const parts = full.split(/\s+/);
+  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
+}
+
 export default function Nav({
   search, setSearch,
   agentCount, skillCount,
-  user, onSignOut,
+  user, role, onSignOut,
   activeTab, setActiveTab,
   onOpenExport, onOpenRoleGroups, canManageRoleGroups, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
+  onOpenMySubmissions,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -17,40 +52,76 @@ export default function Nav({
     function onDocClick(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
     }
+    function onKey(e) { if (e.key === 'Escape') setMenuOpen(false); }
     document.addEventListener('click', onDocClick);
-    return () => document.removeEventListener('click', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onKey); };
   }, []);
 
+  const close = () => setMenuOpen(false);
+  const go = (href) => { window.location.href = href; close(); };
+
+  async function rebuild() {
+    setReindexing(true);
+    try {
+      const r = await rebuildAllVectors();
+      window.alert(`Search index rebuilt\n\nScanned ${r.scanned} · Re-indexed ${r.embedded} · Already current ${r.skipped} · Removed ${r.pruned}`);
+    } catch (e) {
+      window.alert(`Rebuild failed: ${e?.message || e}`);
+    } finally {
+      setReindexing(false);
+      close();
+    }
+  }
+
+  const tabs = [
+    { key: 'lib', label: 'Agent Library', show: true },
+    { key: 'sdlc', label: 'SDLC AI Adoption', show: true },
+    { key: 'dash', label: 'Dashboard', show: canSeeDashboard },
+  ].filter((t) => t.show);
+
+  const reports = [
+    canSeeTimeline && { k: 'timeline', label: 'SDLC Timeline', on: () => go('/timeline') },
+    canSeeUsage && { k: 'usage', label: 'Agent/Skill Usage', on: () => go('/usage') },
+    canSeeWorkshop && { k: 'workshop', label: 'Workshop', on: () => go('/workshop') },
+  ].filter(Boolean);
+  const admin = [
+    canManageRoleGroups && { k: 'roles', label: 'Role Group Management', on: () => { onOpenRoleGroups?.(); close(); } },
+    isAdmin && { k: 'reindex', label: reindexing ? 'Rebuilding…' : 'Rebuild Search Index', on: rebuild, disabled: reindexing },
+  ].filter(Boolean);
+
+  const Item = ({ k, label, on, disabled }) => (
+    <button type="button" role="menuitem" disabled={disabled} onClick={on}>
+      <span className="mi-icon"><Ic d={ICON[k]} />{label}</span>
+    </button>
+  );
+
   return (
-    <nav className="nav">
+    <nav className="nav v7-nav">
       <div className="nav-brand">
+        <span className="v7-brand-mark" aria-hidden="true">
+          <img src="/wolfy-logo.png" alt="" />
+        </span>
         <div>
           <h1>AI Agent Library</h1>
           <p>Powered by Wolfy</p>
         </div>
       </div>
-      <div className="nav-tabs">
-        <button 
-          className={`nav-tab ${activeTab === 'lib' ? 'active' : ''}`}
-          onClick={() => setActiveTab('lib')}
-        >
-          Agent Library
-        </button>
-        <button
-          className={`nav-tab ${activeTab === 'sdlc' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sdlc')}
-        >
-          SDLC AI Adoption
-        </button>
-        {canSeeDashboard && (
+
+      <div className="v7-seg" role="tablist" aria-label="Sections">
+        {tabs.map((t) => (
           <button
-            className={`nav-tab ${activeTab === 'dash' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dash')}
+            key={t.key}
+            role="tab"
+            aria-selected={activeTab === t.key}
+            className={`v7-seg-btn ${activeTab === t.key ? 'active' : ''}`}
+            onClick={() => setActiveTab(t.key)}
           >
-            Dashboard
+            <Ic d={ICON[t.key]} size={14} />{t.label}
           </button>
-        )}
+        ))}
       </div>
+
       {activeTab !== 'dash' && (
         <div className="nav-search">
           <div className="nav-search-wrap">
@@ -61,6 +132,7 @@ export default function Nav({
               type="text"
               className="nav-search-inp"
               placeholder="Search name, owner, description, ability, role…"
+              aria-label="Search the library"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -74,121 +146,54 @@ export default function Nav({
           <div className="chip c-sk"><div className="n">{skillCount}</div><div className="l">Skills</div></div>
         </div>
 
-        {user && (
-          <div className="nav-user">
-            {user.photoURL
-                ? <img src={user.photoURL} alt="" />
-                : <span className="nav-user-fallback">{(user.displayName || user.email || '?').trim().charAt(0).toUpperCase()}</span>}
-            <div className="nav-user-name">
-              {(() => {
-                const full = (user.displayName || user.email || '').trim();
-                const [first, ...rest] = full.split(' ');
-                const last = rest.join(' ');
-                return (
-                  <>
-                    <span>{first}</span>
-                    {last && <span>{last}</span>}
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        )}
-
         <div ref={menuRef} style={{ position: 'relative' }}>
           <button
-            className="icon-btn"
+            className="v7-avatar-btn"
             title="Menu"
             aria-label="Menu"
-            aria-haspopup="true"
+            aria-haspopup="menu"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+            {user?.photoURL
+              ? <img src={user.photoURL} alt="" />
+              : <span className="v7-avatar">{initials(user)}</span>}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+              <line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" />
             </svg>
           </button>
           {menuOpen && (
-            <div className="menu">
-              {/* Dark mode lives in the ☰ menu rather than as its own nav
-                  button — it is a set-once preference, not something worth a
-                  permanent slot in a row that already holds counts, avatar and
-                  menu. */}
+            <div className="menu v7-menu" role="menu" aria-label="Main menu">
+              {user && (
+                <div className="v7-menu-user">
+                  <span className="v7-avatar lg">{initials(user)}</span>
+                  <div>
+                    <strong>{user.displayName || user.email}</strong>
+                    <span>{user.email}{role ? ` · ${role.charAt(0).toUpperCase()}${role.slice(1)}` : ''}</span>
+                  </div>
+                </div>
+              )}
+              {onOpenMySubmissions && (
+                <Item k="subs" label="My Submissions" on={() => { onOpenMySubmissions(); close(); }} />
+              )}
+
+              <div className="v7-menu-head">Data</div>
+              <Item k="export" label="Export Data" on={() => { onOpenExport?.(); close(); }} />
+              {/* Visible to admin/staff/approver; the callable re-checks role + area. */}
+              {canUploadFiles && <Item k="attach" label="Attach Endpoint File" on={() => { onOpenUpload?.(); close(); }} />}
+
+              {reports.length > 0 && <div className="v7-menu-head">Reports</div>}
+              {reports.map((r) => <Item key={r.k} {...r} />)}
+
+              {admin.length > 0 && <div className="v7-menu-head">Admin</div>}
+              {admin.map((r) => <Item key={r.k} {...r} />)}
+
+              <div className="v7-menu-head">Appearance</div>
               <ThemeToggle />
-              <button
-                type="button"
-                onClick={() => { onOpenExport?.(); setMenuOpen(false); }}
-              >
-                Export Data
-              </button>
-              {canManageRoleGroups && (
-                <button
-                  type="button"
-                  onClick={() => { onOpenRoleGroups?.(); setMenuOpen(false); }}
-                >
-                  Role Group Management
-                </button>
-              )}
-              {/* Attach a file to a deploy-approved agent's endpoint. Visible
-                  to admin/staff/approver; the callable re-checks the role and
-                  the Approve Area, so this is presentation only. */}
-              {canUploadFiles && (
-                <button
-                  type="button"
-                  onClick={() => { onOpenUpload?.(); setMenuOpen(false); }}
-                >
-                  Attach Endpoint File
-                </button>
-              )}
-              {isAdmin && (
-                // Admin escape hatch for the semantic search index. Individual
-                // saves reindex themselves fire-and-forget, so this is only
-                // needed after a bulk import/migration that bypassed the UI, or
-                // if a save-time reindex was ever lost. Safe to run any time:
-                // it hashes content and re-embeds only what actually changed.
-                <button
-                  type="button"
-                  disabled={reindexing}
-                  onClick={async () => {
-                    setReindexing(true);
-                    try {
-                      const r = await rebuildAllVectors();
-                      window.alert(`Search index rebuilt\n\nScanned ${r.scanned} · Re-indexed ${r.embedded} · Already current ${r.skipped} · Removed ${r.pruned}`);
-                    } catch (e) {
-                      window.alert(`Rebuild failed: ${e?.message || e}`);
-                    } finally {
-                      setReindexing(false);
-                      setMenuOpen(false);
-                    }
-                  }}
-                >
-                  {reindexing ? 'Rebuilding…' : 'Rebuild Search Index'}
-                </button>
-              )}
-              {canSeeTimeline && (
-                <button
-                  type="button"
-                  onClick={() => { window.location.href = '/timeline'; setMenuOpen(false); }}
-                >
-                  SDLC Timeline
-                </button>
-              )}
-          {canSeeUsage && (
-            <button type="button" onClick={() => { window.location.href = '/usage'; setMenuOpen(false); }}>
-              Agent/Skill Usage
-            </button>
-          )}
-          {canSeeWorkshop && (
-            <button type="button" onClick={() => { window.location.href = '/workshop'; setMenuOpen(false); }}>
-              Workshop
-            </button>
-          )}
-              <button
-                type="button"
-                className="danger"
-                onClick={() => { setMenuOpen(false); onSignOut?.(); }}
-              >
-                Sign out
+
+              <div className="v7-menu-sep" />
+              <button type="button" role="menuitem" className="danger" onClick={() => { close(); onSignOut?.(); }}>
+                <span className="mi-icon"><Ic d={ICON.out} />Sign out</span>
               </button>
             </div>
           )}

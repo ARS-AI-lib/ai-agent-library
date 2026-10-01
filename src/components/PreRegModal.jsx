@@ -797,14 +797,27 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       <div className="mbox wide" style={{ padding: 0 }} onPointerDownCapture={arm} onKeyDownCapture={arm}>
         <button className="mclose" onClick={requestClose} style={{ zIndex: 1 }}>✕</button>
 
-        <div className="tabs">
-          <button className={`tab-btn ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>
-            New Entry
-          </button>
+        {/* V7: the same two tabs, presented as a 2-step header. Step 2 stays
+            locked until an analysis exists (ranked !== null), as before. */}
+        <div className="v7-steps" role="tablist" aria-label="Registration steps">
           <button
-            className={`tab-btn ${tab === 'analysis' ? 'active' : ''} ${ranked === null ? 'locked' : ''}`}
+            role="tab"
+            aria-selected={tab === 'form'}
+            className={`v7-step ${tab === 'form' ? 'active' : ''} ${ranked !== null ? 'done' : ''}`}
+            onClick={() => setTab('form')}
+          >
+            <span className="v7-step-n">{ranked !== null && tab !== 'form' ? '✓' : '1'}</span>
+            Fill in details
+          </button>
+          <span className="v7-step-line" aria-hidden="true" />
+          <button
+            role="tab"
+            aria-selected={tab === 'analysis'}
+            aria-disabled={ranked === null}
+            className={`v7-step ${tab === 'analysis' ? 'active' : ''} ${ranked === null ? 'locked' : ''}`}
             onClick={() => ranked !== null && setTab('analysis')}
           >
+            <span className="v7-step-n">2</span>
             Analysis {ranked !== null ? `(${analysisCount})` : ''}
           </button>
         </div>

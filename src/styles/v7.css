@@ -1,0 +1,138 @@
+/* Redesign V7 (2026-10-01) — loaded AFTER theme.css. Only `.v7-*` classes are
+   new; where an existing class is restyled it is scoped under a `.v7-*`
+   parent so nothing in theme.css is redefined globally (CLAUDE.md §6). */
+
+/* ── Header ── */
+.v7-nav { gap: 6px; min-height: 58px; }
+.v7-brand-mark { width: 32px; height: 32px; border-radius: 10px; background: var(--tint); display: flex; align-items: center; justify-content: center; margin-right: 10px; flex-shrink: 0; }
+.v7-brand-mark img { width: 26px; height: 26px; object-fit: contain; }
+.v7-nav .nav-brand { border-right: none; }
+.v7-nav .nav-brand p { font-size: 10.5px; }
+
+.v7-seg { display: flex; align-items: center; gap: 2px; padding: 3px; margin: auto 0 auto 6px; background: var(--sf2); border: 1px solid var(--bd-soft); border-radius: 99px; height: 38px; box-sizing: border-box; }
+.v7-seg-btn { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 14px; border: none; background: none; border-radius: 99px; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--mu); cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
+.v7-seg-btn:hover { color: var(--tx); }
+.v7-seg-btn.active { background: var(--sf); color: var(--tint-fg); box-shadow: 0 1px 2px rgba(30,45,90,.08), 0 2px 6px rgba(30,45,90,.06); }
+.v7-seg-btn:focus-visible, .v7-avatar-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.v7-nav .nav-search-wrap { max-width: 380px; }
+.v7-nav .nav-search-inp { height: 36px; border-radius: 99px; }
+.v7-nav .chip { border: 1px solid var(--tint-bd); background: var(--tint); border-radius: 99px; padding: 2px 12px; }
+.v7-nav .chip.c-sk { border-color: rgba(11,122,104,.25); background: rgba(11,122,104,.08); }
+
+.v7-avatar-btn { display: flex; align-items: center; gap: 8px; height: 38px; padding: 3px 10px 3px 3px; border: 1px solid var(--bd-soft); background: var(--sf); border-radius: 99px; color: var(--mu); cursor: pointer; }
+.v7-avatar-btn:hover { background: var(--sf2); color: var(--tx); }
+.v7-avatar-btn img { width: 30px; height: 30px; border-radius: 50%; }
+.v7-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--tint); color: var(--tint-fg); font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.v7-avatar.lg { width: 36px; height: 36px; font-size: 12.5px; }
+
+/* ── Grouped ☰ menu (from v6.2) ── */
+.v7-menu { min-width: 290px; padding: 6px; border-radius: 14px; box-shadow: var(--shl); }
+.v7-menu button { border-bottom: none; border-radius: 8px; height: 36px; padding: 0 10px; font-size: 13px; }
+.v7-menu button.danger { color: #b91c1c; }
+.v7-menu-user { display: flex; align-items: center; gap: 10px; padding: 8px 10px 12px; border-bottom: 1px solid var(--bd-soft); margin-bottom: 4px; }
+.v7-menu-user div { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.v7-menu-user strong { font-size: 13px; color: var(--tx); }
+.v7-menu-user span { font-size: 11.5px; color: var(--mu); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v7-menu-head { font-size: 11.5px; font-weight: 600; color: var(--mu); padding: 10px 10px 4px; }
+.v7-menu-sep { height: 1px; background: var(--bd-soft); margin: 6px 4px; }
+:root[data-theme="dark"] .v7-menu button.danger { color: var(--late); }
+
+/* ── Legend row + control bar: v6 pill styling ──
+   Scoped under body.v7 (set in main.jsx) so the class names in theme.css
+   keep their original definitions. */
+body.v7 .legend { padding: 10px 24px; gap: 10px; }
+body.v7 .lg-item { font-size: 12px; padding: 4px 12px 4px 9px; border: 1px solid var(--bd-soft); background: var(--sf); }
+body.v7 .lg-item.on { border-color: var(--tint-bd); background: var(--tint); }
+body.v7 .lg-dot { width: 8px; height: 8px; }
+body.v7 .btn-new { border-radius: 99px; height: 34px; padding: 0 16px; font-size: 13px; box-shadow: 0 2px 6px rgba(47,107,255,.25); }
+
+body.v7 .cbar { padding: 8px 24px; gap: 10px; }
+body.v7 .cl { font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+body.v7 .cbar .dd, body.v7 .cbar .ms-btn { height: 30px; padding: 0 12px; font-size: 12px; max-width: 180px; background: var(--sf); }
+body.v7 .cbar .dd.has-sel, body.v7 .cbar .ms-btn.has-sel { background: var(--tint); border-color: var(--tint-bd); color: var(--tint-fg); }
+body.v7 .cb-toggle { height: 30px; width: 32px; background: var(--sf); }
+body.v7 .btnclr { height: 30px; width: auto; padding: 0 12px; border-radius: 99px; font-size: 12px; font-family: inherit; font-weight: 600; }
+body.v7 .csep { height: 18px; }
+body.v7 .dd-panel { border-radius: 12px; padding: 6px; box-shadow: var(--shl); }
+body.v7 .dd-opt { font-size: 12.5px; padding: 7px 10px; }
+
+/* ── Sidebar ── */
+body.v7 .sidebar { width: 210px; background: var(--sf); padding: 16px 12px; }
+body.v7 .sidebar-h { font-size: 11.5px; font-weight: 600; letter-spacing: 0; text-transform: none; padding: 8px 8px 4px; }
+body.v7 .sidebar-item { font-size: 12.5px; padding: 7px 9px; border-radius: 8px; }
+body.v7 .sidebar-item:hover { background: var(--sf2); }
+body.v7 .sidebar-item.active { background: var(--tint); color: var(--tint-fg); box-shadow: none; }
+body.v7 .sidebar-item.active .sidebar-count { color: var(--tint-fg); }
+body.v7 .sidebar-count { font-size: 11px; }
+body.v7 .sidebar-myai { border: 1px solid var(--bd-soft); box-shadow: none; border-radius: 10px; padding: 9px 10px; font-size: 12.5px; }
+body.v7 .sidebar-myai.active { background: var(--tint); border-color: var(--tint-bd); color: var(--tint-fg); }
+
+/* ── Cards (v6: three zones, softer depth) ── */
+body.v7 .ac { border-radius: var(--r-lg); padding: 16px 16px 12px; box-shadow: var(--sh-card); }
+body.v7 .ac:hover { box-shadow: var(--shm); transform: translateY(-1px); border-color: var(--tint-bd); }
+body.v7 .ac-title { font-size: 14.5px; margin-bottom: 12px; }
+body.v7 .ac-progress-track { height: 6px; }
+body.v7 .ac-meta { padding: 12px 0 4px; border-top: 1px solid var(--bd-soft); }
+body.v7 .ac-meta-label { font-size: 11px; color: var(--mu); text-transform: none; letter-spacing: 0; }
+body.v7 .ac-meta-value { font-size: 12.5px; }
+body.v7 .ac-stats { font-size: 11px; margin-top: 8px; padding-top: 8px; }
+
+/* ── Agent Detail header actions ── */
+.v7-mactions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.v7-btn-outline { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border: 1px solid var(--bd); background: var(--sf); color: var(--tx); border-radius: 99px; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.v7-btn-outline:hover { border-color: var(--tint-bd); background: var(--tint); color: var(--tint-fg); }
+.v7-btn-outline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.v7-more { position: relative; }
+.v7-more-menu { min-width: 200px; }
+body.v7 .mbox { border-radius: var(--r-xl); }
+
+/* ── Register: 2-step header ── */
+.v7-steps { display: flex; align-items: center; gap: 12px; padding: 18px 56px 16px 24px; border-bottom: 1px solid var(--bd-soft); }
+.v7-step { display: flex; align-items: center; gap: 9px; border: none; background: none; padding: 0; font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--mu); cursor: pointer; }
+.v7-step-n { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--bd2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: var(--sf); }
+.v7-step.active { color: var(--tx); }
+.v7-step.active .v7-step-n { background: var(--accent); border-color: var(--accent); color: #fff; }
+.v7-step.done:not(.active) .v7-step-n { background: var(--tint); border-color: var(--tint-bd); color: var(--tint-fg); }
+.v7-step.locked { cursor: not-allowed; opacity: .55; }
+.v7-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.v7-step-line { flex: 0 0 48px; height: 2px; background: var(--bd-soft); border-radius: 2px; }
+
+/* ── Sign-in (V7 split) ── */
+.v7-signin { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) 520px; background: #f8fafd; color: #182135; }
+.v7-signin-hero { position: relative; overflow: hidden; background: #182c5f; color: #fff; padding: 48px 56px; display: flex; flex-direction: column; gap: 28px; }
+.v7-signin-hero::after { content: ''; position: absolute; inset: 0; opacity: .16; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='760' height='900'%3E%3Cg fill='none' stroke='%239db8ff'%3E%3Cpath d='M60 120h220l60 60h200M120 300h160l80-80h220M40 480h300l60 60h160M200 640h240l60-60h180M80 780h260'/%3E%3C/g%3E%3Cg fill='%239db8ff'%3E%3Ccircle cx='280' cy='120' r='4'/%3E%3Ccircle cx='340' cy='180' r='4'/%3E%3Ccircle cx='540' cy='180' r='4'/%3E%3Ccircle cx='360' cy='220' r='4'/%3E%3Ccircle cx='400' cy='540' r='4'/%3E%3Ccircle cx='500' cy='580' r='4'/%3E%3C/g%3E%3C/svg%3E") right top / auto 100% no-repeat; }
+.v7-signin-brand { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; }
+.v7-signin-brand .v7-brand-mark { width: 40px; height: 40px; background: rgba(255,255,255,.12); margin: 0; }
+.v7-signin-brand div { display: flex; flex-direction: column; line-height: 1.2; }
+.v7-signin-brand strong { font-size: 17px; }
+.v7-signin-brand span { font-size: 12px; color: #b8c6e6; }
+.v7-signin-copy { position: relative; z-index: 1; margin-top: 12vh; max-width: 560px; display: flex; flex-direction: column; gap: 18px; }
+.v7-signin-copy h1 { margin: 0; font-size: 40px; line-height: 1.2; letter-spacing: -.015em; font-weight: 700; }
+.v7-signin-copy p { margin: 0; font-size: 16px; line-height: 1.7; color: #c9d4ee; }
+.v7-signin-copy-foot { position: relative; z-index: 1; margin: auto 0 0; font-size: 12px; color: #8fa1c8; }
+.v7-signin-panel { display: flex; align-items: center; justify-content: center; padding: 40px; }
+.v7-signin-box { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 20px; }
+.v7-signin-box .signin-logos { justify-content: flex-start; }
+.v7-signin-box .signin-logos img { height: 40px; }
+.v7-signin-box .signin-logos img:first-of-type { height: 46px; }
+.v7-signin-box h2 { margin: 0 0 6px; font-size: 26px; letter-spacing: -.01em; }
+.v7-muted { margin: 0; font-size: 14px; color: #46516d; line-height: 1.6; }
+.v7-muted.small { font-size: 12px; color: #5f6b85; }
+.v7-google-btn { height: 48px; display: flex; align-items: center; justify-content: center; gap: 12px; border: 1px solid #dde3ee; background: #fff; border-radius: 12px; font-family: inherit; font-size: 15px; font-weight: 600; color: #182135; cursor: pointer; box-shadow: 0 1px 2px rgba(30,45,90,.06), 0 4px 12px rgba(30,45,90,.05); }
+.v7-google-btn:hover { box-shadow: var(--shm); }
+.v7-google-btn:focus-visible { outline: 2px solid #2f6bff; outline-offset: 2px; }
+.v7-signin-err { padding: 12px 14px; border-radius: 12px; background: #fff5f5; border: 1px solid #fee2e2; font-size: 12.5px; color: #46516d; line-height: 1.55; }
+.v7-signin-err strong { color: #b91c1c; }
+.v7-signin-domains { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 12px; background: #fff; border: 1px solid #e8edf6; }
+.v7-signin-domains > span { font-size: 12.5px; font-weight: 600; color: #46516d; }
+.v7-signin-domains > div { display: flex; gap: 6px; flex-wrap: wrap; }
+.v7-pill { padding: 3px 10px; border-radius: 99px; background: #eef3ff; border: 1px solid #c9d8ff; color: #3a64d8; font-size: 12px; font-weight: 600; }
+@media (max-width: 900px) {
+  .v7-signin { grid-template-columns: 1fr; }
+  .v7-signin-hero { padding: 28px 16px; }
+  .v7-signin-copy { margin-top: 8px; }
+  .v7-signin-copy h1 { font-size: 28px; }
+  .v7-signin-panel { padding: 28px 16px; }
+}

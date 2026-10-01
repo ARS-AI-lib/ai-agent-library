@@ -32,12 +32,12 @@ export default function ControlBar({
   return (
     <div className="cbar">
       <div className="cg">
-        <span className="cl">VIEW</span>
+        <span className="cl">View</span>
         <Dropdown options={VIEWS} value={view} onChange={setView} ariaLabel="จัดกลุ่มตาม" />
       </div>
 
       <div className="cg">
-        <span className="cl">SORT</span>
+        <span className="cl">Sort</span>
         {/* Popularity is already its own ranking (demandScore) — a second sort
             on top of it would just fight the reason someone picked that view,
             so the control is disabled rather than silently ignored there. */}
@@ -46,31 +46,31 @@ export default function ControlBar({
 
       <div className="csep" />
       <div className="cg">
-        <span className="cl">OWNER</span>
+        <span className="cl">Owner</span>
         <MultiSelect label="Owner" options={ownerOptions} selected={owner} onChange={setOwner} />
       </div>
 
       <div className="csep" />
       <div className="cg">
-        <span className="cl">ROLE</span>
+        <span className="cl">Role</span>
         <MultiSelect label="Role" options={roleOptions} selected={role} onChange={setRole} />
       </div>
 
       <div className="csep" />
       <div className="cg">
-        <span className="cl">TIER</span>
+        <span className="cl">Tier</span>
         <MultiSelect label="Tier" options={TIER_ORDER} selected={tier} onChange={setTier} />
       </div>
 
       <div className="csep" />
       <div className="cg">
-        <span className="cl">REUSABLE</span>
+        <span className="cl">Reusable</span>
         <MultiSelect label="Reusable" options={reusableOptions} selected={reusable} onChange={setReusable} />
       </div>
 
       <div className="csep" />
       <div className="cg">
-        <span className="cl">TYPE</span>
+        <span className="cl">Type</span>
         <Dropdown options={TYPES} value={type} onChange={setType} ariaLabel="ประเภท" />
       </div>
 
@@ -92,7 +92,7 @@ export default function ControlBar({
         </svg>
       </button>
 
-      <button className="btnclr" title="Clear filters" onClick={onClear}>✕</button>
+      <button className="btnclr" title="Clear filters" onClick={onClear}>✕ Clear</button>
     </div>
   );
 }

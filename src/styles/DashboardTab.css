@@ -1,3 +1,6 @@
+/* V7: Dashboard visuals stay as before — keep the pre-V7 muted text colour. */
+.dash-page { --mu: var(--mu-legacy); --r-md: 10px; --r-lg: 14px; }
+
 /* Dashboard tab — v2 rebuild (2026-09-24). Scoped with .dash- (CLAUDE.md §6:
    never redefine theme.css classes). Every colour is a theme.css token, so
    light/dark follow the app's own data-theme switch. */

@@ -33,32 +33,55 @@ export default function LoginScreen({ onSignIn, error }) {
     };
   }, []);
 
+  // V7 split layout (2026-10-01). The mockup's live stat tiles are left out on
+  // purpose: nothing in Firestore is readable before sign-in.
+  const domains = ALLOWED_DOMAINS_LABEL.split('/').map((d) => d.trim()).filter(Boolean);
   return (
-    <div className="signin-page">
-      <div className="signin-card">
-        <div className="signin-logos">
-          <img src="/logo1.png" alt="Infinitas by Krungthai" />
-          <span className="signin-logos-sep" aria-hidden="true" />
-          <img src="/logo2.png" alt="Arise by Infinitas" />
+    <div className="v7-signin">
+      <section className="v7-signin-hero">
+        <div className="v7-signin-brand">
+          <span className="v7-brand-mark"><img src="/wolfy-logo.png" alt="" /></span>
+          <div><strong>AI Agent Library</strong><span>Powered by Wolfy</span></div>
         </div>
-        <h1 style={{ fontSize: 20, fontWeight: 700 }}>AI Agent Library</h1>
-        {error && <div className="msg error" style={{ maxWidth: 380 }}><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
-        <button className="signin-google-btn" onClick={() => onSignIn()}>
-          <GoogleGlyph />
-          Sign in with Google
-        </button>
-        {USING_EMULATOR && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, border: '1px dashed #e0a100', borderRadius: 8 }}>
-            <small>Local emulator test sign-in</small>
-            {EMU_ACCOUNTS.map((em) => <button key={em} className="btn-sm" onClick={() => onSignIn(em)}>{em}</button>)}
+        <div className="v7-signin-copy">
+          <h1>Find the AI tool your team already built.</h1>
+          <p>รวม Agent และ Skill ที่ทีมในองค์กรสร้างไว้ในที่เดียว ค้นด้วยงานที่อยากทำ เปิดใช้ได้ทันที หรือลงทะเบียนของใหม่ให้ทีมอื่นใช้ต่อ</p>
+        </div>
+        <p className="v7-signin-copy-foot">Copyright © 2026 Arise by Infinitas Co., Ltd. All rights reserved.</p>
+      </section>
+      <section className="v7-signin-panel">
+        <div className="v7-signin-box">
+          <div className="signin-logos">
+            <img src="/logo1.png" alt="Infinitas by Krungthai" />
+            <span className="signin-logos-sep" aria-hidden="true" />
+            <img src="/logo2.png" alt="Arise by Infinitas" />
           </div>
-        )}
-        <p className="signin-domain-hint">เข้าสู่ระบบด้วยบัญชี {ALLOWED_DOMAINS_LABEL}</p>
-      </div>
-      <div className="signin-footer">
-        <span>Copyright © 2026 Arise by Infinitas Co., Ltd. All rights reserved.</span>
-        <span className="signin-footer-brand">Powered by Wolfy<img className="signin-footer-logo" src="/wolfy-logo.png" alt="Wolfy" /></span>
-      </div>
+          <div>
+            <h2>Sign in</h2>
+            <p className="v7-muted">ใช้บัญชีองค์กรของคุณเพื่อเข้าใช้งาน</p>
+          </div>
+          <button className="v7-google-btn" onClick={() => onSignIn()}>
+            <GoogleGlyph />
+            Sign in with Google
+          </button>
+          {error && (
+            <div className="v7-signin-err" role="alert">
+              <strong>This account can&apos;t sign in.</strong> {error}
+            </div>
+          )}
+          {USING_EMULATOR && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, border: '1px dashed #e0a100', borderRadius: 8 }}>
+              <small>Local emulator test sign-in</small>
+              {EMU_ACCOUNTS.map((em) => <button key={em} className="btn-sm" onClick={() => onSignIn(em)}>{em}</button>)}
+            </div>
+          )}
+          <div className="v7-signin-domains">
+            <span>Accounts that can sign in</span>
+            <div>{domains.map((d) => <span key={d} className="v7-pill">{d}</span>)}</div>
+          </div>
+          <p className="v7-muted small">เข้าใช้ครั้งแรกจะได้สิทธิ์ผู้ใช้ทั่วไป ถ้าต้องการสิทธิ์อนุมัติให้ติดต่อ admin</p>
+        </div>
+      </section>
     </div>
   );
 }

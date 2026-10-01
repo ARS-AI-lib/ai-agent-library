@@ -12,7 +12,13 @@
   --bg: #f8fafd; --sf: #fff; --sf2: #f1f5fb; --sf3: #e7edf6;
   --bd: #dde3ee; --bd2: #c8d0e0; --bd-soft: #e8edf6;
   --track: #e7edf6;
-  --tx: #182135; --tx2: #46516d; --mu: #7784a0; --mu2: #a6b0c6;
+  --tx: #182135; --tx2: #46516d; --mu: #5f6b85; --mu2: #a6b0c6;
+  /* V7 (2026-10-01): --mu darkened #7784a0 → #5f6b85 for AA contrast on white.
+     The Dashboard keeps the old value (scoped in DashboardTab.css). */
+  --mu-legacy: #7784a0;
+  --tint: #eef3ff; --tint-bd: #c9d8ff; --tint-fg: #3a64d8;
+  --r-xl: 16px;
+  --sh-card: 0 1px 2px rgba(30,45,90,.04), 0 4px 12px rgba(30,45,90,.04);
   /* Interactive accent — used for UI chrome (buttons, active tab, focus). */
   --accent: #2f6bff; --accent-hover: #1f56e6; --accent-soft: rgba(47,107,255,.10);
   /* Legend colors — 2026-07 revision: unified to ONE blue shade (--ag now
@@ -27,7 +33,7 @@
      at 18px, dialed back). */
   --sh: 0 1px 3px rgba(30,45,90,.05); --shm: 0 6px 18px rgba(30,45,90,.10);
   --shl: 0 14px 34px rgba(40,55,100,.15);
-  --r-sm: 8px; --r-md: 10px; --r-lg: 14px;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
   /* Modal scrim. .mov and .sdlc-ovl used to hardcode two DIFFERENT scrims
      (rgba(26,34,54,.45) vs rgba(0,0,0,.5)) for the same job, so an SDLC popup
      dimmed the page harder/colder than every other modal. One token now. */
@@ -112,7 +118,9 @@
   --bg: #12151d; --sf: #1a1e29; --sf2: #232838; --sf3: #2b3145;
   --bd: #323a4f; --bd2: #3d4560; --bd-soft: #262c3d;
   --track: #262c3d;
-  --tx: #e7eaf3; --tx2: #b7bfd6; --mu: #8891ac; --mu2: #626b87;
+  --tx: #e7eaf3; --tx2: #b7bfd6; --mu: #8891ac; --mu2: #626b87; --mu-legacy: #8891ac;
+  --tint: rgba(116,149,231,.14); --tint-bd: rgba(116,149,231,.38); --tint-fg: #9db8ff;
+  --sh-card: 0 1px 3px rgba(0,0,0,.35);
   /* Full-saturation accent glows on a black page — 2026-08-08 review found
      it "loud" in every element that reused --accent for a lift-shadow, so
      dark drops both saturation and adds lightness instead of leaning on

@@ -49,6 +49,14 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [versionBusy, setVersionBusy] = useState('');
   const readyFileRef = useRef(null);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const onDoc = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [moreOpen]);
   const [renameValue, setRenameValue] = useState('');
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameMsg, setRenameMsg] = useState('');
@@ -492,34 +500,52 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             only the redundant inner card frame. */}
         <div className="mtitle-row">
           <h2 className="mtitle">{agent.agentName}</h2>
-          {mayRequestRename && (
-            <button className="mi-btn" title="ขอเปลี่ยนชื่อ (ต้องผ่านการอนุมัติ)" onClick={() => { setRenameValue(agent.agentName || ''); setRenameMsg(''); setRenameOpen(true); }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 20h16" /><path d="M14.5 3.5a2.12 2.12 0 0 1 3 3L7 17l-4 1 1-4z" />
-              </svg>
-            </button>
-          )}
-          {mayEditDetails && (
-            <button className="mi-btn" title="Edit Details" onClick={() => onEditAgent?.(agent)}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 21v-7" /><path d="M4 10V3" /><path d="M12 21v-9" /><path d="M12 8V3" /><path d="M20 21v-5" /><path d="M20 12V3" />
-                <path d="M1 14h6" /><path d="M9 8h6" /><path d="M17 16h6" />
-              </svg>
-            </button>
-          )}
-          {mayArchive && (
-            <button
-              className="mi-btn"
-              title={isArchived ? 'นำกลับเข้า Library' : 'Archive ออกจาก Library'}
-              disabled={archiving}
-              onClick={() => (isArchived ? handleUnarchive() : setArchiveOpen(true))}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="20" height="5" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
-                {isArchived ? <path d="M12 18v-6M9 15l3-3 3 3" /> : <line x1="9" y1="13" x2="15" y2="13" />}
-              </svg>
-            </button>
-          )}
+          {/* V7 (2026-10-01): one labelled primary action + a More menu.
+              Every item keeps its pre-V7 condition (mayEditDetails /
+              mayRequestRename / mayArchive) — only the presentation moved. */}
+          <div className="v7-mactions">
+            {mayEditDetails && (
+              <button type="button" className="v7-btn-outline" onClick={() => onEditAgent?.(agent)}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 20h16" /><path d="M14.5 3.5a2.12 2.12 0 0 1 3 3L7 17l-4 1 1-4z" />
+                </svg>
+                Edit Details
+              </button>
+            )}
+            {(mayRequestRename || mayArchive || endpointHref) && (
+              <div className="v7-more" ref={moreRef}>
+                <button type="button" className="v7-btn-outline" aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
+                  More
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+                {moreOpen && (
+                  <div className="menu v7-menu v7-more-menu" role="menu">
+                    {endpointHref && (
+                      <button type="button" role="menuitem" onClick={() => { window.open(endpointHref, '_blank', 'noopener,noreferrer'); setMoreOpen(false); }}>
+                        <span className="mi-icon">Open Endpoint</span>
+                      </button>
+                    )}
+                    {mayRequestRename && (
+                      <button type="button" role="menuitem" title="ต้องผ่านการอนุมัติ" onClick={() => { setRenameValue(agent.agentName || ''); setRenameMsg(''); setRenameOpen(true); setMoreOpen(false); }}>
+                        <span className="mi-icon">Request Rename</span>
+                      </button>
+                    )}
+                    {mayArchive && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={isArchived ? '' : 'danger'}
+                        disabled={archiving}
+                        onClick={() => { setMoreOpen(false); if (isArchived) handleUnarchive(); else setArchiveOpen(true); }}
+                      >
+                        <span className="mi-icon">{isArchived ? 'Unarchive' : 'Archive'}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mbadges">

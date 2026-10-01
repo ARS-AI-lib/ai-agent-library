@@ -413,6 +413,7 @@ export default function App() {
       <Nav
         search={search}
         setSearch={setSearch}
+        role={role}
         agentCount={navAgentCount}
         skillCount={navSkillCount}
         user={user}
