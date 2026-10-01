@@ -72,6 +72,9 @@ export const AREA_ORDER = [
   'Business & Product',
   'Governance & Compliance',
   'Procurement',
+  'People',                 // added 2026-10-01 (category People Development)
+  'Resource Management',    // added 2026-10-01 (category Resource Planning)
+  'Financial',              // added 2026-10-01 (category Financial)
   'Delivery Management',
   'Business Analysis',
   'UX Research',
@@ -262,7 +265,7 @@ export function isVerticalCategory(name) {
 }
 
 export const CATEGORY_AREA = {
-  // ── Discipline: 1:1 with an area ──
+  // ── Discipline → area (one each, except Resource Planning → two) ──
   // KEPT FIRST ON PURPOSE (2026-09-23): seed-approve-area-schema.cjs writes
   // /config/schema.category from Object.keys() of this map, and Sidebar.jsx
   // renders that array in raw order with no sort — so "first key here" is
@@ -275,21 +278,30 @@ export const CATEGORY_AREA = {
   // layer 5 anyway — every one of those 28 has a stored approveArea (layer 1),
   // so it only ever applies to future agents.
   'Virtual Assistant': 'Platform, DevOps & Operations',          // added 2026-09-23
-  'Compliance & Governance': 'Governance & Compliance',
-  'Project & Delivery': 'Delivery Management',
+  // ── Management (2026-10-01 order = sidebar order, grouped by kind of work) ──
   'Requirements & Product': 'Business Analysis',
+  'Project & Delivery': 'Delivery Management',
+  'Resource Planning': ['Resource Management', 'Delivery Management'], // added 2026-10-01 — two areas
+  'People Development': 'People',                             // added 2026-10-01
+  'Financial': 'Financial',                                    // added 2026-10-01
+  'Procurement': 'Procurement',                                // added 2026-10-01
+  'Compliance & Governance': 'Governance & Compliance',
+  // ── Design ──
   'UX Research': 'UX Research',
   'Design & UI': 'UI & Visual Design',
   'Writing & Content': 'Content & UX Writing',
+  // ── Engineering ──
   'Architecture': 'Architecture',                              // added 2026-08-10
   'Software Development': 'Development',                       // now unambiguous: Architecture split out
+  'Data & Analytics': 'Data & Analytics',
+  // ── Quality ──
   'SIT': 'SIT',                                                // added 2026-08-10
   'QA': 'QA',                                                  // added 2026-08-10
   'Security': 'Security',
+  // ── Operations ──
   'DevOps & Platform': 'Platform, DevOps & Operations',        // renamed from 'DevOps & Performance'
   'SRE & Reliability': 'SRE & Reliability',                    // added 2026-08-10
   'Incident Management': 'Incident & Problem Management',      // added 2026-08-10
-  'Data & Analytics': 'Data & Analytics',
   // ── Business verticals — see VERTICAL_CATEGORIES below; spread in so the
   //    two can never disagree about which categories are products ──
   ...Object.fromEntries(VERTICAL_CATEGORIES.map((c) => [c, 'Business & Product'])),
@@ -463,7 +475,8 @@ export function agentApproveAreas(agent, categoryAreaOverrides) {
   const byCategory = new Set();
   cats.forEach((c) => {
     const override = isKnownArea(overrides[c]) ? overrides[c] : null;
-    add(byCategory, override || CATEGORY_AREA[c]);
+    // A category may route to more than one area (Resource Planning).
+    [].concat(override || CATEGORY_AREA[c] || []).forEach((v) => add(byCategory, v));
   });
   // (A MERGE_ROLE_CATEGORIES workaround used to sit here: while 'Software
   // Development' and 'Testing & QA' were nulled, an agent carrying one of

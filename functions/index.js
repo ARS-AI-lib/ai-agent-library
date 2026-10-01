@@ -59,10 +59,13 @@ async function getCoreAbilityOptions() {
 // 2026-08-10 so every category maps to exactly one approver area). Only a
 // fallback for when /config/schema is unreachable — that doc is the live list.
 const FALLBACK_CATEGORY = [
-  'Virtual Assistant', 'Compliance & Governance', 'Project & Delivery', 'Requirements & Product',
-  'UX Research', 'Design & UI', 'Writing & Content', 'Architecture',
-  'Software Development', 'SIT', 'QA', 'Security', 'DevOps & Platform',
-  'SRE & Reliability', 'Incident Management', 'Data & Analytics',
+  'Virtual Assistant',
+  'Requirements & Product', 'Project & Delivery', 'Resource Planning', 'People Development',
+  'Financial', 'Procurement', 'Compliance & Governance',
+  'UX Research', 'Design & UI', 'Writing & Content',
+  'Architecture', 'Software Development', 'Data & Analytics',
+  'SIT', 'QA', 'Security',
+  'DevOps & Platform', 'SRE & Reliability', 'Incident Management',
   'Investment', 'Lending & Credit', 'NEXT', 'เป๋าตัง, เป๋าตุง, ถุงเงิน', 'CLICX', 'Core bank',
 ];
 // Which of the above are PRODUCTS rather than disciplines. Mirrors
@@ -97,14 +100,14 @@ async function getCategoryOptions() {
   return categoryCache;
 }
 
-// The approver areas (2026-08-10; 17 since the 2026-10-01 governance split). Mirrors AREA_ORDER in
+// The approver areas (2026-08-10; 20 since 2026-10-01: governance split + People / Resource Management / Financial). Mirrors AREA_ORDER in
 // src/lib/approveAreas.js — Cloud Functions cannot import the client ESM
 // module, so this is the one unavoidable copy. It is only ever a FALLBACK:
 // /config/schema.approveArea is the live list and is seeded from AREA_ORDER
 // by functions/seed-approve-area-schema.cjs, so the two can only diverge if
 // the config doc is missing entirely.
 const FALLBACK_APPROVE_AREA = [
-  'Business & Product', 'Governance & Compliance', 'Procurement', 'Delivery Management',
+  'Business & Product', 'Governance & Compliance', 'Procurement', 'People', 'Resource Management', 'Financial', 'Delivery Management',
   'Business Analysis', 'UX Research', 'UI & Visual Design', 'Content & UX Writing',
   'Architecture', 'Development', 'SIT', 'QA', 'Security',
   'Platform, DevOps & Operations', 'SRE & Reliability',

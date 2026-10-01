@@ -1360,3 +1360,35 @@ banking chatbot ติด AI Engineer → Software Engineer)
   - New trigger `auditUserRole` writes every role/approveAreas change to `/userRoleAudit`. `source` is admin-ui / provision / delete / other. UserManagementModal stamps `updatedBy`.
   - No alert and no PITR (user decision).
 - Test: `node functions/verify-user-provision.cjs` (9 cases).
+
+---
+
+## Approve Area / Category update (2026-10-01)
+
+- **Approve Area is now 20:**
+  - "Governance, Risk & Procurement" was split into **Governance & Compliance** + **Procurement**. Process 1.3 → Procurement; 1.4/1.6, the category Compliance & Governance, and the roles Compliance Officer/CIO → Governance & Compliance. The 10 people who held the old area got both new ones.
+  - Added **People**, **Resource Management** and **Financial**. Nobody holds them yet; the user will assign them.
+- **New categories:**
+
+  | Category | Area |
+  |---|---|
+  | People Development | People |
+  | Resource Planning | Resource Management + Delivery Management |
+  | Financial | Financial |
+  | Procurement | Procurement |
+
+  - Resource Planning is the first category that maps to **2 areas**. A `CATEGORY_AREA` value may now be an array, and layer 5 plus `seed-approve-area-schema.cjs` support it.
+- **Sidebar order** = the key order of `CATEGORY_AREA`, grouped Management / Design / Engineering / Quality / Operations / Products. Virtual Assistant stays first.
+- **Retagged (append):**
+  - Resource Planning: Skill Matching and Resource Allocation, tshirt-sizing, demand-request-generator, Timeline Estimation
+  - People Development: Security People Intelligence Agent, fast-onboard
+  - Financial: AI Governance, AI Governance Cost Estimation, AI Governance Proposal Deck Builder
+  - Procurement: nothing yet
+- **Rename:** "AI Governance Cost Planner" → **AI Governance** (`previousName` kept). Similarity Check moved from Copilot to AI Governance.
+- **Recheck results:**
+  - The resolver has 0 orphans; every item resolves to an area.
+  - Live AI check: 4 test drafts each got the matching new category/area, and a draft with no fitting category got `proposed_new_category`.
+- ⚠️ **Known gaps (not fixed):**
+  - The AI picks only 1 area for Resource Planning work and that value is stored (layer 1 wins), so Delivery Management is not added automatically.
+  - The old category proposal "Orchestration & Automation" (approved 2026-08-07) is no longer in the schema and no item uses it.
+  - `verify-notify.cjs` (11 cases for 13 events) and `verify-agent-ready.cjs` (hard-coded 26 Platform agents, real count is 40) were already failing before this change.

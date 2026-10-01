@@ -48,7 +48,7 @@ if (!Array.isArray(AREA_ORDER) || AREA_ORDER.length < 1 || !CATEGORIES.length) {
   console.error('✗ could not read AREA_ORDER / CATEGORY_AREA from src/lib/approveAreas.js');
   process.exit(1);
 }
-const unmapped = CATEGORIES.filter((c) => !AREA_ORDER.includes(CATEGORY_AREA[c]));
+const unmapped = CATEGORIES.filter((c) => ![].concat(CATEGORY_AREA[c]).every((a) => AREA_ORDER.includes(a)));
 if (unmapped.length) {
   console.error('✗ these categories map to an area that is not in AREA_ORDER — aborting:');
   unmapped.forEach((c) => console.error(`  "${c}" -> ${CATEGORY_AREA[c]}`));
