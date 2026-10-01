@@ -154,7 +154,7 @@ function check(label, got, want) {
 
   console.log('\n6) REGRESSION GUARD — the history audience must not leak upload rights');
   // If someone "simplifies" by adding committee to checkAgentActor, this fails.
-  // Measured blast radius: a committee member holds all 16 areas.
+  // Measured blast radius: a committee member holds all 17 areas (16 before the 2026-10-01 governance split).
   // Isolate the ROLE: no email/uid, so the creator branch cannot fire. That is
   // the same shape verify-endpoint-files.cjs uses, and it is the thing that
   // would break if committee were folded into checkAgentActor/AREA_ROLES.
@@ -165,8 +165,8 @@ function check(label, got, want) {
     committee.every((u) => agents.filter((a) => checkUploadPermission({
       agent: a, role: u.role, userApproveAreas: u.approveAreas,
     }) === null).length === 0), true);
-  check('...even though a committee member holds all 16 areas',
-    Math.max(...committee.map((u) => (u.approveAreas || []).length)), 16);
+  check('...even though a committee member holds all 17 areas',
+    Math.max(...committee.map((u) => (u.approveAreas || []).length)), 17);
 
   console.log(`\n${fail === 0 ? '✓ ALL PASS' : '✗ FAILURES'} — ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
