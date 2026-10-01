@@ -15,3 +15,9 @@ dist
 
 # logs
 *.log
+
+# local emulator flag (dev only)
+.env.development.local
+
+# emulator seed copy of production data (local only, never commit)
+.emulator-seed/

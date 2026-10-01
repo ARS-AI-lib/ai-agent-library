@@ -1,5 +1,8 @@
 import { useEffect } from 'react';
-import { ALLOWED_DOMAINS_LABEL } from '../lib/firebase';
+import { ALLOWED_DOMAINS_LABEL, USING_EMULATOR } from '../lib/firebase';
+
+// Local emulator only — never rendered in a real build.
+const EMU_ACCOUNTS = ['tinnapat.p@arise.tech', 'emu.approver@arise.tech', 'emu.user@arise.tech'];
 
 function GoogleGlyph() {
   return (
@@ -40,10 +43,16 @@ export default function LoginScreen({ onSignIn, error }) {
         </div>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>AI Agent Library</h1>
         {error && <div className="msg error" style={{ maxWidth: 380 }}><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
-        <button className="signin-google-btn" onClick={onSignIn}>
+        <button className="signin-google-btn" onClick={() => onSignIn()}>
           <GoogleGlyph />
           Sign in with Google
         </button>
+        {USING_EMULATOR && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, border: '1px dashed #e0a100', borderRadius: 8 }}>
+            <small>Local emulator test sign-in</small>
+            {EMU_ACCOUNTS.map((em) => <button key={em} className="btn-sm" onClick={() => onSignIn(em)}>{em}</button>)}
+          </div>
+        )}
         <p className="signin-domain-hint">เข้าสู่ระบบด้วยบัญชี {ALLOWED_DOMAINS_LABEL}</p>
       </div>
       <div className="signin-footer">

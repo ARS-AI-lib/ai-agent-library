@@ -3,7 +3,11 @@
     {
       "target": "main",
       "public": "dist",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
       "rewrites": [
         {
           "source": "**",
@@ -14,7 +18,11 @@
     {
       "target": "pretty",
       "public": "dist",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
       "rewrites": [
         {
           "source": "**",
@@ -28,7 +36,27 @@
       "source": "functions",
       "codebase": "default",
       "runtime": "nodejs22",
-      "ignore": ["node_modules", ".git", "*.log"]
+      "ignore": [
+        "node_modules",
+        ".git",
+        "*.log"
+      ]
     }
-  ]
+  ],
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "functions": {
+      "port": 5001
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
+    "singleProjectMode": true
+  }
 }

@@ -354,10 +354,10 @@ export default function App() {
     setSearch('');
   }
 
-  async function handleSignIn() {
+  async function handleSignIn(testEmail) {
     setSignInError('');
     try {
-      await signIn();
+      await signIn(typeof testEmail === 'string' ? testEmail : undefined);
     } catch (e) {
       setSignInError(e.message);
     }

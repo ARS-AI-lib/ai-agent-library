@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth, GoogleAuthProvider, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 // ── Firebase config ──────────────────────────────────────────────
 // ค่าจริงดึงจาก Firebase Console > Project Settings > Your apps > Web app
@@ -28,6 +29,18 @@ export const googleProvider = new GoogleAuthProvider();
 // (ตามที่บันทึกไว้: getFirestore(app) เปล่าๆ จะไปชี้ default DB ผิดตัว)
 export const FIRESTORE_DB_ID = 'ai-agent-lib';
 export const db = getFirestore(app, FIRESTORE_DB_ID);
+
+// ── Local emulators (dev only) ───────────────────────────────────
+// VITE_USE_EMULATOR=1 lives only in .env.development.local (gitignored), so a
+// production build never contains this branch's effect. getFunctions() caches
+// one instance per region, so wiring the asia-southeast1 instance here covers
+// every httpsCallable(getFunctions(undefined, 'asia-southeast1'), …) call site.
+export const USING_EMULATOR = import.meta.env.DEV && import.meta.env.VITE_USE_EMULATOR === '1';
+if (USING_EMULATOR) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  connectFunctionsEmulator(getFunctions(app, 'asia-southeast1'), '127.0.0.1', 5001);
+}
 
 // ── Allowed auth domains (ต้องตรงกับ Firestore Security Rules ฝั่ง server) ──
 export const ALLOWED_EMAIL_DOMAINS = ['arise.tech', 'infinitaskt.com'];

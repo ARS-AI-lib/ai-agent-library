@@ -1029,6 +1029,11 @@ async function pruneEndpointVersions(agentId, currentVersion, currentPath) {
 exports.attachEndpointFile = onCall(
   { cors: true, timeoutSeconds: 60, memory: '512MiB' },
   async (request) => {
+    // Storage is not emulated locally: in the Functions emulator this would
+    // write to the real bucket, so refuse there (production is unaffected).
+    if (process.env.FUNCTIONS_EMULATOR === 'true') {
+      throw new HttpsError('failed-precondition', 'File upload is disabled in the local emulator.');
+    }
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
     assertOrgEmail(request);
     const uid = request.auth.uid;

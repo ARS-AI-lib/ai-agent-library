@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut as fbSignOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut as fbSignOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { auth, googleProvider, db, isAllowedEmail, ALLOWED_DOMAINS_LABEL } from '../lib/firebase';
+import { auth, googleProvider, db, isAllowedEmail, ALLOWED_DOMAINS_LABEL, USING_EMULATOR } from '../lib/firebase';
 import { setDirectoryToken, warmDirectory } from '../lib/directory';
 
 /**
@@ -140,8 +140,15 @@ export function useAuth() {
     };
   }, [user, domainError]);
 
-  async function signIn() {
-    const result = await signInWithPopup(auth, googleProvider);
+  // testEmail is honoured ONLY against the local Auth emulator, which accepts
+  // unsigned fake Google tokens. In any real build USING_EMULATOR is false and
+  // this falls through to the normal popup.
+  async function signIn(testEmail) {
+    const result = USING_EMULATOR && testEmail
+      ? await signInWithCredential(auth, GoogleAuthProvider.credential(JSON.stringify({
+          sub: `emu-${testEmail}`, email: testEmail, email_verified: true, name: testEmail.split('@')[0],
+        })))
+      : await signInWithPopup(auth, googleProvider);
     if (!isAllowedEmail(result.user.email)) {
       await fbSignOut(auth);
       setDomainError(true);
