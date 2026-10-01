@@ -5,7 +5,7 @@ import { isInternalOrExternal, isSkill, getType } from '../lib/tier';
 import { splitRoles, uniq, pairedSubSkills, childSkillIdList, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditOwner, canEditReadyToUseFields, agentUseCaseNames } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
-import { AREA_ORDER, agentApproveAreas } from '../lib/approveAreas';
+import { AREA_ORDER, agentApproveAreas, categoryAreas } from '../lib/approveAreas';
 import MultiSelect from './MultiSelect';
 import TagMultiSelect from './TagMultiSelect';
 import AgentMultiSelect from './AgentMultiSelect';
@@ -249,6 +249,19 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
 
   function setField(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  // 2026-10-01: picking a new Category pre-adds the area(s) it routes to, so
+  // the approver follows the category. Shown before Save and removable — only
+  // ADDED categories contribute; removing a category never strips an area.
+  function handleCategoryChange(next) {
+    setForm((f) => {
+      const added = [...next].filter((c) => !f.category.has(c));
+      if (!canSeeApproveArea || !added.length) return { ...f, category: next };
+      const areas = new Set(f.approveArea);
+      added.forEach((c) => categoryAreas(c, schema.categoryAreaMap).forEach((a) => areas.add(a)));
+      return { ...f, category: next, approveArea: areas };
+    });
   }
 
   async function handleSave() {
@@ -758,7 +771,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         {canSeeCategory && (
           <div className="fg">
             <label>Category</label>
-            <MultiSelect label="เลือก Category…" options={categoryOptions} selected={form.category} onChange={(s) => setField('category', s)} />
+            <MultiSelect label="เลือก Category…" options={categoryOptions} selected={form.category} onChange={handleCategoryChange} />
           </div>
         )}
 

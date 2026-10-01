@@ -3,7 +3,7 @@ import { collection, doc, onSnapshot, query, where, updateDoc, arrayUnion, array
 import { db } from '../lib/firebase';
 import useEscapeKey from '../hooks/useEscapeKey';
 import Dropdown from './Dropdown';
-import { AREA_ORDER } from '../lib/approveAreas';
+import { AREA_ORDER, categoryAreas } from '../lib/approveAreas';
 
 const AREA_OPTIONS = [['', 'เลือก Approve Area…'], ...AREA_ORDER.map((a) => [a, a])];
 
@@ -26,9 +26,16 @@ const AREA_OPTIONS = [['', 'เลือก Approve Area…'], ...AREA_ORDER.map
 // this whole approver-area rework existed to fix, so it must not be possible
 // to reopen it one category at a time. Existing pre-2026-08-10 categories are
 // unaffected — they're already covered by the code-level CATEGORY_AREA table.
-export default function CategoryApprovalPanel({ onClose, user }) {
+// 2026-10-01: both decisions now also fix the proposing agent itself.
+// Approve adds the chosen area to its approveArea (a stored area always wins
+// in the resolver, so the category map alone never re-routed it). Reject
+// makes the admin confirm a real category instead of leaving the AI's
+// fallback guess in place, and adds that category's area(s).
+export default function CategoryApprovalPanel({ onClose, user, schema = {} }) {
   const [proposals, setProposals] = useState([]);
   const [areaPick, setAreaPick] = useState({}); // { proposalId: areaName }
+  const [catPick, setCatPick] = useState({});   // { proposalId: category used on reject }
+  const categoryOptions = (schema.category || []).map((c) => [c, c]);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
   useEscapeKey(onClose);
@@ -65,7 +72,7 @@ export default function CategoryApprovalPanel({ onClose, user }) {
         if (p.fallbackCategory) {
           await updateDoc(agentRef, { category: arrayRemove(p.fallbackCategory), updatedAt: serverTimestamp() });
         }
-        await updateDoc(agentRef, { category: arrayUnion(p.name), updatedAt: serverTimestamp() });
+        await updateDoc(agentRef, { category: arrayUnion(p.name), approveArea: arrayUnion(area), updatedAt: serverTimestamp() });
       }
       await updateDoc(doc(db, 'categoryProposals', p.id), {
         status: 'approved', decidedBy: user?.uid || '', decidedAt: serverTimestamp(),
@@ -80,10 +87,25 @@ export default function CategoryApprovalPanel({ onClose, user }) {
   async function reject(p) {
     setBusyId(p.id);
     setError('');
+    const pick = catPick[p.id] || p.fallbackCategory || '';
+    if (!pick) { setError(`Choose a category for "${p.agentName}" before rejecting`); setBusyId(null); return; }
     try {
-      // Agent stays on its fallback category — nothing to undo there.
+      // The agent keeps a real category: the admin's pick (default = the AI's
+      // fallback guess), plus the area(s) that category routes to.
+      if (p.agentId) {
+        const agentRef = doc(db, 'agents', p.agentId);
+        if (p.fallbackCategory && pick !== p.fallbackCategory) {
+          await updateDoc(agentRef, { category: arrayRemove(p.fallbackCategory), updatedAt: serverTimestamp() });
+        }
+        const areas = categoryAreas(pick, schema.categoryAreaMap);
+        await updateDoc(agentRef, {
+          category: arrayUnion(pick),
+          ...(areas.length ? { approveArea: arrayUnion(...areas) } : {}),
+          updatedAt: serverTimestamp(),
+        });
+      }
       await updateDoc(doc(db, 'categoryProposals', p.id), {
-        status: 'rejected', decidedBy: user?.uid || '', decidedAt: serverTimestamp(),
+        status: 'rejected', resolvedCategory: pick, decidedBy: user?.uid || '', decidedAt: serverTimestamp(),
       });
     } catch (e) {
       setError(e.message || 'ปฏิเสธไม่สำเร็จ');
@@ -134,6 +156,15 @@ export default function CategoryApprovalPanel({ onClose, user }) {
                 {!areaPick[p.id] && (
                   <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 4 }}>เลือก Approve Area ก่อนอนุมัติ</div>
                 )}
+              </div>
+              <div style={{ marginTop: 8, maxWidth: 260 }}>
+                <div style={{ fontSize: 10.5, color: 'var(--mu)', marginBottom: 4 }}>Assign Category (used if rejected)</div>
+                <Dropdown
+                  options={categoryOptions}
+                  value={catPick[p.id] || p.fallbackCategory || ''}
+                  onChange={(v) => setCatPick((prev) => ({ ...prev, [p.id]: v }))}
+                  ariaLabel={`Category for ${p.agentName} if the proposal is rejected`}
+                />
               </div>
               <div className="btn-group" style={{ marginTop: 8 }}>
                 <button

@@ -560,7 +560,7 @@ export default function App() {
       )}
 
       {showCategoryProposals && isAdmin && (
-        <CategoryApprovalPanel onClose={() => setShowCategoryProposals(false)} user={user} />
+        <CategoryApprovalPanel onClose={() => setShowCategoryProposals(false)} user={user} schema={schema} />
       )}
 
       {showRoleGroups && (isAdmin || isCommittee) && (

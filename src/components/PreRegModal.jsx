@@ -10,6 +10,7 @@ import { reindexAgent } from '../lib/reindex';
 import { uniq, splitRoles, extractProcessId, processLabel, agentUseCaseNames } from '../lib/agentUtils';
 import { notifyEvent } from '../lib/notify';
 import { isInternalToolName } from '../lib/internalTool';
+import { categoryAreas, isMultiAreaCategory } from '../lib/approveAreas';
 import useCloseGuard from '../hooks/useCloseGuard';
 import ComboInput from './ComboInput';
 import MultiSelect from './MultiSelect';
@@ -473,7 +474,15 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         // safe to store directly. Empty is fine — agentApproveAreas() then
         // falls back to process/category/role rather than leaving the entry
         // unroutable, which is the failure mode this field exists to prevent.
-        approveArea: Array.isArray(aiResult?.suggested_approve_area) ? aiResult.suggested_approve_area : [],
+        // 2026-10-01: a category that routes to several areas (Resource
+        // Planning → Resource Management + Delivery Management) gets all of
+        // them — the AI picks one, and the stored value is final (layer 1).
+        approveArea: [...new Set([
+          ...(Array.isArray(aiResult?.suggested_approve_area) ? aiResult.suggested_approve_area : []),
+          ...[].concat(aiResult?.suggested_category || [])
+            .filter(isMultiAreaCategory)
+            .flatMap((c) => categoryAreas(c, schema?.categoryAreaMap)),
+        ])],
       };
 
       // Resolve the AI suggestion to a real approved Agent (by exact name)

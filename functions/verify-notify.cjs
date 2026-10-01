@@ -99,7 +99,7 @@ function check(label, got, want) {
   check(`removing one recipient (as emailOptOut does) drops the count ${before} -> ${after}`, after, before - 1);
 
   // ── 5. every event type renders ─────────────────────────────────────
-  console.log('\n5) all 11 event types render a subject and a body');
+  console.log(`\n5) all ${EVENT_TYPES.length} event types render a subject and a body`);
   const rr = { id: 'r1', agentId: parent?.id, currentName: parent?.agentName, requestedName: `${parent?.agentName} v2`, status: 'pending', createdByEmail: 'someone@arise.tech' };
   const cases = {
     'agent.pending': [{ ...approved, approvalStatus: 'pending' }, {}],
@@ -113,6 +113,9 @@ function check(label, got, want) {
     'rename.requested': [rr, { agent: parent }],
     'rename.decided': [{ ...rr, status: 'approved', appliedName: rr.requestedName, childrenUpdated: children.length }, { agent: parent }],
     'user.roleChanged': [{ ...users.find((u) => u.role === 'approver') }, {}],
+    // 2026-09-30 link requests: doc = the skill, ctx.agent = the target agent.
+    'link.requested': [{ ...approved, linkSuggestion: { agentId: parent?.id, agentName: parent?.agentName, status: 'pending' } }, { agent: parent }],
+    'link.decided': [{ ...approved, linkSuggestion: { agentId: parent?.id, agentName: parent?.agentName, status: 'accepted' } }, { agent: parent }],
   };
   check('every declared event type has a test case', Object.keys(cases).length, EVENT_TYPES.length);
   let rendered = 0;

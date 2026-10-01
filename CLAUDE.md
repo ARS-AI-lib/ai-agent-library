@@ -1388,7 +1388,13 @@ banking chatbot ติด AI Engineer → Software Engineer)
 - **Recheck results:**
   - The resolver has 0 orphans; every item resolves to an area.
   - Live AI check: 4 test drafts each got the matching new category/area, and a draft with no fitting category got `proposed_new_category`.
-- ⚠️ **Known gaps (not fixed):**
-  - The AI picks only 1 area for Resource Planning work and that value is stored (layer 1 wins), so Delivery Management is not added automatically.
-  - The old category proposal "Orchestration & Automation" (approved 2026-08-07) is no longer in the schema and no item uses it.
-  - `verify-notify.cjs` (11 cases for 13 events) and `verify-agent-ready.cjs` (hard-coded 26 Platform agents, real count is 40) were already failing before this change.
+- **Consistency fixes (same day, after the recheck):**
+  - `categoryAreas()` / `isMultiAreaCategory()` in `approveAreas.js` are the only places to read a category's area(s).
+  - Submit (PreRegModal) adds every area of a multi-area category to the AI's area.
+  - Edit form: an admin adding a category pre-adds its area(s), which they can remove. Removing a category never strips an area.
+  - Category Proposals panel:
+    - Approve now also adds the chosen area to the agent.
+    - Reject requires an "Assign Category" (default = fallback), which replaces the fallback and adds its area(s). It is stored as `resolvedCategory`.
+  - 🔴 **The seed script was overwriting categories approved through the UI**. This is why "Orchestration & Automation" disappeared. Now `mergeCategories()` keeps any category still in the schema that has a `categoryAreaMap` entry, placed after the code order (`--self-test`). To retire one, delete its `categoryAreaMap` entry first.
+  - The "Orchestration & Automation" proposal now has `status:'retired'` and was not restored.
+  - `verify-notify.cjs` covers all 13 events; `verify-agent-ready.cjs` computes from live data. Every suite passes.

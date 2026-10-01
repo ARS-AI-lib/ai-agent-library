@@ -63,9 +63,13 @@ function check(label, got, want) {
 
   const platform = approvers.find((u) => (u.approveAreas || []).includes('Platform, DevOps & Operations'));
   if (platform) {
-    const want = deployApproved.filter((a) => (a.approveArea || []).includes('Platform, DevOps & Operations')).length;
+    // Expected = agents in ANY of this approver's areas, plus their own (as
+    // creator). Was hard-coded to the Platform area alone, so it drifted the
+    // moment the approver held a second area or authored an agent.
+    const mine = new Set(platform.approveAreas || []);
+    const want = deployApproved.filter((a) => (a.approveArea || []).some((x) => mine.has(x)) || isAgentCreator(a, ctx(platform))).length;
     const got = deployApproved.filter((a) => allowed(a, platform)).length;
-    check(`${platform.email} reaches its ${want} Platform/DevOps agents`, got, want);
+    check(`${platform.email} reaches exactly its ${want} agents (its ${mine.size} area(s) + own)`, got, want);
     const security = deployApproved.find((a) => (a.approveArea || []).includes('Security'));
     if (security) check(`   ...and is blocked on "${security.agentName}" (Security area)`, allowed(security, platform), false);
   }

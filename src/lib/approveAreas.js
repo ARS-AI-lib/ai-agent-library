@@ -307,6 +307,23 @@ export const CATEGORY_AREA = {
   ...Object.fromEntries(VERTICAL_CATEGORIES.map((c) => [c, 'Business & Product'])),
 };
 
+/**
+ * Areas a single category routes to, always as an array. A live admin
+ * override (/config/schema.categoryAreaMap, written when a proposed category
+ * is approved) wins over the baked-in table. Most categories map to one area;
+ * Resource Planning maps to two (2026-10-01).
+ */
+export function categoryAreas(category, categoryAreaOverrides) {
+  const override = (categoryAreaOverrides || {})[category];
+  const raw = isKnownArea(override) ? override : CATEGORY_AREA[category];
+  return [].concat(raw || []).filter(isKnownArea);
+}
+
+/** True when a category routes to more than one area (submit adds them all). */
+export function isMultiAreaCategory(category) {
+  return Array.isArray(CATEGORY_AREA[category]) && CATEGORY_AREA[category].length > 1;
+}
+
 // ── Layer 4: role → area (tiebreak + last resort) ────────────────────
 // Keys are the raw values seen in /config/schema.relatedRole and on agent
 // docs. Some real entries carry zero-width characters ("Dev Lead​"), so
@@ -442,6 +459,7 @@ export function isKnownArea(a) {
 // engineering work); the caller-side check is an INTERSECTION, so two areas
 // means "either area's approver may sign off", which is the existing
 // semantic, not a new one.
+
 export function agentApproveAreas(agent, categoryAreaOverrides) {
   if (!agent) return [];
 
@@ -473,11 +491,7 @@ export function agentApproveAreas(agent, categoryAreaOverrides) {
   const overrides = categoryAreaOverrides || {};
   const cats = agentCategories(agent);
   const byCategory = new Set();
-  cats.forEach((c) => {
-    const override = isKnownArea(overrides[c]) ? overrides[c] : null;
-    // A category may route to more than one area (Resource Planning).
-    [].concat(override || CATEGORY_AREA[c] || []).forEach((v) => add(byCategory, v));
-  });
+  cats.forEach((c) => categoryAreas(c, overrides).forEach((v) => add(byCategory, v)));
   // (A MERGE_ROLE_CATEGORIES workaround used to sit here: while 'Software
   // Development' and 'Testing & QA' were nulled, an agent carrying one of
   // them alongside a real category short-circuited before the role layer and
