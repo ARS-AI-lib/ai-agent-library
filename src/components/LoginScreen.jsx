@@ -40,7 +40,7 @@ export default function LoginScreen({ onSignIn, error }) {
     <div className="v7-signin">
       <section className="v7-signin-hero">
         <div className="v7-signin-brand">
-          <span className="v7-brand-mark"><img src="/wolfy-logo.png" alt="" /></span>
+          <span className="v7-brand-mark"><img src="/alpha-logo-white.png" alt="" /></span>
           <div><strong>AI Agent Library</strong><span>Powered by Wolfy</span></div>
         </div>
         <div className="v7-signin-copy">

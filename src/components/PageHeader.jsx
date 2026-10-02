@@ -6,7 +6,7 @@ import ThemeToggle from './ThemeToggle';
 export function BrandMark() {
   return (
     <span className="v7-brand-mark" aria-hidden="true">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9l3-5 3 4h4l3-4 3 5-2 8-6 3-6-3z" /><path d="M9.5 12.5h.01M14.5 12.5h.01" /></svg>
+      <img src="/alpha-logo-white.png" alt="" />
     </span>
   );
 }
