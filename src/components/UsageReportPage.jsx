@@ -7,6 +7,7 @@ import { downloadCsv } from '../lib/csv';
 import { fmtDate } from '../lib/agentUtils';
 import '../styles/UsageReport.css';
 import { failMsg } from '../lib/copy';
+import Hint from './Hint';
 
 /**
  * Agent/Skill Usage — the adoption report (2026-08-26).
@@ -100,7 +101,7 @@ export default function UsageReportPage() {
     return (
       <div className="tl-center">
         <h2>Sign in to continue</h2>
-        <p style={{ color: 'var(--mu)' }}>sign in ที่หน้า Library ก่อน แล้วค่อยเปิดหน้านี้</p>
+        <p style={{ color: 'var(--mu)' }}>โปรด sign in ที่หน้า Library ก่อนเปิดหน้านี้</p>
       </div>
     );
   }
@@ -108,7 +109,7 @@ export default function UsageReportPage() {
   if (!canView) {
     return (
       <div className="tl-center">
-        <h2>No access</h2>
+        <h2>Access restricted</h2>
         <p style={{ color: 'var(--mu)', fontSize: 13 }}>
           รายงานนี้เปิดได้เฉพาะ Admin, Committee, Staff และ Approver
         </p>
@@ -146,7 +147,7 @@ export default function UsageReportPage() {
                 column headers already say what each field is. `scoped` is
                 still tracked in state in case a scoping note is wanted again
                 later, it just isn't rendered here now. */}
-            {scoped && <p>แสดงเฉพาะ Agent/Skill ที่อยู่ใน Approve Area ของคุณ</p>}
+            {scoped && <p>Your approve areas only <Hint text="แสดงเฉพาะ Agent/Skill ที่อยู่ใน Approve area ของคุณ" /></p>}
           </div>
           <button className="btn btn-secondary" onClick={exportCsv} disabled={!filtered.length}>
             ↓ Download CSV

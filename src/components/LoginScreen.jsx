@@ -45,7 +45,7 @@ export default function LoginScreen({ onSignIn, error }) {
         </div>
         <div className="v7-signin-copy">
           <h1>Find the AI tool your team already built.</h1>
-          <p>รวม Agent และ Skill ที่ทีมในองค์กรสร้างไว้ในที่เดียว ค้นด้วยงานที่อยากทำ เปิดใช้ได้ทันที หรือลงทะเบียนของใหม่ให้ทีมอื่นใช้ต่อ</p>
+          <p>รวม Agent และ Skill ที่ทีมในองค์กรพัฒนาไว้ในที่เดียว ค้นหาตามงานที่ต้องการ เปิดใช้งานได้ทันที หรือลงทะเบียนรายการใหม่ให้ทีมอื่นนำไปใช้ต่อ</p>
         </div>
         <p className="v7-signin-copy-foot">Copyright © 2026 Arise by Infinitas Co., Ltd. All rights reserved.</p>
       </section>

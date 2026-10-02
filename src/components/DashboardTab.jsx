@@ -12,6 +12,7 @@ import DashboardRoleView from './DashboardRoleView';
 import DashboardTeamProgress, { teamOf } from './DashboardTeamProgress';
 import '../styles/SDLCTab.css';
 import '../styles/DashboardTab.css';
+import Hint from './Hint';
 
 const DAY = 864e5;
 
@@ -264,7 +265,7 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
       {/* ── Tier + Reusable ── */}
       <section className="dash-duo">
         <div className="dash-card">
-          <div className="dash-ch"><span className="dash-card-title">Tier</span><span className="dash-card-sub">ชนิด × ขอบเขตการใช้งาน</span></div>
+          <div className="dash-ch"><span className="dash-card-title">Tier</span><Hint text="ชนิด (Agent/Skill) × ขอบเขตการใช้งาน (ภายใน/ลูกค้า)" /></div>
           <div className="dash-tm">
             <span />
             <span className="dash-ax">Skill</span>
@@ -282,7 +283,7 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
         </div>
 
         <div className="dash-card">
-          <div className="dash-ch"><span className="dash-card-title">Reusable</span><span className="dash-card-sub">ทีมอื่นนำไปใช้ต่อได้แค่ไหน</span></div>
+          <div className="dash-ch"><span className="dash-card-title">Reusable</span><Hint text="สัดส่วนรายการที่ทีมอื่นนำไปใช้ต่อได้" /></div>
           <div className="dash-donut-w">
             <div className="dash-donut-box">
               <Donut parts={reuse} total={total} />
@@ -307,11 +308,11 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
 
       {/* ── Adoption ── */}
       <section className="dash-sec">
-        <div className="dash-sec-h"><h2>Adoption</h2><span>มีคนเปิดดู / กดไปใช้จริงไหม</span></div>
+        <div className="dash-sec-h"><h2>Adoption</h2><Hint text="จำนวนการเปิดดูและการใช้งานจริงของแต่ละรายการ" /></div>
         <div className="dash-g21 dash-stretch">
           <div className="dash-card">
             <div className="dash-card-title">Most Used</div>
-            <div className="dash-card-sub dash-mb">เรียงตาม demand score (clicks×3 + opens×2 + search)</div>
+            <div className="dash-card-sub dash-mb">Ranked by demand score <Hint text="demand score = คลิกใช้งาน×3 + เปิดดู×2 + พบจากการค้นหา" /></div>
             {usage.top.length === 0 ? (
               <div className="dash-empty">No usage data yet</div>
             ) : (
@@ -340,7 +341,7 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
               totals are event counts; kept visibly separate inside the card. */}
           <div className="dash-card dash-eng">
             <div className="dash-card-title">Engagement</div>
-            <div className="dash-card-sub dash-mb">สะสมทั้งไลบรารี · คลิกเพื่อดูรายการ</div>
+            <div className="dash-card-sub dash-mb">All-time totals <Hint text="ยอดสะสมทั้งไลบรารี — คลิกเพื่อดูรายการ" /></div>
             <div className="dash-eng-stats">
               <div><b>{usage.totals.o.toLocaleString()}</b><span>Detail opens</span></div>
               <div><b>{usage.totals.h.toLocaleString()}</b><span>Search hits</span></div>
@@ -396,7 +397,7 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
 
       {/* ── Category ── */}
       <section className="dash-sec">
-        <div className="dash-sec-h"><h2>Category</h2><span>นับซ้ำได้ — 1 รายการมีได้ทั้งสายงานและผลิตภัณฑ์</span></div>
+        <div className="dash-sec-h"><h2>Category</h2><Hint text="นับซ้ำได้ เนื่องจาก 1 รายการอาจอยู่ทั้งในสายงานและผลิตภัณฑ์" /></div>
         <div className="dash-card dash-catw">
           <div>
             <div className="dash-subh">Discipline</div>
@@ -409,14 +410,14 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
             <div className="dash-hb">
               {cats.prod.map(([k, n]) => <CatBar key={k} label={k} n={n} max={cats.prod[0]?.[1] || 1} />)}
             </div>
-            <p className="dash-note">{prodTagged} รายการผูกกับผลิตภัณฑ์ — ที่เหลือเป็นเครื่องมือข้ามผลิตภัณฑ์</p>
+            <p className="dash-note">{prodTagged} รายการผูกกับผลิตภัณฑ์ — รายการที่เหลือใช้ได้ข้ามผลิตภัณฑ์</p>
           </div>
         </div>
       </section>
 
       {/* ── Role Coverage — the approved view, mounted unchanged ── */}
       <section className="dash-sec">
-        <div className="dash-sec-h"><h2>Role Coverage</h2><span>AI ที่แต่ละ role มีให้ใช้</span></div>
+        <div className="dash-sec-h"><h2>Role Coverage</h2><Hint text="จำนวน AI ที่รองรับแต่ละ role" /></div>
         <DashboardRoleView
           agents={agents}
           processes={processes}
@@ -427,7 +428,7 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
 
       {/* ── Team Progress ── one row per team (owner), top 8 + View all. */}
       <section className="dash-sec">
-        <div className="dash-sec-h"><h2>Team Progress</h2><span>ความคืบหน้าของ AI แยกตามทีม</span></div>
+        <div className="dash-sec-h"><h2>Team Progress</h2><Hint text="ความคืบหน้าของ AI แยกตามทีม" /></div>
         <DashboardTeamProgress
           agents={agents}
           onOpenTeam={(team, list) => setListModal({ sub: 'Team Progress', title: team, agents: list })}
@@ -441,10 +442,10 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
           card was removed 2026-09-25: every figure in it repeated the KPI row
           or Data Quality.) */}
       <section className="dash-sec">
-        <div className="dash-sec-h"><h2>Delivery Health</h2><span>แผน launch รายเดือน เทียบกับสถานะจริง</span></div>
+        <div className="dash-sec-h"><h2>Delivery Health</h2><Hint text="แผน launch รายเดือนเทียบกับสถานะจริง" /></div>
         <div className="dash-card">
           <div className="dash-card-title">Launch Plan by Month</div>
-          <div className="dash-card-sub dash-mb">สถานะเดียวกับหน้า Timeline — ตัวเลขตรงกันทุกเดือน</div>
+          <div className="dash-card-sub dash-mb">Same status as Timeline <Hint text="ใช้เกณฑ์เดียวกับหน้า Timeline ตัวเลขจึงตรงกันทุกเดือน" /></div>
           <div className="dash-mc-w"><MonthChart months={months} /></div>
           <div className="dash-lg">
             {TL_KEYS.map((k) => <span key={k}><b style={{ background: TL_COLOR[k] }} />{TL_ST[k].lb} <em>{tlCounts[k]}</em></span>)}
@@ -456,7 +457,7 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
       {/* ── Needs Attention ── every row opens its list; anything at 0 is not shown. */}
       {(delayed.length > 0 || dqRows.length > 0) && (
       <section className="dash-sec">
-        <div className="dash-sec-h"><h2>Needs Attention</h2><span>สิ่งที่ต้องมีคนตามต่อ</span></div>
+        <div className="dash-sec-h"><h2>Needs Attention</h2><Hint text="รายการที่ควรติดตามต่อ" /></div>
         <div className="dash-g2">
           {delayed.length > 0 && (
             <div className="dash-card">
@@ -483,7 +484,7 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
             {delayByTeam.length > 0 && (
               <div className="dash-card">
                 <div className="dash-card-title">Delayed by Owner Team</div>
-                <div className="dash-card-sub dash-mb">ใครต้องตามก่อน · คลิกเพื่อดูรายการ</div>
+                <div className="dash-card-sub dash-mb">Follow up first <Hint text="รายการที่ควรติดตามก่อน — คลิกเพื่อดูรายการ" /></div>
                 <div className="dash-bars">
                   {delayByTeam.map(([t, n, list]) => (
                     <button type="button" key={t} className="dash-rowbtn" onClick={() => setListModal({ sub: 'Delayed by Owner Team', title: t, agents: list })}>
@@ -498,7 +499,7 @@ export default function DashboardTab({ agents: allAgents = [], onAgentClick }) {
             {dqRows.length > 0 && (
               <div className="dash-card">
                 <div className="dash-card-title">Data Quality</div>
-                <div className="dash-card-sub dash-mb">ข้อมูลที่ยังไม่ครบ · คลิกเพื่อดูรายการ</div>
+                <div className="dash-card-sub dash-mb">Incomplete data <Hint text="รายการที่ข้อมูลยังไม่ครบ — คลิกเพื่อดูรายการ" /></div>
                 <div className="dash-dq">
                   {dqRows.map((r) => (
                     <button type="button" key={r.label} className="dash-rowbtn" onClick={() => setListModal({ sub: 'Data Quality', title: r.label, agents: r.list })}>

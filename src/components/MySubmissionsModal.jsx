@@ -85,7 +85,7 @@ export default function MySubmissionsModal({ user, allAgents = [], pending = [],
         <button className="mclose" onClick={onClose} aria-label="Close">✕</button>
         <h2 className="mtitle">My submissions</h2>
         <div className="msub">
-          {needs > 0 ? <><strong style={{ color: 'var(--tx)' }}>{needs} {needs === 1 ? 'item needs' : 'items need'} you</strong> · อื่นๆ ไม่ต้องทำอะไรตอนนี้</> : 'ไม่มีอะไรรอคุณตอนนี้'}
+          {needs > 0 ? <><strong style={{ color: 'var(--tx)' }}>{needs} {needs === 1 ? 'item needs' : 'items need'} you</strong> · รายการอื่นยังไม่ต้องดำเนินการ</> : 'ไม่มีรายการที่ต้องดำเนินการ'}
         </div>
 
         <div className="v7-subs-bar">

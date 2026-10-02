@@ -12,6 +12,7 @@ import { handleEndpointClick, isLibraryFileUrl, markAgentReady, attachEndpointFi
 import { notifyEvent } from '../lib/notify';
 import { readStats, ratingDisplay, canRateAgent, STAR_LEVELS } from '../lib/agentStats';
 import { failMsg } from '../lib/copy';
+import Hint from './Hint';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
 function toDateInputValue(d) {
@@ -252,7 +253,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   async function handleSave() {
     const clamped = Math.max(0, Math.min(100, Math.round(Number(editProgress) || 0)));
     if (clamped > 95 && deploymentStatus !== 'approved') {
-      setSaveError('ตั้งเกิน 95% ได้หลัง Deploy ได้รับอนุมัติ — กด Request deploy ใต้แถบ Progress');
+      setSaveError('ตั้งค่าเกิน 95% ได้หลัง Deploy ได้รับอนุมัติ (ปุ่ม Request deploy อยู่ใต้แถบ Progress)');
       return;
     }
     // ── The 100% transition is a different operation, not a bigger number ──
@@ -433,7 +434,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // paired sub-skills' matchingAgent so the pairing survives.
   async function handleRequestRename() {
     const next = renameValue.trim();
-    if (!next) { setRenameMsg('ใส่ชื่อใหม่ก่อน'); return; }
+    if (!next) { setRenameMsg('ระบุชื่อใหม่'); return; }
     if (next === String(agent.agentName || '').trim()) { setRenameMsg('ชื่อใหม่ซ้ำกับชื่อเดิม'); return; }
     setRenameBusy(true);
     setRenameMsg('');
@@ -593,7 +594,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 <label>
                   Launch Date
                   {Number(editProgress) === 100 && !editLaunch && (
-                    <span className="hint">ไม่ระบุ = ใช้วันที่ปรับเป็น 100% อัตโนมัติ</span>
+                    <Hint text="หากไม่ระบุ ระบบจะใช้วันที่ปรับเป็น 100% เป็นวัน Launch" />
                   )}
                 </label>
                 <input type="date" value={editLaunch} onChange={(e) => setEditLaunch(e.target.value)} />
@@ -612,7 +613,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 <div className="fg" style={{ marginTop: 8, marginBottom: 0 }}>
                   <label>
                     Share Progress With
-                    <span className="hint">Skill ที่ผูกไว้ · เลือกเฉพาะตัวที่ต้องการให้ปรับตาม</span>
+                    <Hint text="Skill ที่ผูกกับ Agent นี้ — เลือกเฉพาะรายการที่ต้องการให้ปรับ progress ตาม" />
                   </label>
                   <div style={{ border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-sm)', padding: '4px 2px', maxHeight: 148, overflowY: 'auto' }}>
                     {cascadeShareTargets.map((sk) => (
@@ -640,7 +641,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   </div>
                   {cascadePick.size === 0 && (
                     <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 5 }}>
-                      ไม่ได้เลือกไว้เลย — จะปรับเฉพาะ Agent ตัวนี้ ไม่แตะ Skill ลูก
+                      ไม่ได้เลือก Skill — จะปรับเฉพาะ Agent นี้
                     </div>
                   )}
                 </div>
@@ -654,7 +655,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               {Number(editProgress) === 100 && !hasEndpoint && linkExempt && (
                 <div className="msg info" style={{ marginTop: 8, fontSize: 11 }}>
                   <span className="dot" style={{ background: '#4a6fa5' }} />
-                  {isNonReusable ? 'Non-reusable' : 'T4 · Enterprise Agent'} — ไม่ต้องระบุ Endpoint หรืออัปโหลดไฟล์ก่อนปรับเป็น 100%
+                  {isNonReusable ? 'Non-reusable' : 'T4 · Enterprise Agent'} — ไม่จำเป็นต้องมี Endpoint หรือไฟล์ก่อนปรับเป็น 100%
                 </div>
               )}
               {Number(editProgress) === 100 && !hasEndpoint && !linkExempt && (
@@ -713,8 +714,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                       setEditFile(err ? null : f);
                     }}
                   />
-                  <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 6 }}>
-                    {ALLOWED_EXT.map((x) => `.${x}`).join(' ')} · ไม่เกิน {formatBytes(MAX_UPLOAD_BYTES)} · ไฟล์ที่อัปโหลดต้อง login ก่อนดาวน์โหลด
+                  <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 6 }}>
+                    File requirements <Hint text={`รองรับ ${ALLOWED_EXT.map((x) => `.${x}`).join(' ')} ขนาดไม่เกิน ${formatBytes(MAX_UPLOAD_BYTES)} — ผู้ดาวน์โหลดต้อง sign in ก่อน`} />
                   </div>
                 </div>
               )}
@@ -978,12 +979,12 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           <div className="mbox" style={{ padding: 18, maxWidth: 420 }}>
             <button className="mclose" onClick={() => setRenameOpen(false)}>✕</button>
             <h2 className="mtitle">Request Rename</h2>
-            <div className="msub">Approver ประจำ Area หรือ Admin อนุมัติชื่อใหม่</div>
+            <div className="msub">Approval required <Hint text="Approver ของ area นี้หรือ Admin เป็นผู้อนุมัติชื่อใหม่" /></div>
             <p style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 12 }}>
               Agent/Skill นี้เผยแพร่แล้ว การเปลี่ยนชื่อต้องได้รับอนุมัติจาก Approver ประจำ Area หรือ Admin ก่อน
               {subSkills.length > 0 && (
                 <span style={{ display: 'block', marginTop: 6, color: 'var(--mu)', fontSize: 11 }}>
-                  เมื่ออนุมัติ Skill ที่ผูกอยู่ {subSkills.length} ตัวจะเปลี่ยนตามให้เอง
+                  เมื่อได้รับอนุมัติ Skill ที่ผูกอยู่ {subSkills.length} รายการจะอัปเดตชื่อโดยอัตโนมัติ
                 </span>
               )}
             </p>
@@ -1013,10 +1014,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             <h2 className="mtitle">Request deploy</h2>
             <div className="msub">Confirm</div>
             <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 16 }}>
-              ทดสอบผ่านแล้วและพร้อมเปิดใช้? แนบหลักฐานการทดสอบให้ Approver ดูด้วย
+              ยืนยันว่าผ่านการทดสอบและพร้อมเปิดใช้งาน โปรดแนบหลักฐานการทดสอบให้ Approver พิจารณา
             </p>
             <div className="btn-row">
-              <button className="btn btn-secondary" onClick={() => setConfirmingDeploy(false)}>Not yet</button>
+              <button className="btn btn-secondary" onClick={() => setConfirmingDeploy(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleRequestDeploy}>Request deploy</button>
             </div>
           </div>
@@ -1028,7 +1029,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           <div className="mbox" style={{ padding: 18, maxWidth: 460 }}>
             <button className="mclose" onClick={() => setArchiveOpen(false)}>✕</button>
             <h2 className="mtitle">Archive from Library</h2>
-            <div className="msub">ซ่อนออกจาก Library (กู้คืนได้)</div>
+            <div className="msub">Hidden from the library, can be restored</div>
             <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 14 }}>
               <strong>{agent.agentName}</strong> จะหายจากหน้า Library, การค้นหา, Dashboard และ Timeline
               โดย<strong>ไม่ถูกลบ</strong> — ข้อมูลยังอยู่สำหรับตรวจย้อนหลัง, เตือนความซ้ำซ้อน
@@ -1041,7 +1042,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   Skill ที่ผูกกับ Agent นี้ ({subSkills.length})
                 </div>
                 <div style={{ fontSize: 11.5, color: 'var(--mu)', marginBottom: 8, lineHeight: 1.5 }}>
-                  ติ๊กตัวที่ต้องการ<strong>เก็บไว้ใน Library</strong> (เช่น skill ที่ยัง reusable) —
+                  เลือก Skill ที่ต้องการ<strong>เก็บไว้ใน Library</strong> (เช่น skill ที่ยัง reusable) —
                   ที่ไม่ติ๊กจะถูก archive ไปพร้อมกันทั้งหมด
                 </div>
                 {subSkills.map((sk) => (
@@ -1078,7 +1079,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 placeholder="เช่น ซ้ำกับ X / เจ้าของย้ายทีม / เลิกใช้แล้ว"
               />
               <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 3 }}>
-                AI จะใช้เหตุผลนี้เตือนคนที่กำลังจะสร้างของคล้ายกันในอนาคต
+                AI จะใช้เหตุผลนี้แจ้งเตือนผู้ที่ลงทะเบียนรายการที่คล้ายกันในอนาคต
               </div>
             </div>
 

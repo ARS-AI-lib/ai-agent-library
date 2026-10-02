@@ -17,7 +17,7 @@ export const GLOSSARY = [
   { k: 'In Progress', v: 'กำลังพัฒนา' },
   { k: 'Pilot', v: 'ทดลองใช้กับกลุ่มเล็กก่อนเปิดให้ทุกคน' },
   { k: 'Ready to Use', v: 'เปิดใช้ได้แล้ว และมีลิงก์หรือไฟล์ให้เข้าถึง' },
-  { k: 'Request deploy', v: 'ขออนุมัติเปิดใช้เมื่อ progress ถึง 95% — อนุมัติแล้วจึงปรับเป็น Ready to use ได้' },
+  { k: 'Request deploy', v: 'ขออนุมัติเปิดใช้งานเมื่อ progress ถึง 95% เมื่อได้รับอนุมัติจึงปรับเป็น Ready to use ได้' },
 ];
 
 const BY_KEY = new Map(GLOSSARY.map((t) => [t.k.toLowerCase(), t]));

@@ -30,9 +30,9 @@ export default class ErrorBoundary extends Component {
         alignItems: 'center', justifyContent: 'center', gap: 14,
         background: 'var(--bg)', color: 'var(--tx)', textAlign: 'center', padding: 24,
       }}>
-        <div style={{ fontSize: 15, fontWeight: 700 }}>เกิดข้อผิดพลาด ลองรีเฟรชหน้านี้ครับ</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>เกิดข้อผิดพลาด โปรดรีเฟรชหน้านี้</div>
         <div style={{ fontSize: 12.5, color: 'var(--mu)', maxWidth: 420 }}>
-          ถ้ารีเฟรชแล้วยังเจอปัญหาเดิม รบกวนแจ้งผู้ดูแลระบบพร้อมบอกว่ากำลังทำอะไรอยู่ตอนที่เจอ
+          หากยังพบปัญหาเดิม โปรดแจ้งผู้ดูแลระบบ พร้อมระบุขั้นตอนที่ทำก่อนเกิดปัญหา
         </div>
         <button
           onClick={() => window.location.reload()}

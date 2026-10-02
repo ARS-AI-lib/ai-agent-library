@@ -3,6 +3,7 @@ import { ST_DEF, ST_ORDER, progressBucket } from '../lib/status';
 import { getType } from '../lib/tier';
 import { normalizeProgress } from '../lib/agentUtils';
 import TagMultiSelect from './TagMultiSelect';
+import Hint from './Hint';
 
 /**
  * Dashboard → "Team Progress" (2026-09-28).
@@ -100,7 +101,7 @@ export default function DashboardTeamProgress({ agents = [], onOpenTeam, teamOpt
           </div>
         )}
       </div>
-      <div className="dash-card-sub dash-mb">AI ของแต่ละทีม แยกตามสถานะ · กดแถวเพื่อดูรายการ</div>
+      <div className="dash-card-sub dash-mb">By team and status <Hint text="AI ของแต่ละทีมแยกตามสถานะ — คลิกแถวเพื่อดูรายการ" /></div>
       <Table rows={rows.slice(0, TOP)} onOpen={open} />
       {rows.length > TOP && (
         <button type="button" className="dash-more" onClick={() => setShowAll(true)}>View all {rows.length} teams ›</button>
@@ -108,7 +109,7 @@ export default function DashboardTeamProgress({ agents = [], onOpenTeam, teamOpt
       <div className="dash-lg">
         {used.map((k) => <span key={k}><b style={{ background: sliceDef(k).dot }} />{sliceDef(k).lb}</span>)}
       </div>
-      <div className="dash-tp-note">% Progress = ค่าเฉลี่ย progress ของ AI ในทีม · % Complete = สัดส่วนที่ Ready to Use</div>
+      <div className="dash-tp-note">How % is calculated <Hint text="% Progress = ค่าเฉลี่ย progress ของ AI ในทีม · % Complete = สัดส่วนที่ Ready to Use" /></div>
 
       {showAll && (
         <div className="sdlc-ovl" onClick={() => setShowAll(false)}>

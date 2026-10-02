@@ -19,6 +19,7 @@ import AgentMultiSelect from './AgentMultiSelect';
 import CreatorPicker from './CreatorPicker';
 import AgentDetailModal from './AgentDetailModal';
 import SkillRow, { emptySkillRow, validateSkillRows } from './SkillRow';
+import Hint from './Hint';
 
 // Submit is hard-blocked based on verdict FIRST, confidence as a secondary
 // filter within that verdict — not a single flat confidence ceiling. Decided
@@ -732,7 +733,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       onAddTeam?.([form.owner.trim()].filter(Boolean));
       onClose();
     } catch (e) {
-      setSubmitError(e.message || 'เกิดข้อผิดพลาดในการบันทึก');
+      setSubmitError(e.message || 'บันทึกไม่สำเร็จ — โปรดลองอีกครั้ง');
     } finally {
       setSubmitting(false);
     }
@@ -891,7 +892,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               <div className="fg">
                 <label>Compatible Agents <span style={{ fontWeight: 400, color: 'var(--mu)' }}>(optional)</span></label>
                 <AgentMultiSelect
-                  label="Choose compatible agents…"
+                  label="Select compatible agents…"
                   agents={approvedAgents}
                   selected={new Set(form.compatibleAgents)}
                   onChange={(s) => setField('compatibleAgents', [...s])}
@@ -907,11 +908,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             <div className="grid2">
               <div className="fg">
                 <label>Core Ability <span className="req">*</span></label>
-                <MultiSelect label="Choose ability…" options={abilityOptions} selected={form.coreAbility} onChange={(s) => setField('coreAbility', s)} />
+                <MultiSelect label="Select ability…" options={abilityOptions} selected={form.coreAbility} onChange={(s) => setField('coreAbility', s)} />
               </div>
               <div className="fg">
                 <label>Related Role <span className="req">*</span></label>
-                <TagMultiSelect label="Choose role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
+                <TagMultiSelect label="Select role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
               </div>
             </div>
 
@@ -938,7 +939,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 <ComboInput value={form.owner} onChange={(v) => setField('owner', v)} options={ownerOptions} placeholder="เช่น Wolfy" />
               </div>
               <div className="fg">
-                <label>Creator / Team member <span className="hint">(รายชื่อสมาชิกในทีม / ชื่อ Key contact หลัก)</span></label>
+                <label>Creator / Team member <Hint text="รายชื่อสมาชิกในทีม หรือผู้ติดต่อหลัก" /></label>
                 <CreatorPicker
                   selected={form.creatorPicks}
                   onChange={(v) => setField('creatorPicks', v)}
@@ -990,14 +991,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 <div className="grid2">
                   <div className="fg">
                     <label>SDLC Stage</label>
-                    <MultiSelect label="Choose SDLC stage…" options={stageOptions} selected={form.sdlcStage} onChange={(s) => setField('sdlcStage', s)} />
+                    <MultiSelect label="Select SDLC stage…" options={stageOptions} selected={form.sdlcStage} onChange={(s) => setField('sdlcStage', s)} />
                   </div>
                   <div className="fg">
                     <label>SDLC Process Mapping</label>
                     {form.sdlcStage.size === 0 ? (
                       <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Stage ก่อน เพื่อดูรายการ Process ที่ผูกกับ Stage นั้น</div>
                     ) : (
-                      <MultiSelect label="Choose process…" options={processOptions} selected={form.sdlcProcessMapping} onChange={(s) => setField('sdlcProcessMapping', s)} />
+                      <MultiSelect label="Select process…" options={processOptions} selected={form.sdlcProcessMapping} onChange={(s) => setField('sdlcProcessMapping', s)} />
                     )}
                   </div>
                 </div>
@@ -1006,7 +1007,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                   {form.sdlcProcessMapping.size === 0 ? (
                     <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Process Mapping ก่อน เพื่อดูรายการ Use Case ที่ผูกกับ Process นั้น</div>
                   ) : (
-                    <MultiSelect label="Choose use case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
+                    <MultiSelect label="Select use case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
                   )}
                 </div>
             </>
@@ -1098,7 +1099,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 {blockedByHardLimit && blockingCandidate && (
                   <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />
                     ไม่สามารถ Submit ได้ — <strong>{blockingCandidate.agentName}</strong> ซ้ำซ้อนถึง {blockingCandidate.confidence}%
-                    {blockingCandidate.verdict === 'clear_duplicate' ? ' (AI มองว่าเป็นตัวเดียวกัน)' : ' (เกือบเหมือนกันทั้งหมด)'} — ปรับให้ต่างจากของเดิม หรือใช้ของเดิมแทน
+                    {blockingCandidate.verdict === 'clear_duplicate' ? ' (AI ประเมินว่าเป็นรายการเดียวกัน)' : ' (เกือบเหมือนกันทั้งหมด)'} — โปรดปรับให้แตกต่างจากรายการเดิม หรือใช้รายการเดิมแทน
                   </div>
                 )}
 
@@ -1107,7 +1108,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 {!blockedByHardLimit && breadthFlag && (
                   <div className="msg warn"><span className="dot" style={{ background: 'var(--warn)' }} />
                     ไอเดียนี้ทำงานทับกับ Agent เดิม <strong>{aiStats.overlapAgents} ตัว</strong> —
-                    เข้าข่าย "ตัวเหมารวม" ที่ขัดกับหลัก Agent เฉพาะทาง แนะนำให้แยกเป็น skill เฉพาะทาง
+                    มีลักษณะเป็น Agent อเนกประสงค์ ซึ่งขัดกับหลัก Agent เฉพาะทาง แนะนำให้แยกเป็น skill เฉพาะทาง
                     หรือใช้/เชื่อมต่อของเดิมแทน — submit ได้ แต่จะถูกส่งให้ผู้อนุมัติพิจารณาเป็นพิเศษ
                   </div>
                 )}
@@ -1162,8 +1163,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             {/* ── Rule-based directional connections ("ต่อกับตัวนี้ได้") ── */}
             {connections.length > 0 && (
               <>
-                <div className="sec-title" style={{ marginTop: 4 }}>Related Connections (rule-based)</div>
-                <div style={{ fontSize: 11, color: 'var(--mu)', marginBottom: 6 }}>Agent/Skill ที่อาจส่งข้อมูลต่อ, trigger กัน, หรือใช้ context ร่วมกับไอเดียนี้</div>
+                <div className="sec-title" style={{ marginTop: 4 }}>Related Connections (rule-based) <Hint text="Agent/Skill ที่อาจส่งข้อมูลต่อกัน เรียกใช้กัน หรือใช้ context ร่วมกับรายการนี้" /></div>
                 {connections.map((c, i) => {
                   const tColor = { 'Data Handoff': '#2f6bff', Trigger: '#b45309', 'Shared Context/Tool': '#0b7a68' }[c.type] || 'var(--mu)';
                   return (

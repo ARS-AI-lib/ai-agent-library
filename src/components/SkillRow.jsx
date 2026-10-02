@@ -98,11 +98,11 @@ export default function SkillRow({
           <div className="grid2">
             <div className="fg">
               <label>Core Ability <span className="req">*</span></label>
-              <MultiSelect label="Choose ability…" options={abilityOptions} selected={skill.ability} onChange={(v) => onField('ability', v)} />
+              <MultiSelect label="Select ability…" options={abilityOptions} selected={skill.ability} onChange={(v) => onField('ability', v)} />
             </div>
             <div className="fg">
               <label>Related Role <span className="req">*</span></label>
-              <TagMultiSelect label="Choose role…" options={roleOptions} selected={skill.relatedRole} onChange={(v) => onField('relatedRole', v)} onAddNew={onAddRelatedRole} />
+              <TagMultiSelect label="Select role…" options={roleOptions} selected={skill.relatedRole} onChange={(v) => onField('relatedRole', v)} onAddNew={onAddRelatedRole} />
             </div>
           </div>
           <div className="grid2">

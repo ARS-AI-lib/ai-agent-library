@@ -76,7 +76,7 @@ export default function MilestoneEditor({ milestones, defaultColors, onSave, onC
           </div>
           <div>
             <h2 className="mtitle">Manage Milestones</h2>
-            <p>เพิ่ม / แก้ไข / ลบ ช่วง milestone ในไทม์ไลน์</p>
+            <p>Add, edit or remove timeline milestones</p>
           </div>
         </div>
 

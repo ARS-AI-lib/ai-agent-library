@@ -9,6 +9,7 @@ import { readStats, STAR_LEVELS } from '../lib/agentStats';
 import { useAgentStats } from '../hooks/useAgentStats';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { failMsg } from '../lib/copy';
+import Hint from './Hint';
 
 // ratingScore is a CSV-only exception to agentStats.js's "never render a
 // computed average" rule. That rule protects a casual card/modal viewer from
@@ -245,7 +246,7 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
           </div>
           <div>
             <h2 className="mtitle">Export Data</h2>
-            <p>ดาวน์โหลดเป็น CSV</p>
+            <p>Download as CSV</p>
           </div>
         </div>
 
@@ -268,7 +269,7 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
                 )}
               </div>
               <div style={{ fontSize: 11, color: 'var(--mu)', marginTop: 5 }}>
-                {fromDate || toDate ? 'กรองตามวันที่สร้างรายการ (Created Date) — มีผลกับทุกปุ่มด้านล่าง' : 'ไม่กำหนด = ดึงข้อมูลทั้งหมด'}
+                {fromDate || toDate ? 'กรองตาม Created Date — มีผลกับทุกปุ่มด้านล่าง' : 'หากไม่ระบุช่วงเวลา จะส่งออกข้อมูลทั้งหมด'}
               </div>
             </div>
             {/* .mac reused as a clickable option row (2026-08-08) — was a plain

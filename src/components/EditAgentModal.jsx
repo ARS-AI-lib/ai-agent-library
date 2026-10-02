@@ -16,6 +16,7 @@ import SkillRow, { emptySkillRow, validateSkillRows } from './SkillRow';
 import { isInternalToolName } from '../lib/internalTool';
 import useCloseGuard from '../hooks/useCloseGuard';
 import { failMsg } from '../lib/copy';
+import Hint from './Hint';
 
 const REUSABLE_OPTIONS = ['Reusable', 'Reusable with Conditions', 'Non-reusable'];
 // <fieldset disabled> natively disables every form control inside it — used to
@@ -617,7 +618,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           {lockTierA && !canEditRTU && (
             <div className="msg info" style={{ fontSize: 11 }}>
               <span className="dot" style={{ background: '#4a6fa5' }} />
-              คุณแก้ได้เฉพาะส่วน SDLC (Stage / Process / Use Case)
+              คุณแก้ไขได้เฉพาะส่วน SDLC (Stage / Process / Use Case)
             </div>
           )}
           <div className="fg">
@@ -653,7 +654,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
             <div className="fg">
               <label>Compatible Agents <span style={{ fontWeight: 400, color: 'var(--mu)' }}>(optional)</span></label>
               <AgentMultiSelect
-                label="Choose compatible agents…"
+                label="Select compatible agents…"
                 agents={allAgents}
                 excludeId={agent.id}
                 selected={new Set(form.compatibleAgents)}
@@ -665,11 +666,11 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           <div className="grid2">
             <div className="fg">
               <label>Core Ability <span className="req">*</span></label>
-              <MultiSelect label="Choose ability…" options={abilityOptions} selected={form.coreAbility} onChange={(s) => setField('coreAbility', s)} />
+              <MultiSelect label="Select ability…" options={abilityOptions} selected={form.coreAbility} onChange={(s) => setField('coreAbility', s)} />
             </div>
             <div className="fg">
               <label>Related Role <span className="req">*</span></label>
-              <TagMultiSelect label="Choose role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
+              <TagMultiSelect label="Select role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
             </div>
           </div>
 
@@ -713,14 +714,14 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
             <div className="grid2">
               <div className="fg">
                 <label>SDLC Stage</label>
-                <MultiSelect label="Choose SDLC stage…" options={stageOptions} selected={form.sdlcStage} onChange={(s) => { stageTouched.current = true; setField('sdlcStage', s); }} />
+                <MultiSelect label="Select SDLC stage…" options={stageOptions} selected={form.sdlcStage} onChange={(s) => { stageTouched.current = true; setField('sdlcStage', s); }} />
               </div>
               <div className="fg">
                 <label>SDLC Process Mapping</label>
                 {form.sdlcStage.size === 0 ? (
                   <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Stage ก่อน เพื่อดูรายการ Process ที่ผูกกับ Stage นั้น</div>
                 ) : (
-                  <MultiSelect label="Choose process…" options={processOptions} selected={form.sdlcProcessMapping} onChange={(s) => { processTouched.current = true; setField('sdlcProcessMapping', s); }} />
+                  <MultiSelect label="Select process…" options={processOptions} selected={form.sdlcProcessMapping} onChange={(s) => { processTouched.current = true; setField('sdlcProcessMapping', s); }} />
                 )}
               </div>
             </div>
@@ -729,7 +730,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
               {form.sdlcProcessMapping.size === 0 ? (
                 <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Process Mapping ก่อน เพื่อดูรายการ Use Case ที่ผูกกับ Process นั้น</div>
               ) : (
-                <MultiSelect label="Choose use case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
+                <MultiSelect label="Select use case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
               )}
             </div>
           </fieldset>
@@ -751,10 +752,10 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           <fieldset disabled={!canEditSDLCFlag} style={{ ...FS, opacity: !canEditSDLCFlag ? 0.6 : 1 }}>
             <div className="fg">
               <label>Approve Area</label>
-              <MultiSelect label="Choose approve area…" options={areaOptions} selected={form.approveArea} onChange={(s) => setField('approveArea', s)} />
+              <MultiSelect label="Select approve area…" options={areaOptions} selected={form.approveArea} onChange={(s) => setField('approveArea', s)} />
               {form.approveArea.size === 0 && (
                 <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 5, lineHeight: 1.5 }}>
-                  เว้นว่างได้ ระบบจะใช้: {derivedAreas.join(' + ') || '(คำนวณไม่ได้ — ควรเลือกเอง)'}
+                  หากเว้นว่าง จะใช้: {derivedAreas.join(' + ') || '(ระบุไม่ได้ — โปรดเลือก)'}
                 </div>
               )}
             </div>
@@ -774,7 +775,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         {canSeeCategory && (
           <div className="fg">
             <label>Category</label>
-            <MultiSelect label="Choose category…" options={categoryOptions} selected={form.category} onChange={handleCategoryChange} />
+            <MultiSelect label="Select category…" options={categoryOptions} selected={form.category} onChange={handleCategoryChange} />
           </div>
         )}
 
@@ -800,7 +801,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
 
         {/* ── Sensitive: creator list ── */}
         <div className="fg">
-          <label>Creator / Team member <span className="hint">(รายชื่อสมาชิกในทีม / ชื่อ Key contact หลัก)</span></label>
+          <label>Creator / Team member <Hint text="รายชื่อสมาชิกในทีม หรือผู้ติดต่อหลัก" /></label>
           {canEditSensitive ? (
             <CreatorPicker selected={form.creatorPicks} onChange={(v) => setField('creatorPicks', v)} placeholder="พิมพ์ชื่อหรืออีเมล…" />
           ) : (

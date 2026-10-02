@@ -83,7 +83,7 @@ export default function Nav({
     setReindexing(true);
     try {
       const r = await rebuildAllVectors();
-      toast(`Search updated · ${r.scanned} รายการ, อัปเดต ${r.embedded}`);
+      toast(`Search index updated · ${r.scanned} รายการ (อัปเดต ${r.embedded})`);
     } catch (e) {
       toast(failMsg('อัปเดตการค้นหา', e));
     } finally {

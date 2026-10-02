@@ -17,6 +17,7 @@ import MilestoneEditor from './MilestoneEditor';
 import { useTheme } from '../hooks/useTheme';
 import '../styles/SDLCTab.css';
 import '../styles/TimelinePage.css';
+import Hint from './Hint';
 
 const LW = 200, RH = 76, HH = 36, AH = 52, IR = 12, PAD = 16, DAY = 864e5;
 const DEFAULT_MS_COLORS = ['#0b7a68', '#2f6bff', '#6d28d9', '#c2590a', '#b45309', '#0369a1'];
@@ -82,7 +83,7 @@ export default function TimelinePage() {
     return <div className="tl-center"><div className="spin" /><span>กำลังโหลด…</span></div>;
   }
   if (!user) {
-    return <div className="tl-center"><h2>Sign in to continue</h2><p style={{ color: 'var(--mu)' }}>sign in ที่หน้า Library ก่อน แล้วค่อยเปิดหน้านี้</p></div>;
+    return <div className="tl-center"><h2>Sign in to continue</h2><p style={{ color: 'var(--mu)' }}>โปรด sign in ที่หน้า Library ก่อนเปิดหน้านี้</p></div>;
   }
   if (!roleReady || !cfgLoaded) {
     return <div className="tl-center"><div className="spin" /><span>กำลังตรวจสิทธิ์…</span></div>;
@@ -90,8 +91,8 @@ export default function TimelinePage() {
   if (!canView) {
     return (
       <div className="tl-center">
-        <h2>No access</h2>
-        <p style={{ color: 'var(--mu)', fontSize: 13 }}>{user.email} ยังไม่มีสิทธิ์ดู SDLC Timeline — ขอสิทธิ์จาก admin</p>
+        <h2>Access restricted</h2>
+        <p style={{ color: 'var(--mu)', fontSize: 13 }}>{user.email} ยังไม่มีสิทธิ์ดู SDLC Timeline โปรดติดต่อ admin เพื่อขอสิทธิ์</p>
       </div>
     );
   }
@@ -119,7 +120,7 @@ export default function TimelinePage() {
       </div>
 
       <div className="tl-mobile-banner">
-        ดูบนจอกว้างจะดีที่สุด — บนมือถือเลื่อนซ้าย–ขวา หรือหมุนจอเป็นแนวนอน
+        หน้านี้แสดงผลได้ดีที่สุดบนจอกว้าง บนมือถือให้เลื่อนซ้าย–ขวาหรือหมุนจอเป็นแนวนอน
       </div>
 
       <div className="tl-legend">
@@ -140,7 +141,7 @@ export default function TimelinePage() {
         <div className="tl-canvas-hdr">
           <div>
             <div style={{ fontSize: 13.5, fontWeight: 700 }}>Launch Timeline</div>
-            <div style={{ fontSize: 10.5, opacity: .75, marginTop: 2 }}>คลิกจุด → รายละเอียด · คลิก milestone → กรอง</div>
+            <div style={{ fontSize: 10.5, opacity: .75, marginTop: 2 }}>How to use <Hint text="คลิกจุดเพื่อดูรายละเอียด · คลิก milestone เพื่อกรอง" /></div>
           </div>
           <div style={{ fontSize: 11, opacity: .75 }}>
             {range.start.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })} – {range.end.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}
@@ -260,7 +261,7 @@ function OutOfMilestoneCard({ items, allItems, filter, setFilter }) {
     >
       <div className="tl-out-hdr">
         <span className="tl-out-title">Out of Milestone</span>
-        <span style={{ fontSize: 10, color: 'var(--mu)' }}>Agent/Skill ที่ launch ไม่อยู่ใน milestone ใด</span>
+        <Hint text="Agent/Skill ที่ launch ไม่อยู่ใน milestone ใด" />
         {sel && <span className="tl-out-active">Active</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
           <Stat n={items.length} l="Total" c="#d97706" />
@@ -286,7 +287,7 @@ function MilestoneSummaryCard({ milestone, items, onClear }) {
     <div className="tl-ms-card" onClick={onClear} style={{ borderTopColor: col, boxShadow: `0 0 0 2px ${col}33, var(--sh)` }}>
       <div className="tl-out-hdr">
         <span className="tl-ms-title" style={{ color: col }}>{milestone.name || milestone.id}</span>
-        <span style={{ fontSize: 10, color: 'var(--mu)' }}>Agent/Skill ที่ launch อยู่ใน milestone นี้</span>
+        <Hint text="Agent/Skill ที่ launch อยู่ใน milestone นี้" />
         <span className="tl-ms-active" style={{ background: col }}>Active</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
           <Stat n={items.length} l="Total" c={col} />

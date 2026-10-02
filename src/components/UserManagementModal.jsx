@@ -9,6 +9,7 @@ import Dropdown from './Dropdown';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { AREA_ORDER } from '../lib/approveAreas';
 import { failMsg } from '../lib/copy';
+import Hint from './Hint';
 
 function fmtSyncTime(ts) {
   if (!ts) return '';
@@ -61,7 +62,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
       const code = e?.code || '';
       setDirError(
         code.includes('popup') || code.includes('cancelled')
-          ? 'ยกเลิก/ปิดหน้าต่างให้สิทธิ์ Google — ลอง Sync ใหม่แล้วกด Allow เพื่อเข้าถึง directory'
+          ? 'หน้าต่างให้สิทธิ์ Google ถูกปิด — โปรด Sync อีกครั้งและกด Allow เพื่อเข้าถึง directory'
           : (failMsg('ดึงรายชื่อจาก Directory', e))
       );
     } finally {
@@ -134,7 +135,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
       <div className="mbox wide v7-um">
         <button className="mclose" onClick={onClose} aria-label="Close">✕</button>
         <h2 className="mtitle">User Management</h2>
-        <div className="msub">{users.length} users · กำหนด role และ approve area</div>
+        <div className="msub">{users.length} users <Hint text="กำหนด role และ Approve area ของผู้ใช้แต่ละคน" /></div>
 
         {error && <div className="msg error">{error}</div>}
 

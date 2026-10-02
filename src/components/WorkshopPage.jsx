@@ -1123,8 +1123,8 @@ export default function WorkshopPage() {
   if (!canView) {
     return (
       <div className="tl-center">
-        <h2>No access</h2>
-        <p style={{ color: 'var(--mu)', fontSize: 13 }}>{user.email} ยังไม่มีสิทธิ์เข้า Workshop — ขอสิทธิ์จาก facilitator</p>
+        <h2>Access restricted</h2>
+        <p style={{ color: 'var(--mu)', fontSize: 13 }}>{user.email} ยังไม่มีสิทธิ์เข้า Workshop โปรดติดต่อ facilitator</p>
       </div>
     );
   }

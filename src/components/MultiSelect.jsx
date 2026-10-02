@@ -86,7 +86,7 @@ export default function MultiSelect({ label, options, selected, onChange, pill, 
             </div>
             <div className="v7-ms-foot">
               <button type="button" disabled={selected.size === 0} onClick={() => onChange(new Set())}>Clear</button>
-              <span>ใช้ทันทีที่ติ๊ก</span>
+              <span>Applied instantly</span>
             </div>
           </div>
         )}

@@ -6,7 +6,7 @@ import Dropdown from './Dropdown';
 import { AREA_ORDER, categoryAreas } from '../lib/approveAreas';
 import { failMsg } from '../lib/copy';
 
-const AREA_OPTIONS = [['', 'Choose approve area…'], ...AREA_ORDER.map((a) => [a, a])];
+const AREA_OPTIONS = [['', 'Select approve area…'], ...AREA_ORDER.map((a) => [a, a])];
 
 // Admin-only approve/reject queue for AI-proposed Category shortcuts
 // (2026-08). A proposal is created by analyzeDuplicate (or the backfill
@@ -89,7 +89,7 @@ export default function CategoryApprovalPanel({ onClose, user, schema = {} }) {
     setBusyId(p.id);
     setError('');
     const pick = catPick[p.id] || p.fallbackCategory || '';
-    if (!pick) { setError(`Choose a category for "${p.agentName}" before rejecting`); setBusyId(null); return; }
+    if (!pick) { setError(`Select a category for "${p.agentName}" before rejecting`); setBusyId(null); return; }
     try {
       // The agent keeps a real category: the admin's pick (default = the AI's
       // fallback guess), plus the area(s) that category routes to.
@@ -140,7 +140,7 @@ export default function CategoryApprovalPanel({ onClose, user, schema = {} }) {
             <div key={p.id} className="catprop-row">
               <div className="catprop-name">{p.name}</div>
               <div className="catprop-meta">
-                เสนอจาก <strong>{p.agentName}</strong> · หมวดสำรองตอนนี้: {p.fallbackCategory || '—'}
+                เสนอจาก <strong>{p.agentName}</strong> · หมวดสำรองปัจจุบัน: {p.fallbackCategory || '—'}
               </div>
               {p.reason && <div className="catprop-reason">{p.reason}</div>}
               <div style={{ marginTop: 8, maxWidth: 260 }}>

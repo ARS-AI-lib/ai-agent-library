@@ -6,6 +6,7 @@ import {
   attachEndpointFile, formatBytes, validateUploadFile,
 } from '../lib/endpointFiles';
 import { failMsg } from '../lib/copy';
+import Hint from './Hint';
 
 /**
  * Attach a file to an agent's `endpoint` (2026-08-18).
@@ -115,17 +116,14 @@ export default function UploadEndpointFileModal({
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
       <div className="mbox" style={{ maxWidth: 520 }}>
         <button className="mclose" onClick={onClose}>✕</button>
-        <h2 className="mtitle" style={{ marginBottom: 4 }}>Attach Endpoint File</h2>
-        <p style={{ fontSize: 11.5, color: 'var(--mu)', lineHeight: 1.6, marginBottom: 14 }}>
-          แนบไฟล์ให้ Agent/Skill ที่ผ่านการอนุมัติ Deployment แล้ว
-        </p>
+        <h2 className="mtitle" style={{ marginBottom: 14 }}>Attach Endpoint File <Hint text="แนบไฟล์ให้ Agent/Skill ที่ Deploy ได้รับอนุมัติแล้ว" /></h2>
 
         {eligible.length === 0 ? (
           <div className="msg info" style={{ fontSize: 11.5 }}>
             <span className="dot" style={{ background: '#4a6fa5' }} />
             {isAdmin
               ? 'ยังไม่มี Agent/Skill ที่ Deploy ได้รับอนุมัติ'
-              : `ยังไม่มีรายการที่คุณแนบไฟล์ได้ — ต้องเป็นของที่คุณสร้าง หรืออยู่ใน area ของคุณ (${(approveAreas || []).join(', ') || 'ยังไม่มี area'})`}
+              : `ยังไม่มีรายการที่คุณแนบไฟล์ได้ (ต้องเป็นรายการที่คุณสร้าง หรืออยู่ใน Approve area ของคุณ: ${(approveAreas || []).join(', ') || 'ยังไม่ได้กำหนด'})`}
           </div>
         ) : (
           <>
@@ -159,7 +157,7 @@ export default function UploadEndpointFileModal({
             <div className="fg" style={{ marginBottom: 12 }}>
               <label>
                 2. Select File{' '}
-                <span className="hint">{ALLOWED_EXT.map((e) => `.${e}`).join(' ')} · ไม่เกิน {formatBytes(MAX_UPLOAD_BYTES)}</span>
+                <Hint text={`รองรับไฟล์ ${ALLOWED_EXT.map((e) => `.${e}`).join(' ')} ขนาดไม่เกิน ${formatBytes(MAX_UPLOAD_BYTES)} — ผู้ดาวน์โหลดต้อง sign in ก่อน`} />
               </label>
               <div
                 className={`uef-drop${file ? ' has' : ''}`}

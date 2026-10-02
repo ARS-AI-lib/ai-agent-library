@@ -133,12 +133,12 @@ export function validateUploadFile(file) {
 export function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
-    r.onerror = () => reject(new Error('อ่านไฟล์ไม่ได้ — ลองเลือกไฟล์ใหม่'));
+    r.onerror = () => reject(new Error('อ่านไฟล์ไม่สำเร็จ — โปรดเลือกไฟล์อีกครั้ง'));
     // readAsDataURL gives "data:<mime>;base64,<payload>" — take the payload.
     r.onload = () => {
       const s = String(r.result || '');
       const i = s.indexOf(',');
-      i >= 0 ? resolve(s.slice(i + 1)) : reject(new Error('อ่านไฟล์ไม่ได้ — ลองเลือกไฟล์ใหม่'));
+      i >= 0 ? resolve(s.slice(i + 1)) : reject(new Error('อ่านไฟล์ไม่สำเร็จ — โปรดเลือกไฟล์อีกครั้ง'));
     };
     r.readAsDataURL(file);
   });

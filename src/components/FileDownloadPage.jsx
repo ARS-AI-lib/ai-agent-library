@@ -82,7 +82,7 @@ export default function FileDownloadPage() {
     </div>
   );
 
-  if (!agentId) return wrap(<><h2>Link not found</h2><p className="fdl-mu">ลิงก์นี้ไม่ได้บอกว่าเป็นไฟล์ของ Agent ตัวไหน</p></>);
+  if (!agentId) return wrap(<><h2>Link not found</h2><p className="fdl-mu">ลิงก์นี้ไม่ได้ระบุไฟล์ของ Agent/Skill</p></>);
   if (loading) return wrap(<><div className="spin" /><p className="fdl-mu">กำลังตรวจสอบสิทธิ์…</p></>);
 
   if (!user) {
@@ -90,7 +90,7 @@ export default function FileDownloadPage() {
       <>
         <h2>Sign in to download</h2>
         <p className="fdl-mu">
-          ไฟล์นี้โหลดได้เฉพาะบัญชีองค์กร — sign in แล้วจะเริ่มโหลดให้
+          ไฟล์นี้ดาวน์โหลดได้เฉพาะบัญชีขององค์กร เมื่อ sign in แล้วระบบจะเริ่มดาวน์โหลดโดยอัตโนมัติ
         </p>
         {domainError && <div className="msg error" style={{ marginBottom: 12 }}><span className="dot" style={{ background: '#ea4335' }} />{domainError}</div>}
         <button className="btn btn-primary" onClick={() => signIn().catch((e) => setError(failMsg('เข้าสู่ระบบ', e)))}>

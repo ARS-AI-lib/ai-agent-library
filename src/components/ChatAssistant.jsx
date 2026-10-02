@@ -212,7 +212,7 @@ function templateAnswer(name, args, result) {
     const lines = result.suggestions.map((s) => `@@ ${s.target} | ${s.type} — ${s.reason}`).join('\n');
     return { text: `**ต่อกับตัวนี้ได้**\n${lines}`, csv: null };
   }
-  return { text: 'ขอโทษครับ ตอนนี้ตอบไม่ได้ ลองถามใหม่อีกครั้งนะครับ', csv: null };
+  return { text: 'ขออภัยครับ ไม่สามารถตอบได้ในขณะนี้ โปรดลองถามอีกครั้งครับ', csv: null };
 }
 
 // ── Rich-text rendering for chat bubbles ───────────────────────────────
@@ -431,7 +431,7 @@ function RecommendationList({ recs, library, onOpen }) {
             <span>{r.name}{r.reason ? ` — ${r.reason}` : ''}</span>
           </div>
         ))}
-        <div className="chat-rec-note">ไม่เจอชื่อเหล่านี้ในไลบรารีครับ ลองเช็กตัวสะกดอีกครั้ง</div>
+        <div className="chat-rec-note">ไม่พบชื่อเหล่านี้ในไลบรารีครับ โปรดตรวจสอบตัวสะกดอีกครั้ง</div>
       </div>
     );
   }

@@ -6,6 +6,7 @@ import TagMultiSelect from './TagMultiSelect';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { classifyMissingRoleGroups } from '../lib/roleGroupClassify';
 import '../styles/RoleGroupManager.css';
+import Hint from './Hint';
 
 // Role Group Management (2026-09-24) — admin + committee only (App/Nav gate;
 // the manageRoleGroups callable re-checks the role). Edits /config/roleGroups:
@@ -116,7 +117,7 @@ export default function RoleGroupManagerModal({ onClose, agents = [], schema = {
         <div className="m-head">
           <div>
             <h2 className="mtitle">Role Group Management</h2>
-            <p>กลุ่มบนการ์ด Role Coverage · แก้ role/คำอธิบายมีผลกับรายการใหม่ ส่วนรายการเดิมไม่ถูกย้ายเอง</p>
+            <p>Groups on the Role Coverage card <Hint text="การแก้ role หรือคำอธิบายมีผลกับรายการใหม่เท่านั้น รายการเดิมจะไม่ถูกย้ายโดยอัตโนมัติ" /></p>
           </div>
         </div>
 
@@ -175,7 +176,7 @@ export default function RoleGroupManagerModal({ onClose, agents = [], schema = {
                     selected={form.roles}
                     onChange={(roles) => setForm((f) => ({ ...f, roles }))}
                   />
-                  <p className="rgm-hint">ไม่สนตัวพิมพ์เล็ก/ใหญ่ เว้นวรรค หรือขีด · 1 role อยู่ได้กลุ่มเดียว</p>
+                  <p className="rgm-hint">Matching rules <Hint text="ไม่คำนึงถึงตัวพิมพ์เล็ก/ใหญ่ เว้นวรรค หรือขีด และ 1 role อยู่ได้เพียงกลุ่มเดียว" /></p>
                 </div>
                 <div className="fg">
                   <label>Definition for AI</label>

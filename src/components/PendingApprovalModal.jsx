@@ -13,6 +13,7 @@ import { classifyRoleGroups } from '../lib/roleGroupClassify';
 import AgentDetailModal from './AgentDetailModal';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { failMsg } from '../lib/copy';
+import Hint from './Hint';
 
 // One .tier-badge-styled chip per area (2026-08-10) — replaces a single
 // comma-joined text span. Area is the field a reviewer actually decides
@@ -447,7 +448,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
 
         {areaEmptyForApprover && (
           <div className="msg info">
-            ไม่มีรายการใหม่ใน area ของคุณตอนนี้ ({[...mine].join(', ')}) — กำลังแสดงเฉพาะรายการที่คุณส่งเอง
+            ขณะนี้ไม่มีรายการใหม่ใน area ของคุณ ({[...mine].join(', ')}) — แสดงเฉพาะรายการที่คุณส่ง
           </div>
         )}
 
@@ -533,10 +534,10 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                       autoFocus
                       value={rejectModal.reason}
                       onChange={(e) => setRejectModal((m) => ({ ...m, reason: e.target.value }))}
-                      placeholder="บอกเหตุผลให้ Creator แก้แล้วส่งใหม่ได้ เช่น ซ้ำกับ Agent เดิม / ขอบเขตยังไม่ชัด"
+                      placeholder="ระบุเหตุผลเพื่อให้ Creator ปรับแก้และส่งใหม่ได้ เช่น ซ้ำกับ Agent เดิม / ขอบเขตยังไม่ชัดเจน"
                     />
                     <div className="queue-actions">
-                      <span className="v7-rej-note">ผู้ส่งจะได้รับเหตุผลนี้ผ่านการแจ้งเตือนของระบบ</span>
+                      <span className="v7-rej-note"><Hint text="ผู้ส่งจะได้รับเหตุผลนี้ผ่านการแจ้งเตือน" /></span>
                       <button className="btn-sm rej" disabled={busyId === agent.id} onClick={() => setRejectModal(null)}>Cancel</button>
                       <button
                         className="btn-sm v7-danger-sm"
@@ -650,7 +651,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                       <span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                       {kids.length > 0 && (
                         <span style={{ color: 'var(--msg-warn-fg)' }}>
-                          Skill ที่ผูกอยู่ {kids.length} ตัวจะเปลี่ยนตามให้เอง
+                          Skill ที่ผูกอยู่ {kids.length} รายการจะอัปเดตโดยอัตโนมัติ
                         </span>
                       )}
                     </div>
@@ -708,13 +709,13 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
         {(kind === 'all' ? visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length
           : kind === 'new' ? visible.length : kind === 'deploy' ? visibleDeploy.length
           : kind === 'rename' ? visibleRenames.length : visibleLinks.length) === 0 && (
-          <div className="v7-inbox-empty">ไม่มีคำขอรอคุณตอนนี้</div>
+          <div className="v7-inbox-empty">ไม่มีคำขอที่รอการพิจารณา</div>
         )}
 
         {kind === 'all' && myRejected.length > 0 && (
           <>
             <div className="sec-title" style={{ marginTop: 16 }}>My rejected items</div>
-            <div className="msub">{myRejected.length} รายการ · เหตุผลจากผู้ตรวจ</div>
+            <div className="msub">{myRejected.length} รายการ <Hint text="รายการของคุณที่ไม่ผ่านการอนุมัติ พร้อมเหตุผลจาก Approver" /></div>
             {myRejected.map((agent) => (
               <div className="queue-row" key={agent.id}>
                 <div className="queue-content">
