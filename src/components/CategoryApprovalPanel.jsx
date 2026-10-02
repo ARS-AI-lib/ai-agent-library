@@ -132,7 +132,7 @@ export default function CategoryApprovalPanel({ onClose, user, schema = {} }) {
           {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
 
           {proposals.length === 0 && (
-            <div className="msg success"><span className="dot" style={{ background: '#34a853' }} />ไม่มีหมวดใหม่ค้างอนุมัติ</div>
+            <div className="msg success"><span className="dot" style={{ background: 'var(--ok)' }} />ไม่มีหมวดใหม่ค้างอนุมัติ</div>
           )}
 
           {proposals.map((p) => (
@@ -166,7 +166,15 @@ export default function CategoryApprovalPanel({ onClose, user, schema = {} }) {
                   ariaLabel={`Category for ${p.agentName} if the proposal is rejected`}
                 />
               </div>
-              <div className="btn-group" style={{ marginTop: 8 }}>
+              <div className="queue-actions" style={{ marginTop: 10, justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn-sm rej"
+                  disabled={busyId === p.id}
+                  onClick={() => reject(p)}
+                >
+                  Reject
+                </button>
                 <button
                   type="button"
                   className="btn-sm appr"
@@ -174,15 +182,7 @@ export default function CategoryApprovalPanel({ onClose, user, schema = {} }) {
                   title={!areaPick[p.id] ? 'เลือก Approve Area ก่อน' : undefined}
                   onClick={() => approve(p)}
                 >
-                  {busyId === p.id ? 'กำลังทำงาน…' : 'อนุมัติ'}
-                </button>
-                <button
-                  type="button"
-                  className="btn-sm rej"
-                  disabled={busyId === p.id}
-                  onClick={() => reject(p)}
-                >
-                  ปฏิเสธ
+                  {busyId === p.id ? 'Working…' : 'Approve'}
                 </button>
               </div>
             </div>

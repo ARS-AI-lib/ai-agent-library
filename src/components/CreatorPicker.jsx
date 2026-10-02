@@ -96,7 +96,7 @@ export default function CreatorPicker({ selected, onChange, placeholder }) {
               <button
                 type="button"
                 onClick={() => removePerson(p.email)}
-                title="ลบ"
+                title="Remove" aria-label="Remove"
                 style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--mu)', fontSize: 13, padding: '0 3px', fontFamily: 'inherit' }}
               >
                 ✕
@@ -128,7 +128,7 @@ export default function CreatorPicker({ selected, onChange, placeholder }) {
         </div>
       )}
       {manualError && (
-        <div style={{ fontSize: 10.5, color: '#c5221f', marginTop: 3 }}>{manualError}</div>
+        <div style={{ fontSize: 10.5, color: 'var(--late)', marginTop: 3 }}>{manualError}</div>
       )}
 
       {!fallback && open && results.length > 0 && (

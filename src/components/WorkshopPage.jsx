@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BrandMark } from './PageHeader';
 import {
   collection, getDocs, addDoc, onSnapshot, query, orderBy, serverTimestamp,
   doc, updateDoc, deleteDoc, writeBatch, runTransaction,
@@ -1132,16 +1133,21 @@ export default function WorkshopPage() {
 
   return (
     <div>
-      <nav className="nav">
-        <div className="nav-brand" role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => { window.location.href = '/'; }}>
+      <nav className="nav v7-nav v7-page-nav">
+        <a className="nav-brand v7-brand-link" href="/" aria-label="AI Agent Library home">
+          <BrandMark />
           <div>
             <h1>AI Agent Library</h1>
             <p>Powered by Wolfy</p>
           </div>
-        </div>
-        <div className="nav-tabs">
-          <button className={`nav-tab ${activeTab === 'workshop' ? 'active' : ''}`} onClick={() => setActiveTab('workshop')}>Workshop</button>
-          <button className={`nav-tab ${activeTab === 'ucs' ? 'active' : ''}`} onClick={() => setActiveTab('ucs')}>Use Cases</button>
+        </a>
+        <a className="v7-back" href="/">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+          Library
+        </a>
+        <div className="v7-seg" role="tablist" aria-label="Workshop views">
+          <button role="tab" aria-selected={activeTab === 'workshop'} className={`v7-seg-btn ${activeTab === 'workshop' ? 'active' : ''}`} onClick={() => setActiveTab('workshop')}>Workshop</button>
+          <button role="tab" aria-selected={activeTab === 'ucs'} className={`v7-seg-btn ${activeTab === 'ucs' ? 'active' : ''}`} onClick={() => setActiveTab('ucs')}>Use Cases</button>
         </div>
         {activeTab === 'ucs' && (
           <div className="ws-search">

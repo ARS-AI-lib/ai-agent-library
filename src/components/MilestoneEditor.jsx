@@ -101,16 +101,16 @@ export default function MilestoneEditor({ milestones, defaultColors, onSave, onC
                 <div style={LB}>สี</div>
                 <input type="color" value={r.color} onChange={(e) => setRow(r.id, { color: e.target.value })} style={{ ...CTRL, padding: 0, height: 30, cursor: 'pointer' }} />
               </div>
-              <button className="mi-btn" onClick={() => removeRow(r.id)} title="ลบ" style={{ width: 30, height: 30, color: 'var(--clr-fg)' }}>✕</button>
+              <button type="button" className="btn-icon v7-icon-danger" onClick={() => removeRow(r.id)} title="Remove" aria-label="Remove">✕</button>
             </div>
           ))}
         </div>
 
         <div className="btn-group" style={{ marginTop: 14, justifyContent: 'space-between' }}>
-          <button className="btn btn-secondary" onClick={addRow}>+ เพิ่ม Milestone</button>
+          <button className="btn btn-secondary" onClick={addRow}>+ Add Milestone</button>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn-secondary" disabled={saving} onClick={onClose}>Cancel</button>
-            <button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'กำลังบันทึก…' : 'Save'}</button>
+            <button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'Saving…' : 'Save'}</button>
           </div>
         </div>
       </div>

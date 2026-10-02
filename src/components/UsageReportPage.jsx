@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import PageHeader from './PageHeader';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useAuth } from '../hooks/useAuth';
 import { AREA_ORDER } from '../lib/approveAreas';
 import { downloadCsv } from '../lib/csv';
 import { fmtDate } from '../lib/agentUtils';
-import ThemeToggle from './ThemeToggle';
 import '../styles/UsageReport.css';
 
 /**
@@ -135,33 +135,7 @@ export default function UsageReportPage() {
 
   return (
     <div>
-      <nav className="nav">
-        <div className="nav-brand">
-          <div>
-            <h1>AI Agent Library</h1>
-            <p>Powered by Wolfy</p>
-          </div>
-        </div>
-        <div className="nav-tabs">
-          <button className="nav-tab" onClick={() => { window.location.href = '/'; }}>← Back to Library</button>
-        </div>
-        <div className="nav-r" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div className="menu" style={{ position: 'static', minWidth: 0, marginTop: 0 }}>
-            <ThemeToggle />
-          </div>
-          {/* No Sign out here (2026-08-26, user request): this is a report you
-              arrive at from the library and go back to, so the destructive
-              action does not belong in its top bar. Sign out stays on the
-              library's own ☰ menu. */}
-          {user && (
-            <div className="nav-user">
-              {user.photoURL
-                ? <img src={user.photoURL} alt="" />
-                : <span className="nav-user-fallback">{(user.displayName || user.email || '?').trim().charAt(0).toUpperCase()}</span>}
-            </div>
-          )}
-        </div>
-      </nav>
+      <PageHeader user={user} />
 
       <div className="usage-page">
         <div className="usage-head">

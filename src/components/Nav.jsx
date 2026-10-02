@@ -160,8 +160,8 @@ export default function Nav({
       )}
 
       <div className="nav-r">
-        <span className="v7-count"><strong><span className="v7-count-dot ag" />{agentCount}</strong><span>Agents</span></span>
-        <span className="v7-count"><strong><span className="v7-count-dot sk" />{skillCount}</strong><span>Skills</span></span>
+        <span className="v7-count ag"><strong>{agentCount}</strong><span>Agents</span></span>
+        <span className="v7-count sk"><strong>{skillCount}</strong><span>Skills</span></span>
         <span className="v7-nav-sep" aria-hidden="true" />
 
         {/* Avatar = My submissions (board 1). The dot means at least one of

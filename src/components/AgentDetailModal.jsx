@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from '../lib/toast';
 import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import Term from './Term';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
@@ -26,7 +25,7 @@ function toDateInputValue(d) {
 }
 
 const DEPLOY_STATUS_LABEL = { requested: 'Deploy Pending', approved: 'Deploy Approved', rejected: 'Deploy Rejected' };
-const DEPLOY_STATUS_COLOR = { requested: '#c96a00', approved: '#137333', rejected: '#c5221f' };
+const DEPLOY_STATUS_COLOR = { requested: 'var(--warn)', approved: 'var(--ok)', rejected: 'var(--late)' };
 
 export default function AgentDetailModal({ agent, allAgents, onClose, user, userRole, isAdmin, onEditAgent, approveAreas = [], schema = {} }) {
   const [editing, setEditing] = useState(false);
@@ -507,13 +506,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             conditions (mayEditDetails / mayRequestRename / mayArchive). */}
         <div className="v7-dhead">
           <div className="v7-dhead-meta">
-            <Term k={tier}><span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
+            <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
               {tier} {type === 'agent' ? 'Agent' : 'Skill'}
-            </span></Term>
-            <span className="v7-dhead-scope">
-              {scope === 'External' ? 'Customer-facing' : 'Internal'}
-              {agent.reusable ? <> · <Term k="Reusable">{agent.reusable}</Term></> : null}
             </span>
+            {agent.reusable && <span className="v7-dhead-scope">{agent.reusable}</span>}
             {isArchived && (
               <span
                 className="ttag"
@@ -578,7 +574,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             <span>Delivery</span>
             <span className="status-pill" style={{ color: sd.color, background: sd.bg }}>
               <span className="status-dot" style={{ background: sd.dot || sd.color }} />
-              <Term k={sd.lb}>{sd.lb}</Term>
+              {sd.lb}
             </span>
             {!editing && <span className="v7-delivery-launch">Launch <strong>{fmtDate(agent.launchDate) || '—'}</strong></span>}
           </div>
@@ -736,7 +732,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               <div className="btn-group" style={{ marginTop: 10 }}>
                 <button className="btn btn-secondary" disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
                 <button className="btn btn-success" disabled={saving} onClick={handleSave}>
-                  {saving ? (editFile ? 'กำลังอัปโหลด…' : 'กำลังบันทึก…') : 'Save'}
+                  {saving ? (editFile ? 'Uploading…' : 'Saving…') : 'Save'}
                 </button>
               </div>
             </div>
@@ -764,7 +760,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                     <button type="button" className="v7-btn-primary-sm" onClick={startEdit}>Update Progress</button>
                   )}
                   {mayEditThisAgent && !lockedSubSkill && deploymentStatus !== 'none' && (
-                    <span className="deploy-badge" style={{ color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `${DEPLOY_STATUS_COLOR[deploymentStatus]}15` }}>
+                    <span className="deploy-badge" style={{ color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `color-mix(in srgb, ${DEPLOY_STATUS_COLOR[deploymentStatus]} 9%, transparent)` }}>
                       {DEPLOY_STATUS_LABEL[deploymentStatus]}
                     </span>
                   )}
@@ -774,7 +770,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                       disabled={requesting}
                       onClick={() => setConfirmingDeploy(true)}
                     >
-                      {requesting ? 'กำลังส่งคำขอ…' : 'Deployment Request'}
+                      {requesting ? 'Sending…' : 'Deployment Request'}
                     </button>
                   )}
                 </div>
@@ -893,7 +889,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                           } finally { setVersionBusy(''); }
                         }}
                       >
-                        {versionBusy === v.version ? 'กำลังดาวน์โหลด…' : '↓ Download'}
+                        {versionBusy === v.version ? 'Downloading…' : '↓ Download'}
                       </button>
                     )}
                   </span>
@@ -902,92 +898,77 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             </>
           )}
 
+          {/* V7 Feedback & Review: histogram (counts, never an average —
+              src/lib/agentStats.js), usage line, rate control, review cards.
+              Same data and handlers as before; classes instead of inline styles. */}
           <div className="v7-fb-h">
             <h3>Feedback &amp; Review</h3>
             <span>· {ratingView.kind === 'histogram' ? `${ratingView.total} reviews` : 'No reviews yet'}</span>
           </div>
-          <div className="mrow" style={{ alignItems: 'flex-start' }}>
-            <span className="mk">Rating</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              {ratingView.kind === 'histogram' ? (
-                <span style={{ display: 'block' }}>
-                  {ratingView.bars.slice().reverse().map((b) => (
-                    <span key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
-                      <span style={{ fontSize: 11, color: 'var(--mu)', width: 22, flexShrink: 0 }}>{b.star}★</span>
-                      <span style={{ flex: 1, height: 6, background: 'var(--sf3)', borderRadius: 3, overflow: 'hidden', minWidth: 0 }}>
-                        <span style={{ display: 'block', width: `${b.pct}%`, height: '100%', background: 'var(--accent)' }} />
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--mu)', width: 18, textAlign: 'right', flexShrink: 0, fontFamily: "'IBM Plex Mono',monospace" }}>{b.count}</span>
-                    </span>
-                  ))}
-                  <span style={{ fontSize: 11, color: 'var(--mu)' }}>{ratingView.total} reviews</span>
-                </span>
-              ) : (
-                <span style={{ fontSize: 11, color: 'var(--mu2)' }}>No reviews</span>
-              )}
-            </span>
-          </div>
-          <div className="mrow">
-            <span className="mk">Usage</span>
-            <span style={{ fontSize: 11, fontFamily: "'IBM Plex Mono',monospace" }}>
-              Opened {liveStats.detailOpens} · Used {liveStats.endpointClicks} · Found in search {liveStats.searchHits}
-            </span>
-          </div>
+          <div className="v7-fb">
+            {ratingView.kind === 'histogram' && (
+              <div className="v7-fb-bars">
+                {ratingView.bars.slice().reverse().map((b) => (
+                  <div key={b.star} className="v7-fb-bar">
+                    <span>{b.star}★</span>
+                    <span className="v7-fb-track"><span style={{ width: `${b.pct}%` }} /></span>
+                    <span className="v7-fb-n">{b.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="v7-fb-usage">
+              Opened <strong>{liveStats.detailOpens}</strong> · Used <strong>{liveStats.endpointClicks}</strong> · Found in search <strong>{liveStats.searchHits}</strong>
+            </div>
 
-          {mayRate && (
-            <div className="mrow" style={{ alignItems: 'flex-start' }}>
-              <span className="mk">{myRating ? 'Your Rating' : 'Rate'}</span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+            {mayRate && (
+              <div className="v7-fb-rate">
+                <span className="v7-fb-label">{myRating ? 'Your rating' : 'Rate this'}</span>
+                <div className="v7-stars" role="radiogroup" aria-label="Rating">
                   {STAR_LEVELS.map((n) => (
                     <button
                       key={n}
                       type="button"
+                      role="radio"
+                      aria-checked={n === myRating}
+                      aria-label={`${n} stars`}
+                      className={n <= myRating ? 'on' : ''}
                       onClick={() => { setMyRating(n); setRateOpen(true); }}
-                      title={`${n} stars`}
-                      style={{
-                        border: 'none', background: 'none', cursor: 'pointer', padding: 0,
-                        fontSize: 19, lineHeight: 1,
-                        color: n <= myRating ? 'var(--accent)' : 'var(--bd2)',
-                      }}
                     >★</button>
                   ))}
-                </span>
+                </div>
                 {rateOpen && (
-                  <>
+                  <div className="v7-fb-form">
                     <textarea
                       rows={2}
                       value={myComment}
                       onChange={(e) => setMyComment(e.target.value)}
                       maxLength={1000}
                       placeholder="Add a comment (optional) — shown anonymously"
-                      style={{ width: '100%', fontSize: 11 }}
+                      aria-label="Comment"
                     />
-                    <span className="btn-row" style={{ marginTop: 6 }}>
-                      <button className="btn-sm rej" disabled={rating} onClick={() => setRateOpen(false)}>Cancel</button>
-                      <button className="btn-sm appr" disabled={rating || !myRating} onClick={handleSubmitRating}>
+                    <div className="btn-row">
+                      <button className="btn btn-secondary" disabled={rating} onClick={() => setRateOpen(false)}>Cancel</button>
+                      <button className="btn btn-primary" disabled={rating || !myRating} onClick={handleSubmitRating}>
                         {rating ? 'Submitting…' : (myRating && reviews.length ? 'Update Rating' : 'Submit Rating')}
                       </button>
-                    </span>
-                  </>
+                    </div>
+                  </div>
                 )}
-              </span>
-            </div>
-          )}
+              </div>
+            )}
 
-          {visibleReviews.length > 0 && (
-            <div className="mrow" style={{ alignItems: 'flex-start' }}>
-              <span className="mk">Comments</span>
-              <span style={{ flex: 1, minWidth: 0 }}>
+            {visibleReviews.length > 0 && (
+              <div className="v7-reviews">
                 {visibleReviews.map((r) => (
-                  <span key={r.id} style={{ display: 'block', marginBottom: 7, paddingBottom: 7, borderBottom: '1px solid var(--bd-soft)' }}>
-                    <span style={{ color: 'var(--accent)', fontSize: 11 }}>{'★'.repeat(r.rating || 0)}</span>
-                    <span style={{ display: 'block', fontSize: 11, color: 'var(--tx2)', marginTop: 2, lineHeight: 1.55 }}>{r.comment}</span>
-                  </span>
+                  <div key={r.id} className="v7-review">
+                    <span className="v7-review-stars" aria-label={`${r.rating || 0} stars`}>{'★'.repeat(r.rating || 0)}</span>
+                    <p>{r.comment}</p>
+                  </div>
                 ))}
-              </span>
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1017,7 +998,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             <div className="btn-row">
               <button className="btn btn-secondary" disabled={renameBusy} onClick={() => setRenameOpen(false)}>Close</button>
               <button className="btn btn-primary" disabled={renameBusy || !renameValue.trim()} onClick={handleRequestRename}>
-                {renameBusy ? 'กำลังส่ง…' : 'Request Rename'}
+                {renameBusy ? 'Sending…' : 'Request Rename'}
               </button>
             </div>
           </div>
@@ -1107,7 +1088,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               <button className="btn btn-secondary" disabled={archiving} onClick={() => setArchiveOpen(false)}>Cancel</button>
               <button className="btn btn-danger" disabled={archiving} onClick={handleArchive}>
                 {archiving
-                  ? 'กำลัง Archive…'
+                  ? 'Archiving…'
                   : `Archive${subSkills.length ? ` (${1 + subSkills.length - keepIds.size} items)` : ''}`}
               </button>
             </div>

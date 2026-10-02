@@ -59,10 +59,10 @@ const VERDICT_LABEL = {
   unrelated: 'Unrelated',
 };
 const VERDICT_COLOR = {
-  clear_duplicate: '#c5221f',
-  likely_overlap: '#c96a00',
+  clear_duplicate: 'var(--late)',
+  likely_overlap: 'var(--warn)',
   distinct_but_related: '#2f6bff',
-  unrelated: '#137333',
+  unrelated: 'var(--ok)',
 };
 
 // Attach the reviewer's decision to the stored analysis (knowledge base) so a
@@ -89,7 +89,7 @@ const CANDIDATE_GROUPS = [
 const CANDIDATE_VERDICTS = CANDIDATE_GROUPS.flatMap((g) => g.verdicts);
 
 const RISK_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
-const RISK_COLOR = { high: '#c5221f', medium: '#c96a00', low: '#137333' };
+const RISK_COLOR = { high: 'var(--late)', medium: 'var(--warn)', low: 'var(--ok)' };
 
 // Visibility + action rights per tier:
 //   admin/committee — see & approve/reject every pending item, any area.
@@ -182,7 +182,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
           >
             {c.agentName}
           </span>
-          <span style={{ fontSize: 10.5, fontWeight: 700, color: vColor, background: `${vColor}15`, border: 'none', padding: '2px 8px', borderRadius: 6 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: vColor, background: `color-mix(in srgb, ${vColor} 9%, transparent)`, border: 'none', padding: '2px 8px', borderRadius: 6 }}>
             {VERDICT_LABEL[c.verdict] || c.verdict}
           </span>
         </div>
@@ -500,7 +500,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                         role="button"
                         tabIndex={0}
                         onClick={() => openOverlapPopup(agent)}
-                        style={{ color: '#c96a00', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                        style={{ color: 'var(--warn)', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                         title="กดเพื่อดูรายชื่อ Agent ที่ทับซ้อน"
                       >
                         ทับซ้อนหลายตัว{overlapAgents ? ` (${overlapAgents})` : ''}
@@ -542,7 +542,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                         disabled={busyId === agent.id || !rejectModal.reason.trim()}
                         onClick={() => handleReject(rejectModal.agent, rejectModal.reason)}
                       >
-                        {busyId === agent.id ? 'กำลังบันทึก…' : 'Confirm Reject'}
+                        {busyId === agent.id ? 'Saving…' : 'Confirm Reject'}
                       </button>
                     </div>
                   </div>
@@ -745,7 +745,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
               <div className="msg info"><span className="spin" style={{ width: 14, height: 14, borderWidth: 2 }} />กำลังโหลด…</div>
             )}
             {overlapCandidates?.length === 0 && (
-              <div className="msg warn"><span className="dot" style={{ background: '#fbbc04' }} />ไม่พบข้อมูลรายละเอียด (อาจถูกข้ามตอนบันทึกเนื่องจากซ้ำกับ analysis อื่นที่มีอยู่แล้ว)</div>
+              <div className="msg warn"><span className="dot" style={{ background: 'var(--warn)' }} />ไม่พบข้อมูลรายละเอียด (อาจถูกข้ามตอนบันทึกเนื่องจากซ้ำกับ analysis อื่นที่มีอยู่แล้ว)</div>
             )}
             {/* Two groups, not one list: an approver reads "ทับซ้อน" and "คล้าย"
                 as different decisions — the first is a reason to reject or

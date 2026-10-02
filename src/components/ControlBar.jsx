@@ -3,7 +3,7 @@ import Dropdown from './Dropdown';
 import { TIER_ORDER } from '../lib/tier';
 import { SORT_OPTIONS } from '../lib/agentUtils';
 
-// V7 action row (board 1 · 2026-10-01): quick paths → filter pills → the
+// V7 action row (board 1 · 2026-10-01): filter pills → the
 // page actions (Inbox / Users / New) on the right. Every control drives the
 // SAME state it did before the redesign; only placement and skin changed.
 
@@ -22,10 +22,6 @@ const TYPES = [
   ['skill', 'Skill'],
 ];
 
-const Q = {
-  ready: 'M20 6L9 17l-5-5',
-  mine: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
-};
 
 export default function ControlBar({
   view, setView,
@@ -37,24 +33,12 @@ export default function ControlBar({
   reusableOptions, reusable, setReusable,
   hasEndpoint, setHasEndpoint,
   onClear,
-  // V7 quick paths — both map onto existing filters.
-  readyOnly, onToggleReady,
-  myAI, onToggleMyAI,
   counts = {},
   actions,
 }) {
-  const QuickBtn = ({ on, onClick, d, children }) => (
-    <button type="button" className={`v7-quick ${on ? 'on' : ''}`} aria-pressed={on} onClick={onClick}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
-      {children}
-    </button>
-  );
 
   return (
     <div className="cbar v7-actrow">
-      {onToggleReady && <QuickBtn on={readyOnly} onClick={onToggleReady} d={Q.ready}>Ready to use</QuickBtn>}
-      {onToggleMyAI && <QuickBtn on={myAI} onClick={onToggleMyAI} d={Q.mine}>My AI</QuickBtn>}
-      {(onToggleReady || onToggleMyAI) && <span className="v7-vsep" aria-hidden="true" />}
 
       <Dropdown pill="View" options={VIEWS} value={view} onChange={setView} ariaLabel="Group by" activeWhen={(v) => v !== 'by-category'} />
       {/* Popularity is already its own ranking (demandScore) — a second sort

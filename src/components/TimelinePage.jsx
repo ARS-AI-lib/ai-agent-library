@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import PageHeader from './PageHeader';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
@@ -13,7 +14,6 @@ import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import AgentDetailModal from './AgentDetailModal';
 import MilestoneEditor from './MilestoneEditor';
-import ThemeToggle from './ThemeToggle';
 import { useTheme } from '../hooks/useTheme';
 import '../styles/SDLCTab.css';
 import '../styles/TimelinePage.css';
@@ -103,48 +103,7 @@ export default function TimelinePage() {
 
   return (
     <div>
-      <nav className="nav">
-        <div className="nav-brand">
-          <div>
-            <h1>AI Agent Library</h1>
-            <p>Powered by Wolfy</p>
-          </div>
-        </div>
-        <div className="nav-tabs">
-          <button className="nav-tab" onClick={() => { window.location.href = '/'; }}>
-            ← Back to Library
-          </button>
-        </div>
-        <div className="nav-r" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* This page has no ☰ menu of its own, so the toggle (which renders
-              as a bare menu row — see ThemeToggle.jsx) gets a .menu wrapper
-              here to pick up the same row styling instead of falling through
-              to an unstyled UA button. */}
-          <div className="menu" style={{ position: 'static', minWidth: 0, marginTop: 0 }}>
-            <ThemeToggle />
-          </div>
-          {user && (
-            <div className="nav-user">
-              {user.photoURL
-                ? <img src={user.photoURL} alt="" />
-                : <span className="nav-user-fallback">{(user.displayName || user.email || '?').trim().charAt(0).toUpperCase()}</span>}
-              <div className="nav-user-name">
-                {(() => {
-                  const full = (user.displayName || user.email || '').trim();
-                  const [first, ...rest] = full.split(' ');
-                  const last = rest.join(' ');
-                  return (
-                    <>
-                      <span>{first}</span>
-                      {last && <span>{last}</span>}
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-        </div>
-      </nav>
+      <PageHeader user={user} />
 
     <div className="tl-page">
       <div className="tl-topbar">

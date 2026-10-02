@@ -748,7 +748,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   };
   const agentByName = (name) => approvedAgents.find((a) => a.agentName === name) || null;
   const reusableFor = (name) => agentByName(name)?.reusable || '';
-  const REUSE_COLOR = { Reusable: '#137333', 'Reusable with Conditions': '#b06000', 'Non-reusable': '#c5221f' };
+  const REUSE_COLOR = { Reusable: 'var(--ok)', 'Reusable with Conditions': 'var(--warn)', 'Non-reusable': 'var(--late)' };
 
   // Aggregate stats over the AI's own confidences — so the overall verdict is
   // legible ("where does the 85% come from?") instead of a lone scary number.
@@ -1089,8 +1089,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                       <span>วิเคราะห์ <strong>{aiStats.count}</strong> รายการ</span>
                       <span>สูงสุด <strong>{aiStats.max}%</strong>{aiStats.top ? ` (${aiStats.top.agentName})` : ''}</span>
                       <span>เฉลี่ย <strong>{aiStats.avg}%</strong></span>
-                      {aiStats.dupCount > 0 && <span style={{ color: '#c5221f' }}>ซ้ำชัด {aiStats.dupCount}</span>}
-                      {aiStats.overlapCount > 0 && <span style={{ color: '#c96a00' }}>ทับซ้อนบางส่วน {aiStats.overlapCount}</span>}
+                      {aiStats.dupCount > 0 && <span style={{ color: 'var(--late)' }}>ซ้ำชัด {aiStats.dupCount}</span>}
+                      {aiStats.overlapCount > 0 && <span style={{ color: 'var(--warn)' }}>ทับซ้อนบางส่วน {aiStats.overlapCount}</span>}
                     </div>
                   )}
                 </div>
@@ -1105,7 +1105,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 {/* Breadth warning (7th grill-me): submit is still allowed, but the
                     kitchen-sink pattern is flagged and routed to the approver. */}
                 {!blockedByHardLimit && breadthFlag && (
-                  <div className="msg warn"><span className="dot" style={{ background: '#fbbc04' }} />
+                  <div className="msg warn"><span className="dot" style={{ background: 'var(--warn)' }} />
                     ไอเดียนี้ทำงานทับกับ Agent เดิม <strong>{aiStats.overlapAgents} ตัว</strong> —
                     เข้าข่าย "ตัวเหมารวม" ที่ขัดกับหลัก Agent เฉพาะทาง แนะนำให้แยกเป็น skill เฉพาะทาง
                     หรือใช้/เชื่อมต่อของเดิมแทน — submit ได้ แต่จะถูกส่งให้ผู้อนุมัติพิจารณาเป็นพิเศษ
@@ -1156,7 +1156,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             )}
 
             {aiResult?.error && (
-              <div className="msg warn"><span className="dot" style={{ background: '#fbbc04' }} />AI ไม่พร้อมใช้งานชั่วคราว ({aiResult.error}) — แสดงผล rule-based ด้านล่างแทน</div>
+              <div className="msg warn"><span className="dot" style={{ background: 'var(--warn)' }} />AI ไม่พร้อมใช้งานชั่วคราว ({aiResult.error}) — แสดงผล rule-based ด้านล่างแทน</div>
             )}
 
             {/* ── Rule-based directional connections ("ต่อกับตัวนี้ได้") ── */}
@@ -1165,11 +1165,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 <div className="sec-title" style={{ marginTop: 4 }}>Related Connections (rule-based)</div>
                 <div style={{ fontSize: 11, color: 'var(--mu)', marginBottom: 6 }}>Agent/Skill ที่อาจส่งข้อมูลต่อ, trigger กัน, หรือใช้ context ร่วมกับไอเดียนี้</div>
                 {connections.map((c, i) => {
-                  const tColor = { 'Data Handoff': '#2f6bff', Trigger: '#b45309', 'Shared Context/Tool': '#0b7a68' }[c.type] || '#7a85a3';
+                  const tColor = { 'Data Handoff': '#2f6bff', Trigger: '#b45309', 'Shared Context/Tool': '#0b7a68' }[c.type] || 'var(--mu)';
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 11px', background: 'var(--sf2)', border: 'none', borderRadius: 'var(--r-sm)', marginBottom: 5 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: tColor, fontFamily: "'IBM Plex Mono',monospace", minWidth: 40 }}>{c.confidence.toFixed(0)}%</span>
-                      <span style={{ fontSize: 9.5, fontWeight: 700, color: tColor, background: `${tColor}15`, border: `1px solid ${tColor}40`, padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>{c.type}</span>
+                      <span style={{ fontSize: 9.5, fontWeight: 700, color: tColor, background: `color-mix(in srgb, ${tColor} 9%, transparent)`, border: `1px solid color-mix(in srgb, ${tColor} 25%, transparent)`, padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>{c.type}</span>
                       <span style={{ fontWeight: 600, flex: 1, fontSize: 12 }}>
                         {c.direction === 'draft→existing' ? '(ไอเดียนี้) → ' : ''}
                         <span
@@ -1194,13 +1194,13 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             {aiCandidates && <div className="sec-title" style={{ marginTop: 10 }}>Detected Overlaps</div>}
             {aiCandidates ? (
               aiCandidates.length === 0 ? (
-                <div className="msg success"><span className="dot" style={{ background: '#34a853' }} />AI ไม่พบ Agent/Skill ที่ทับซ้อนอย่างมีนัยสำคัญ — ปลอดภัยที่จะลงทะเบียนใหม่</div>
+                <div className="msg success"><span className="dot" style={{ background: 'var(--ok)' }} />AI ไม่พบ Agent/Skill ที่ทับซ้อนอย่างมีนัยสำคัญ — ปลอดภัยที่จะลงทะเบียนใหม่</div>
               ) : (
                 aiCandidates.map((c, i) => {
                   const rs = ruleScoreFor(c.agentName);
-                  const vColor = c.verdict === 'clear_duplicate' ? '#c5221f'
-                    : c.verdict === 'likely_overlap' ? '#c96a00'
-                    : c.verdict === 'distinct_but_related' ? '#2f6bff' : '#137333';
+                  const vColor = c.verdict === 'clear_duplicate' ? 'var(--late)'
+                    : c.verdict === 'likely_overlap' ? 'var(--warn)'
+                    : c.verdict === 'distinct_but_related' ? '#2f6bff' : 'var(--ok)';
                   return (
                     <div className="dup-row" key={i} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 5 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1218,13 +1218,13 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                           <div style={{ fontSize: 11, color: 'var(--mu)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                             <span>rule-based: {rs != null ? `${rs}%` : '—'}</span>
                             {reusableFor(c.agentName) && (
-                              <span style={{ fontSize: 9.5, fontWeight: 700, color: REUSE_COLOR[reusableFor(c.agentName)] || 'var(--mu)', background: `${REUSE_COLOR[reusableFor(c.agentName)] || '#7a85a3'}15`, border: `1px solid ${REUSE_COLOR[reusableFor(c.agentName)] || '#7a85a3'}40`, padding: '1px 5px', borderRadius: 4 }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, color: REUSE_COLOR[reusableFor(c.agentName)] || 'var(--mu)', background: `color-mix(in srgb, ${REUSE_COLOR[reusableFor(c.agentName)] || 'var(--mu)'} 9%, transparent)`, border: `1px solid color-mix(in srgb, ${REUSE_COLOR[reusableFor(c.agentName)] || 'var(--mu)'} 25%, transparent)`, padding: '1px 5px', borderRadius: 4 }}>
                                 {reusableFor(c.agentName)}
                               </span>
                             )}
                           </div>
                         </div>
-                        <span className="risk-badge" style={{ color: vColor, background: `${vColor}15` }}>{VERDICT_LABEL[c.verdict] || c.verdict}</span>
+                        <span className="risk-badge" style={{ color: vColor, background: `color-mix(in srgb, ${vColor} 9%, transparent)` }}>{VERDICT_LABEL[c.verdict] || c.verdict}</span>
                       </div>
                       <div style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.5 }}>{c.reason}</div>
                     </div>
@@ -1234,7 +1234,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             ) : (
               // AI unavailable → deterministic fallback
               fallbackMatches.length === 0 ? (
-                <div className="msg success"><span className="dot" style={{ background: '#34a853' }} />rule-based ไม่พบรายการที่คล้ายเกินเกณฑ์</div>
+                <div className="msg success"><span className="dot" style={{ background: 'var(--ok)' }} />rule-based ไม่พบรายการที่คล้ายเกินเกณฑ์</div>
               ) : (
                 fallbackMatches.map((m, i) => {
                   const rd = RISK_DEF[riskLevel(m.confidence)];
@@ -1268,7 +1268,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 disabled={submitting || analyzing || blockedByHardLimit}
                 title={blockedByHardLimit && blockingCandidate ? `บล็อก: ซ้ำกับ ${blockingCandidate.agentName} ${blockingCandidate.confidence}%` : undefined}
               >
-                {submitting ? 'กำลังบันทึก…' : blockedByHardLimit ? 'ถูกบล็อกเนื่องจากความซ้ำซ้อนสูง' : 'Submit for Approval'}
+                {submitting ? 'Saving…' : blockedByHardLimit ? 'ถูกบล็อกเนื่องจากความซ้ำซ้อนสูง' : 'Submit for Approval'}
               </button>
             </div>
           </div>

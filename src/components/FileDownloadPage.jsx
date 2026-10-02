@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { BrandMark } from './PageHeader';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
@@ -73,9 +74,9 @@ export default function FileDownloadPage() {
   const wrap = (children) => (
     <div className="fdl-wrap">
       <div className="fdl-card">
-        <img src="/wolfy-logo.png" alt="" className="fdl-logo" />
+        <BrandMark />
         {children}
-        <a className="fdl-back" href="/">← กลับไปที่ AI Agent Library</a>
+        <a className="v7-back fdl-back" href="/">← AI Agent Library</a>
       </div>
     </div>
   );
