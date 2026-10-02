@@ -900,20 +900,18 @@ body.v7 .v7-fab-m-logo { display: none; }
 body.v7 .v7-brand-mark { background: transparent !important; box-shadow: none !important; width: 36px; height: 36px; }
 body.v7 .v7-brand-mark img { width: 34px; height: 34px; }
 
-/* Sign-in round 3: lighter background, transparent card, white org logos */
-.v7-si { background: radial-gradient(1200px 760px at 50% 20%, #3a6fd6 0%, #2552b0 42%, #183b86 100%); }
-.v7-si::before { opacity: .12; }
-.v7-si-glow { background: radial-gradient(circle, rgba(120,210,255,.40), transparent 65%); }
-.v7-si-name { color: #dbe6ff; }
-.v7-si-sub { color: #dde6fb; }
-.v7-si h1 { background: linear-gradient(180deg, #ffffff 0%, #e2ebff 100%); -webkit-background-clip: text; background-clip: text; }
+/* Sign-in round 4: light background so the blue "A" logo sits bare (no tile) */
+.v7-si { color: #14213d; background: radial-gradient(1100px 700px at 50% 22%, #ffffff 0%, #eef4ff 45%, #dde8fb 100%); }
+.v7-si::before { opacity: .55; background-image: linear-gradient(rgba(37,82,176,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(37,82,176,.07) 1px, transparent 1px); }
+.v7-si-glow { top: 90px; width: 520px; height: 520px; background: radial-gradient(circle, rgba(90,170,255,.28), transparent 65%); }
+.v7-si-logo { width: 96px; height: 96px; padding: 0; background: none; box-shadow: none; border-radius: 0; filter: drop-shadow(0 12px 24px rgba(37,110,230,.28)); }
+.v7-si-name { color: #2552b0; }
+.v7-si h1 { background: linear-gradient(180deg, #13285c 0%, #2552b0 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.v7-si-sub { color: #4a5878; }
 .v7-si-card { background: transparent; box-shadow: none; padding: 0; gap: 22px; max-width: 360px; }
-.v7-si-card .v7-google-btn { border: none; box-shadow: 0 10px 30px rgba(6,20,60,.30); }
-.v7-si-orgs { border-top: none; padding-top: 0; opacity: .9; }
-.v7-si-orgs img { filter: brightness(0) invert(1); }
-.v7-si-orgs span { background: rgba(255,255,255,.35); }
-.v7-si-foot { color: #cbd8f6; }
-.v7-si-card .v7-signin-err { background: rgba(255,255,255,.95); }
-
-.v7-si-logo { width: 88px; height: 88px; padding: 16px; box-sizing: border-box; border-radius: 24px; background: #fff; box-shadow: 0 14px 40px rgba(6,20,60,.30); filter: none; }
-@media (max-width: 760px) { .v7-si-logo { width: 72px; height: 72px; padding: 13px; border-radius: 20px; } }
+.v7-si-card .v7-google-btn { border: 1px solid #d6dfef; background: #fff; box-shadow: 0 8px 24px rgba(19,40,92,.10); }
+.v7-si-orgs { border-top: none; padding-top: 0; }
+.v7-si-orgs img { filter: none; }
+.v7-si-orgs span { background: #c9d4e8; }
+.v7-si-foot { color: #6b7896; }
+@media (max-width: 760px) { .v7-si-logo { width: 76px; height: 76px; } }
