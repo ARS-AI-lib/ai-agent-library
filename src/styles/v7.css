@@ -853,3 +853,10 @@ body.v7 .v7-btn-compact { height: 32px; padding: 0 12px; font-size: 12.5px; whit
 .v7-hint-pop.flip { left: auto; right: -6px; }
 :root[data-theme="dark"] .v7-hint-pop { background: #2b3145; }
 @media (max-width: 760px) { .v7-hint-btn { width: 28px; height: 28px; } .v7-hint-pop { max-width: calc(100vw - 48px); } }
+
+/* ALPHA logo (light-blue wolf) sits on a white disc so it stays readable on the blue button */
+body.v7 .chat-fab-logo { width: 28px !important; height: 28px !important; padding: 3px; box-sizing: border-box; border-radius: 50%; background: #fff; object-fit: contain; }
+body.v7 .chat-hdr-logo { width: 24px; height: 24px; object-fit: contain; vertical-align: middle; }
+
+body.v7 .v7-fab-m-logo { display: none; }
+@media (max-width: 760px) { body.v7 .v7-fab-m-logo { display: block; } }

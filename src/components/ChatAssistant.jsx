@@ -795,11 +795,15 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
           to a circle) — the closed pill is text-only now, per explicit
           request to keep the logo as a "chat is open" signal rather than
           branding on the always-visible entry point. */}
-      <button className={`chat-fab ${open ? 'chat-fab-closed' : ''}`} onClick={() => setOpen((v) => !v)} title="AI Agent Library Chat Assistant">
+      <button className={`chat-fab ${open ? 'chat-fab-closed' : ''}`} onClick={() => setOpen((v) => !v)} title="AI Agent Library Chat Assistant" aria-label={open ? 'Close ALPHA chat' : 'Ask ALPHA'}>
         {open ? (
-          <img src="/wolfy-chat.png" alt="" className="chat-fab-logo" />
+          <img src="/alpha-logo.png" alt="" className="chat-fab-logo" />
         ) : (
-          <span className="chat-fab-label">Ask ALPHA</span>
+          <>
+            {/* Mobile only (CSS): the text label is hidden there, so the logo stands in. */}
+            <img src="/alpha-logo.png" alt="" className="chat-fab-logo v7-fab-m-logo" />
+            <span className="chat-fab-label">Ask ALPHA</span>
+          </>
         )}
       </button>
 
@@ -810,7 +814,7 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
             onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
           />
           <div className="chat-header">
-            <span><img src="/wolfy-logo.png" alt="" className="chat-hdr-logo" /> AI Agent Library Assistant</span>
+            <span><img src="/alpha-logo.png" alt="" className="chat-hdr-logo" /> AI Agent Library Assistant</span>
             <div className="chat-header-actions">
               <button className="chat-close" onClick={handleClose}>✕</button>
             </div>
