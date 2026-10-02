@@ -798,3 +798,48 @@ body.v7 .v7-btn-compact { height: 32px; padding: 0 12px; font-size: 12.5px; whit
 }
 @keyframes v7-sheet-up { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { body.v7 .mov .mbox, body.v7 .sdlc-mbox, body.v7 .ws-mbox { animation: none !important; } }
+
+/* ════════════════ Compact tiers (round 5 · user OK'd slightly smaller type/space) ════════════════ */
+/* Tablet / narrow desktop: header must fit on one row. */
+@media (min-width: 761px) and (max-width: 1180px) {
+  body.v7 .v7-nav { padding: 0 16px; gap: 10px; }
+  body.v7 .v7-nav .nav-brand h1 { font-size: 14px; }
+  body.v7 .v7-nav .nav-brand p { display: none; }
+  body.v7 .v7-seg-btn { padding: 0 10px; font-size: 12.5px; gap: 5px; }
+  body.v7 .v7-nav .nav-search { flex: 1 1 120px; min-width: 120px; }
+  body.v7 .v7-kbd { display: none; }
+  .v7-count { padding: 0 10px; height: 36px; }
+  .v7-count strong { font-size: 13px; }
+  .v7-nav-sep { margin: 0 2px; }
+  body.v7 .v7-actrow { padding: 8px 16px; }
+  body.v7 .main { padding: 18px 20px; }
+  body.v7 .sidebar { width: 200px; padding: 16px 10px; }
+}
+@media (min-width: 761px) and (max-width: 940px) {
+  body.v7 .v7-seg-btn svg { display: none; }
+  body.v7 .v7-nav .nav-brand div { display: none; }
+  .v7-count { display: none; }
+  .v7-nav-sep { display: none; }
+  body.v7 .sidebar { width: 180px; }
+  body.v7 .sidebar-item { font-size: 12px; padding: 0 8px 0 12px; }
+}
+/* Small phones: tighten type/spacing a little so rows fit without scrolling. */
+@media (max-width: 400px) {
+  body.v7 .main { padding: 12px; }
+  .v7-title h1 { font-size: 18px; }
+  .v7-title p { font-size: 12.5px; }
+  .v7-legend { flex-wrap: wrap; overflow: visible; gap: 5px; }
+  .v7-lg { height: 30px; padding: 0 8px; font-size: 11px; gap: 4px; }
+  body.v7 .ac { padding: 14px 14px 12px; }
+  body.v7 .v7-ac-head .ac-title { font-size: 14px; }
+  .v7-ac-desc { font-size: 12px; }
+  .v7-ac-foot { font-size: 11px; gap: 10px; }
+  body.v7 .v7-actrow { gap: 5px; padding: 8px 10px; }
+  body.v7 .v7-filters-btn { padding: 0 10px; font-size: 13px; }
+  body.v7 .v7-actrow .btn-new { padding: 0 12px; font-size: 13px; }
+  body.v7 .v7-nav { padding: 8px 12px; }
+  body.v7 .v7-nav .nav-brand h1 { font-size: 14px; }
+  body.v7 .mov .mbox { padding: 16px 12px calc(14px + env(safe-area-inset-bottom)); }
+  body.v7 .v7-dtitle { font-size: 19px !important; }
+  body.v7 .v7-nav .v7-seg-btn { font-size: 10.5px; }
+}
