@@ -6,7 +6,7 @@ import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { uniq, splitRoles, relationshipLabel, fmtDate, extractProcessId, agentProcessIds, agentUseCaseNames } from '../lib/agentUtils';
 import MultiSelect from './MultiSelect';
 import Dropdown from './Dropdown';
-import StatusLegend from './StatusLegend';
+import LibraryTitle from './LibraryTitle';
 import '../styles/SDLCTab.css';
 
 // Stage palette — SINGLE source of truth (2026-07 redesign fix: this used to
@@ -531,54 +531,53 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
           "SDLC AI Adoption", so a repeated heading was pure redundancy.
           .sdlc-title stays defined in SDLCTab.css in case something else
           ever needs it, it's just not rendered on this page. */}
-      <StatusLegend agents={legendAgents} actions={legendActions} onStatusClick={setSelectedStatus} selectedStatus={selectedStatus} />
-
-      <div className="cbar">
-        <button className={`pill ${showUseCases ? 'on' : ''}`} onClick={toggleUseCases}>Use Cases</button>
+      {/* V7 boards 7–8 (2026-10-01): action row first (same filters, pill
+          skin, page actions on the right), then a title row with the status
+          legend — the same state and handlers as before, only re-ordered. */}
+      <div className="cbar v7-actrow">
+        <button className={`pill ${showUseCases ? 'on' : ''}`} aria-pressed={showUseCases} onClick={toggleUseCases}>Use Cases</button>
+        <span className="v7-vsep" aria-hidden="true" />
 
         {showUseCases && (
-          <>
-            <div className="csep" />
-            <div className="cg"><span className="cl">VIEW</span>
-              <Dropdown
-                options={[['by-stage', 'By Stage'], ['by-process', 'By Process']]}
-                value={adoptView}
-                onChange={changeAdoptView}
-                ariaLabel="จัดกลุ่ม Use Case ตาม"
-              />
-            </div>
-          </>
+          <Dropdown
+            pill="View"
+            options={[['by-stage', 'By Stage'], ['by-process', 'By Process']]}
+            value={adoptView}
+            onChange={changeAdoptView}
+            ariaLabel="จัดกลุ่ม Use Case ตาม"
+          />
         )}
         {showUseCases && adoptView === 'by-stage' && (
-          <>
-            <div className="csep" />
-            <div className="cg"><span className="cl">STAGE</span>
-              <Dropdown
-                options={[['all', 'All'], ...ALL_STAGES.map((s) => [s, s])]}
-                value={stage}
-                onChange={setStage}
-                ariaLabel="กรองตาม Stage"
-              />
-            </div>
-          </>
+          <Dropdown
+            pill="Stage"
+            options={[['all', 'All'], ...ALL_STAGES.map((s) => [s, s])]}
+            value={stage}
+            onChange={setStage}
+            ariaLabel="กรองตาม Stage"
+            activeWhen={(v) => v !== 'all'}
+          />
         )}
 
-        <div className="csep" />
-        <div className="cg"><span className="cl">OWNER</span>
-          <MultiSelect label="Owner" options={ownerOptions} selected={owner} onChange={setOwner} />
-        </div>
-        <div className="csep" />
-        <div className="cg"><span className="cl">ROLE</span>
-          <MultiSelect label="Role" options={roleOptions} selected={role} onChange={setRole} />
-        </div>
-        <div className="csep" />
-        <div className="cg"><span className="cl">REUSABLE</span>
-          <MultiSelect label="Reusable" options={reusableOptions} selected={reusable} onChange={setReusable} />
-        </div>
-        <div className="csep" />
-        <button className={`pill ${hasAgent ? 'on' : ''}`} onClick={() => setHasAgent((v) => !v)}>Has agent</button>
-        <button className={`pill ${nonSdlcOnly ? 'on' : ''}`} onClick={() => setNonSdlcOnly((v) => !v)}>Non-SDLC</button>
-        <button className="btnclr" title="Clear filters" onClick={clearFilters}>✕</button>
+        <MultiSelect pill="Owner" label="Owner" options={ownerOptions} selected={owner} onChange={setOwner} />
+        <MultiSelect pill="Role" label="Role" options={roleOptions} selected={role} onChange={setRole} />
+        <MultiSelect pill="Reusable" label="Reusable" options={reusableOptions} selected={reusable} onChange={setReusable} />
+        <span className="v7-vsep" aria-hidden="true" />
+        <button className={`pill ${hasAgent ? 'on' : ''}`} aria-pressed={hasAgent} onClick={() => setHasAgent((v) => !v)}>Has agent</button>
+        <button className={`pill ${nonSdlcOnly ? 'on' : ''}`} aria-pressed={nonSdlcOnly} onClick={() => setNonSdlcOnly((v) => !v)}>Non-SDLC</button>
+        <button type="button" className="v7-clear" aria-label="Clear filters" title="Clear filters" onClick={clearFilters}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+        {legendActions && <div className="v7-row-actions">{legendActions}</div>}
+      </div>
+
+      <div className="v7-sdlc-title">
+        <LibraryTitle
+          agents={legendAgents}
+          title={showUseCases ? 'Use Cases' : 'SDLC AI Adoption'}
+          count={showUseCases ? `${useCases.length} use cases` : `${processes.length} processes`}
+          selectedStatus={selectedStatus}
+          onStatusClick={setSelectedStatus}
+        />
       </div>
 
       <div className="adopt-scroll">

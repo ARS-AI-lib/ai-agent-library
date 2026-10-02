@@ -3,20 +3,29 @@ import Dropdown from './Dropdown';
 import { TIER_ORDER } from '../lib/tier';
 import { SORT_OPTIONS } from '../lib/agentUtils';
 
+// V7 action row (board 1 · 2026-10-01): quick paths → filter pills → the
+// page actions (Inbox / Users / New) on the right. Every control drives the
+// SAME state it did before the redesign; only placement and skin changed.
+
 const VIEWS = [
-  ['by-category', 'By Category'],
-  ['by-owner', 'By Owner'],
-  ['by-role', 'By Role'],
-  ['by-ability', 'By Ability'],
+  ['by-category', 'Category'],
+  ['by-owner', 'Owner'],
+  ['by-role', 'Role'],
+  ['by-ability', 'Ability'],
   // Flat ranked list rather than a grouping — see CardGrid.
   ['by-popularity', 'Popularity'],
 ];
 
 const TYPES = [
-  ['all', 'All types'],
+  ['all', 'All'],
   ['agent', 'Agent'],
   ['skill', 'Skill'],
 ];
+
+const Q = {
+  ready: 'M20 6L9 17l-5-5',
+  mine: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+};
 
 export default function ControlBar({
   view, setView,
@@ -28,83 +37,58 @@ export default function ControlBar({
   reusableOptions, reusable, setReusable,
   hasEndpoint, setHasEndpoint,
   onClear,
-  layout, setLayout,
+  // V7 quick paths — both map onto existing filters.
+  readyOnly, onToggleReady,
+  myAI, onToggleMyAI,
+  counts = {},
+  actions,
 }) {
+  const QuickBtn = ({ on, onClick, d, children }) => (
+    <button type="button" className={`v7-quick ${on ? 'on' : ''}`} aria-pressed={on} onClick={onClick}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+      {children}
+    </button>
+  );
+
   return (
-    <div className="cbar">
-      <div className="cg">
-        <span className="cl">View</span>
-        <Dropdown options={VIEWS} value={view} onChange={setView} ariaLabel="จัดกลุ่มตาม" />
-      </div>
+    <div className="cbar v7-actrow">
+      {onToggleReady && <QuickBtn on={readyOnly} onClick={onToggleReady} d={Q.ready}>Ready to use</QuickBtn>}
+      {onToggleMyAI && <QuickBtn on={myAI} onClick={onToggleMyAI} d={Q.mine}>My AI</QuickBtn>}
+      <span className="v7-vsep" aria-hidden="true" />
 
-      <div className="cg">
-        <span className="cl">Sort</span>
-        {/* Popularity is already its own ranking (demandScore) — a second sort
-            on top of it would just fight the reason someone picked that view,
-            so the control is disabled rather than silently ignored there. */}
-        <Dropdown options={SORT_OPTIONS} value={sort} onChange={setSort} ariaLabel="เรียงลำดับ" disabled={view === 'by-popularity'} />
-      </div>
+      <Dropdown pill="View" options={VIEWS} value={view} onChange={setView} ariaLabel="Group by" activeWhen={(v) => v !== 'by-category'} />
+      {/* Popularity is already its own ranking (demandScore) — a second sort
+          on top of it would just fight the reason someone picked that view,
+          so the control is disabled rather than silently ignored there. */}
+      <Dropdown pill="Sort" options={SORT_OPTIONS} value={sort} onChange={setSort} ariaLabel="Sort" disabled={view === 'by-popularity'} activeWhen={(v) => v !== 'created'} />
+      <MultiSelect pill="Owner" label="Owner" options={ownerOptions} selected={owner} onChange={setOwner} counts={counts.owner} />
+      <MultiSelect pill="Role" label="Role" options={roleOptions} selected={role} onChange={setRole} counts={counts.role} />
+      <MultiSelect pill="Tier" label="Tier" options={TIER_ORDER} selected={tier} onChange={setTier} counts={counts.tier} />
+      <MultiSelect pill="Reusable" label="Reusable" options={reusableOptions} selected={reusable} onChange={setReusable} counts={counts.reusable} />
+      <Dropdown pill="Type" options={TYPES} value={type} onChange={setType} ariaLabel="Type" activeWhen={(v) => v !== 'all'} />
 
-      <div className="csep" />
-      <div className="cg">
-        <span className="cl">Owner</span>
-        <MultiSelect label="Owner" options={ownerOptions} selected={owner} onChange={setOwner} />
-      </div>
-
-      <div className="csep" />
-      <div className="cg">
-        <span className="cl">Role</span>
-        <MultiSelect label="Role" options={roleOptions} selected={role} onChange={setRole} />
-      </div>
-
-      <div className="csep" />
-      <div className="cg">
-        <span className="cl">Tier</span>
-        <MultiSelect label="Tier" options={TIER_ORDER} selected={tier} onChange={setTier} />
-      </div>
-
-      <div className="csep" />
-      <div className="cg">
-        <span className="cl">Reusable</span>
-        <MultiSelect label="Reusable" options={reusableOptions} selected={reusable} onChange={setReusable} />
-      </div>
-
-      <div className="csep" />
-      <div className="cg">
-        <span className="cl">Type</span>
-        <Dropdown options={TYPES} value={type} onChange={setType} ariaLabel="ประเภท" />
-      </div>
-
-      {/* Icon-only toggle rather than another labelled dropdown: it is a single
-          on/off condition, and the link glyph is the same one the cards use for
-          an endpoint — so the button reads as "show only the ones with this". */}
-      <div className="csep" />
+      {/* Icon-only toggle: the link glyph is the same one the cards use for an
+          endpoint — so the button reads as "show only the ones with this". */}
       <button
         type="button"
-        className={`cb-toggle ${hasEndpoint ? 'on' : ''}`}
+        className={`cb-toggle v7-icon-toggle ${hasEndpoint ? 'on' : ''}`}
         aria-pressed={hasEndpoint}
+        aria-label="Has endpoint"
         title={hasEndpoint ? 'กำลังกรองเฉพาะที่มีลิงก์ใช้งาน — กดเพื่อยกเลิก' : 'กรองเฉพาะ Agent/Skill ที่มีลิงก์ใช้งานแล้ว'}
         onClick={() => setHasEndpoint(!hasEndpoint)}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
           <polyline points="15 3 21 3 21 9" />
           <line x1="10" y1="14" x2="21" y2="3" />
         </svg>
       </button>
 
-      <button className="btnclr" title="Clear filters" onClick={onClear}>✕ Clear</button>
+      <button type="button" className="v7-clear" aria-label="Clear filters" title="Clear filters" onClick={onClear}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
 
-      {setLayout && (
-        <div className="v7-layout" role="group" aria-label="Layout">
-          {[['cards', 'Cards', 'M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v5H4zM13 14h7v5h-7z'], ['list', 'List', 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01']].map(([k, label, d]) => (
-            <button key={k} type="button" aria-pressed={layout === k} className={layout === k ? 'active' : ''} onClick={() => setLayout(k)}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {actions && <div className="v7-row-actions">{actions}</div>}
     </div>
   );
 }

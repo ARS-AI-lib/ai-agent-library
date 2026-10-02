@@ -5,7 +5,7 @@ import { useAuth } from './hooks/useAuth';
 import { useApprovedAgents, usePendingAgents, useDeploymentRequests } from './hooks/useAgents';
 import { useConfigSchema } from './hooks/useConfigSchema';
 import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from './lib/agentUtils';
-import { getType } from './lib/tier';
+import { getType, getTier } from './lib/tier';
 import { queueViewer, pendingBadgeCount } from './lib/pendingQueue';
 import { recordSearchHits } from './lib/agentEvents';
 import { useAgentStats } from './hooks/useAgentStats';
@@ -15,13 +15,14 @@ import { agentStatus } from './lib/status';
 import LoginScreen from './components/LoginScreen';
 import Nav from './components/Nav';
 import Sidebar from './components/Sidebar';
-import StatusLegend from './components/StatusLegend';
+import LibraryTitle from './components/LibraryTitle';
 import ControlBar from './components/ControlBar';
 import CardGrid from './components/CardGrid';
 import CategoryApprovalPanel from './components/CategoryApprovalPanel';
 import AgentDetailModal from './components/AgentDetailModal';
 import PreRegModal from './components/PreRegModal';
 import MySubmissionsModal from './components/MySubmissionsModal';
+import { nextStep } from './lib/mySubmissions';
 import GlossaryModal from './components/GlossaryModal';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import ChatAssistant from './components/ChatAssistant';
@@ -94,7 +95,11 @@ export default function App() {
   // be able to attach a file to their own agent (measured: 8 such creators own
   // a deploy-approved agent). The modal's own list, and checkAgentActor()
   // server-side, decide which agents they actually see.
-  const canUploadFiles = !!user && !!role;
+  // 2026-10-01 (V7, user decision): hidden from the base 'user' role. A
+  // 'user' Creator still attaches a file inside Agent Detail when marking the
+  // agent Ready to Use (markAgentReady flow); replacing a file later now needs
+  // an approver/staff/admin. Server checks (checkAgentActor) are unchanged.
+  const canUploadFiles = !!user && !!role && role !== 'user';
   // Agent/Skill Usage (2026-08-26). Plain role gating — the roles were named
   // exactly, so unlike Timeline/Dashboard there is no /config allowlist. The
   // callable re-checks this and additionally scopes staff/approver to their
@@ -317,31 +322,74 @@ export default function App() {
     ? sdlcVisAgents.filter((a) => getType(a) === 'skill').length
     : skillCount;
 
+  // V7 per-option counts in the filter pills (board 2) — over the whole live
+  // library, so a count never drops to 0 just because another filter is on.
+  const filterCounts = useMemo(() => {
+    const inc = (m, k) => { if (k) m.set(k, (m.get(k) || 0) + 1); };
+    const owner = new Map(); const role = new Map(); const tierM = new Map(); const reus = new Map();
+    for (const a of agents) {
+      inc(owner, a.owner);
+      splitRoles(a.relatedRole).forEach((r) => inc(role, r));
+      inc(tierM, getTier(a));
+      inc(reus, a.reusable);
+    }
+    return { owner, role, tier: tierM, reusable: reus };
+  }, [agents]);
+
+  // V7 title row: the page heading names the one thing narrowing the library
+  // (a single sidebar pick), and every other active filter becomes a chip
+  // whose ✕ calls that filter's existing setter.
+  const libTitle = category.size === 1 ? [...category][0]
+    : stage.size === 1 ? [...stage][0]
+    : platformTools ? 'Platform Tools'
+    : myAI ? 'My AI'
+    : selectedStatus.size === 1 && selectedStatus.has('ru') ? 'Ready to Use'
+    : 'All tools';
+  const without = (set, v) => { const n = new Set(set); n.delete(v); return n; };
+  const libChips = [
+    ...(category.size > 1 ? [...category].map((c) => ({ key: `c-${c}`, label: c, onRemove: () => setCategory(without(category, c)) })) : []),
+    ...(stage.size > 1 ? [...stage].map((c) => ({ key: `s-${c}`, label: c, onRemove: () => setStage(without(stage, c)) })) : []),
+    ...[...owner].map((v) => ({ key: `o-${v}`, label: `Owner: ${v}`, onRemove: () => setOwner(without(owner, v)) })),
+    ...[...role_].map((v) => ({ key: `r-${v}`, label: `Role: ${v}`, onRemove: () => setRole_(without(role_, v)) })),
+    ...[...tier].map((v) => ({ key: `t-${v}`, label: `Tier: ${v}`, onRemove: () => setTier(without(tier, v)) })),
+    ...[...reusable].map((v) => ({ key: `u-${v}`, label: v, onRemove: () => setReusable(without(reusable, v)) })),
+    ...(type !== 'all' ? [{ key: 'type', label: `Type: ${type === 'agent' ? 'Agent' : 'Skill'}`, onRemove: () => setType('all') }] : []),
+    ...(hasEndpoint ? [{ key: 'ep', label: 'Has endpoint', onRemove: () => setHasEndpoint(false) }] : []),
+    ...(search.trim() ? [{ key: 'q', label: `“${search.trim()}”`, onRemove: () => setSearch('') }] : []),
+  ];
+  const readyOnly = selectedStatus.size === 1 && selectedStatus.has('ru');
+  // Header avatar dot: how many of MY items have an action waiting on me.
+  const mySubsNeedAction = useMemo(() => {
+    const byId = new Map();
+    [...pending, ...allAgents].filter((a) => isMyAgent(a, user)).forEach((a) => byId.set(a.id, a));
+    return [...byId.values()].filter((a) => nextStep(a).tone === 'act').length;
+  }, [pending, allAgents, user]);
+
   const legendActions = (
     <>
       {canSubmitIdea && (
-        <button className="btn-legend new" onClick={() => setShowPreReg(true)}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+        <button type="button" className="v7-inbox-btn" onClick={() => setShowPending(true)} aria-label={pendingCount > 0 ? `Inbox, ${pendingCount} waiting for you` : 'Inbox'}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 13l2.5-7h11L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" /><path d="M4 13h5l1 2h4l1-2h5" />
           </svg>
-          New
-        </button>
-      )}
-      {canSubmitIdea && (
-        <button className="btn-legend pending" onClick={() => setShowPending(true)}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
-          </svg>
-          Pending
-          {pendingCount > 0 && <span className="btn-legend-badge">{pendingCount}</span>}
+          Inbox
+          {pendingCount > 0 && <span className="v7-badge">{pendingCount}</span>}
         </button>
       )}
       {canManageUsers && (
-        <button className="btn-legend pending" onClick={() => setShowUsers(true)}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <button type="button" className="v7-inbox-btn" onClick={() => setShowUsers(true)}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
           Users
+        </button>
+      )}
+      {canSubmitIdea && (
+        <button type="button" className="btn-new" onClick={() => setShowPreReg(true)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          New
         </button>
       )}
     </>
@@ -424,6 +472,7 @@ export default function App() {
         setSearch={setSearch}
         role={role}
         onOpenMySubmissions={() => setShowMySubs(true)}
+        mySubsNeedAction={mySubsNeedAction}
         onOpenGlossary={() => setShowGlossary(true)}
         agentCount={navAgentCount}
         skillCount={navSkillCount}
@@ -447,8 +496,6 @@ export default function App() {
 
       {activeTab === 'lib' && (
         <>
-          <StatusLegend agents={filtered} actions={legendActions} onStatusClick={setSelectedStatus} selectedStatus={selectedStatus} />
-
           <ControlBar
             view={view} setView={setView}
             sort={sort} setSort={setSort}
@@ -459,7 +506,11 @@ export default function App() {
             reusableOptions={reusableOptions} reusable={reusable} setReusable={setReusable}
             hasEndpoint={hasEndpoint} setHasEndpoint={setHasEndpoint}
             onClear={clearFilters}
-            layout={layout} setLayout={setLayout}
+            readyOnly={readyOnly}
+            onToggleReady={() => setSelectedStatus(readyOnly ? new Set() : new Set(['ru']))}
+            myAI={myAI} onToggleMyAI={() => setMyAI((v) => !v)}
+            counts={filterCounts}
+            actions={legendActions}
           />
 
           <div className="main-row">
@@ -470,12 +521,21 @@ export default function App() {
               stageOptions={schema.sdlcStage || []}
               stage={stage} setStage={handleSetStage}
               platformTools={platformTools} setPlatformTools={handleSetPlatformTools}
-              myAI={myAI} onToggleMyAI={() => setMyAI((v) => !v)}
               isAdmin={isAdmin}
               pendingProposalCount={pendingProposalCount}
               onOpenProposals={() => setShowCategoryProposals(true)}
             />
             <div className="main">
+              <LibraryTitle
+                agents={filtered}
+                title={libTitle}
+                sort={view === 'by-popularity' ? null : sort}
+                chips={libChips}
+                selectedStatus={selectedStatus}
+                onStatusClick={setSelectedStatus}
+                layout={layout}
+                setLayout={setLayout}
+              />
               {agentsLoading ? (
                 <div className="empty-state">Loading…</div>
               ) : (
@@ -557,6 +617,7 @@ export default function App() {
           pending={pending}
           onOpenAgent={(a) => { setShowMySubs(false); setSelectedAgent(a); }}
           onClose={() => setShowMySubs(false)}
+          onNew={canSubmitIdea ? () => { setShowMySubs(false); setShowPreReg(true); } : undefined}
         />
       )}
 

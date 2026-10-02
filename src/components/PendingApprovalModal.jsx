@@ -265,7 +265,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
   }
   const WhyChip = ({ agent }) => {
     const w = whyYou(agent);
-    return w ? <span className="v7-why">Why you · {w}</span> : null;
+    return w ? <span className="v7-why">Why you: {w}</span> : null;
   };
 
   function canReject(agent) {
@@ -417,8 +417,11 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
           </div>
           <div>
-            <h2 className="mtitle">Pending Approval</h2>
-            <div className="msub" style={{ margin: 0 }}>รายการที่รอให้คุณตัดสิน</div>
+            <h2 className="mtitle">Inbox</h2>
+            <div className="msub" style={{ margin: 0 }}>
+              <strong style={{ color: 'var(--tx)' }}>{visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length} requests</strong> รอคุณ
+              {fullAccess ? ' · คุณเห็นทุก Area' : mine.size > 0 ? ` · คุณอนุมัติ ${[...mine].join(', ')}` : ''}
+            </div>
           </div>
         </div>
 
@@ -445,15 +448,10 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
         )}
 
         {(kind === 'all' || kind === 'new') && (<>
-        <div className="sec-title" style={{ marginTop: 4 }}>New Entry</div>
-        <div className="msub">
-          {visible.length} รายการ
-          {!fullAccess && pending.length > visible.length && ` (อีก ${pending.length - visible.length} รายการอยู่นอกสิทธิ์ของคุณ)`}
-        </div>
-
-        {visible.length === 0 ? (
-          <div className="empty-state">ไม่มีรายการรออนุมัติ</div>
-        ) : (
+        {/* V7 board 12: one queue. Each request type still renders with its
+            own rule set (visiblePending / visibleDeployRequests / …); the
+            section headings became a type badge on each row. */}
+        {visible.length === 0 ? null : (
           visible.map((agent) => {
             const tier = getTier(agent);
             const tierDef = TIER_DEF[tier];
@@ -461,9 +459,9 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
             const breadthFlag = agent.analysisResult?.breadthFlag;
             const overlapAgents = agent.analysisResult?.overlapAgents;
             return (
-            <div className="queue-row" key={agent.id}>
+            <div className="queue-row v7-qrow" key={agent.id}>
               <div className="queue-content">
-                <div className="dup-name">{agent.agentName}</div>
+                <div className="dup-name"><span className="v7-kind new">NEW</span><span className="v7-qname" role="button" tabIndex={0} onClick={() => setDetailAgent(agent)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setDetailAgent(agent)}>{agent.agentName}</span></div>
                 <div className="queue-meta">
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
                     <span>{agentTypeLabel(agent, agents)}</span>
@@ -524,7 +522,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                     second modal). Same rejectModal state, same handleReject. */}
                 {rejectModal?.agent.id === agent.id && (
                   <div className="v7-inline-reject">
-                    <label htmlFor={`rej-${agent.id}`}>Reject Reason</label>
+                    <label htmlFor={`rej-${agent.id}`}>Reject “{agent.agentName}”</label>
                     <textarea
                       id={`rej-${agent.id}`}
                       rows={3}
@@ -534,10 +532,10 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                       placeholder="ระบุเหตุผลให้ creator ทราบ เช่น ทับซ้อนกับ Agent เดิม / ขอบเขตยังไม่ชัด…"
                     />
                     <div className="queue-actions">
+                      <span className="v7-rej-note">ผู้ส่งจะได้รับเหตุผลนี้ผ่านการแจ้งเตือนของระบบ</span>
                       <button className="btn-sm rej" disabled={busyId === agent.id} onClick={() => setRejectModal(null)}>Cancel</button>
                       <button
-                        className="btn-sm appr"
-                        style={{ background: 'var(--clr-fg)', borderColor: 'var(--clr-fg)' }}
+                        className="btn-sm v7-danger-sm"
                         disabled={busyId === agent.id || !rejectModal.reason.trim()}
                         onClick={() => handleReject(rejectModal.agent, rejectModal.reason)}
                       >
@@ -571,29 +569,14 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
         </>)}
 
         {(kind === 'all' || kind === 'deploy') && (<>
-        <div className="sec-title" style={{ marginTop: 16 }}>Deployment Request</div>
-        <div className="msub">
-          {visibleDeploy.length} รายการ
-          {!fullAccess && deployRequests.length > visibleDeploy.length && ` (อีก ${deployRequests.length - visibleDeploy.length} รายการอยู่นอกสิทธิ์ของคุณ)`}
-        </div>
-
-        {visibleDeploy.length === 0 ? (
-          <div className="empty-state">ไม่มีคำขอ Deploy รออนุมัติ</div>
-        ) : (
+        {visibleDeploy.length === 0 ? null : (
           visibleDeploy.map((agent) => {
             const tier = getTier(agent);
             const tierDef = TIER_DEF[tier];
             return (
-              <div className="queue-row" key={agent.id}>
+              <div className="queue-row v7-qrow" key={agent.id}>
                 <div className="queue-content">
-                  <div
-                    className="dup-name"
-                    style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
-                    onClick={() => setDetailAgent(agent)}
-                    title="คลิกเพื่อดูรายละเอียด"
-                  >
-                    {agent.agentName}
-                  </div>
+                  <div className="dup-name"><span className="v7-kind deploy">DEPLOY</span><span className="v7-qname" role="button" tabIndex={0} onClick={() => setDetailAgent(agent)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setDetailAgent(agent)} title="คลิกเพื่อดูรายละเอียด">{agent.agentName}</span></div>
                   <div className="queue-meta">
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
                       <span>Owner: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{agent.owner || '—'}</strong></span>
@@ -634,18 +617,13 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
             field edit: decideRenameRequest also rewrites matchingAgent on every
             paired sub-skill in the same batch, because pairing is by NAME and a
             bare rename would detach all of them. */}
-        <div className="sec-title" style={{ marginTop: 16 }}>Rename Request</div>
-        <div className="msub">{visibleRenames.length} รายการ · เปลี่ยนชื่อหลังเผยแพร่แล้ว ต้องอนุมัติก่อน</div>
-
-        {visibleRenames.length === 0 ? (
-          <div className="empty-state">ไม่มีคำขอเปลี่ยนชื่อรออนุมัติ</div>
-        ) : (
+        {visibleRenames.length === 0 ? null : (
           visibleRenames.map(({ r, agent }) => {
             const tier = getTier(agent);
             const tierDef = TIER_DEF[tier];
             const kids = pairedSubSkills(agent, agents);
             return (
-              <div className="queue-row" key={r.id}>
+              <div className="queue-row v7-qrow" key={r.id}>
                 <div className="queue-content">
                   <div
                     className="dup-name"
@@ -653,6 +631,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                     onClick={() => setDetailAgent(agent)}
                     title="คลิกเพื่อดูรายละเอียด"
                   >
+                    <span className="v7-kind rename">RENAME</span>
                     <span style={{ color: 'var(--mu)', textDecoration: 'line-through' }}>{r.currentName || agent.agentName}</span>
                     {' → '}
                     <span style={{ textDecoration: 'underline', textDecorationStyle: 'dotted' }}>{r.requestedName}</span>
@@ -691,15 +670,12 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
         </>)}
 
         {(kind === 'all' || kind === 'link') && (<>
-        <div className="sec-title" style={{ marginTop: 16 }}>Link Request</div>
-        <div className="msub">{visibleLinks.length} รายการ · AI แนะนำให้ผูก Skill เข้ากับ Agent ต้องยืนยันก่อน</div>
-        {visibleLinks.length === 0 ? (
-          <div className="empty-state">ไม่มีคำขอผูกรออนุมัติ</div>
-        ) : (
+        {visibleLinks.length === 0 ? null : (
           visibleLinks.map(({ skill, target }) => (
-            <div className="queue-row" key={skill.id}>
+            <div className="queue-row v7-qrow" key={skill.id}>
               <div className="queue-content">
                 <div className="dup-name">
+                  <span className="v7-kind link">LINK</span>
                   <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }} onClick={() => setDetailAgent(skill)} title="คลิกเพื่อดูรายละเอียด">{skill.agentName}</span>
                   {' → '}
                   <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }} onClick={() => setDetailAgent(target)} title="คลิกเพื่อดูรายละเอียด">{target.agentName}</span>
@@ -724,6 +700,12 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
         )}
 
         </>)}
+
+        {(kind === 'all' ? visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length
+          : kind === 'new' ? visible.length : kind === 'deploy' ? visibleDeploy.length
+          : kind === 'rename' ? visibleRenames.length : visibleLinks.length) === 0 && (
+          <div className="v7-inbox-empty">ไม่มีคำขอรอคุณตอนนี้</div>
+        )}
 
         {kind === 'all' && myRejected.length > 0 && (
           <>

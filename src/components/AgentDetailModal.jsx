@@ -499,16 +499,33 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             one flat sheet: title row → type/tier/scope badges → progress →
             deploy status → a plain field list. No information was dropped,
             only the redundant inner card frame. */}
-        <div className="mtitle-row">
-          <h2 className="mtitle">{agent.agentName}</h2>
-          {/* V7 (2026-10-01): one labelled primary action + a More menu.
-              Every item keeps its pre-V7 condition (mayEditDetails /
-              mayRequestRename / mayArchive) — only the presentation moved. */}
+        {/* V7 board 3 header: what it is (tier · scope · reusable) and the
+            actions on one line, the name below. Actions keep their pre-V7
+            conditions (mayEditDetails / mayRequestRename / mayArchive). */}
+        <div className="v7-dhead">
+          <div className="v7-dhead-meta">
+            <Term k={tier}><span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
+              {tier} {type === 'agent' ? 'Agent' : 'Skill'}
+            </span></Term>
+            <span className="v7-dhead-scope">
+              {scope === 'External' ? 'Customer-facing' : 'Internal'}
+              {agent.reusable ? <> · <Term k="Reusable">{agent.reusable}</Term></> : null}
+            </span>
+            {isArchived && (
+              <span
+                className="ttag"
+                style={{ color: 'var(--msg-warn-fg)', background: 'var(--msg-warn-bg)', fontWeight: 700 }}
+                title={agent.archiveReason ? `เหตุผล: ${agent.archiveReason}` : 'ถูก archive ออกจาก Library'}
+              >
+                ARCHIVED
+              </span>
+            )}
+          </div>
           <div className="v7-mactions">
             {mayEditDetails && (
-              <button type="button" className="v7-btn-outline" onClick={() => onEditAgent?.(agent)}>
+              <button type="button" className="v7-btn-tint" onClick={() => onEditAgent?.(agent)}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 20h16" /><path d="M14.5 3.5a2.12 2.12 0 0 1 3 3L7 17l-4 1 1-4z" />
+                  <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
                 </svg>
                 Edit Details
               </button>
@@ -520,15 +537,15 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
                 </button>
                 {moreOpen && (
-                  <div className="menu v7-menu v7-more-menu" role="menu">
-                    {endpointHref && (
-                      <button type="button" role="menuitem" onClick={() => { window.open(endpointHref, '_blank', 'noopener,noreferrer'); setMoreOpen(false); }}>
-                        <span className="mi-icon">Open Endpoint</span>
+                  <div className="menu v7-menu v7-more-menu" role="menu" aria-label="More actions">
+                    {mayRequestRename && (
+                      <button type="button" role="menuitem" onClick={() => { setRenameValue(agent.agentName || ''); setRenameMsg(''); setRenameOpen(true); setMoreOpen(false); }}>
+                        <span className="v7-mi"><strong>Request Rename</strong><span>ต้องผ่านการอนุมัติ</span></span>
                       </button>
                     )}
-                    {mayRequestRename && (
-                      <button type="button" role="menuitem" title="ต้องผ่านการอนุมัติ" onClick={() => { setRenameValue(agent.agentName || ''); setRenameMsg(''); setRenameOpen(true); setMoreOpen(false); }}>
-                        <span className="mi-icon">Request Rename</span>
+                    {endpointHref && (
+                      <button type="button" role="menuitem" onClick={() => { window.open(endpointHref, '_blank', 'noopener,noreferrer'); setMoreOpen(false); }}>
+                        <span className="v7-mi"><strong>Open Endpoint</strong><span>เปิดในแท็บใหม่</span></span>
                       </button>
                     )}
                     {mayArchive && (
@@ -539,7 +556,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                         disabled={archiving}
                         onClick={() => { setMoreOpen(false); if (isArchived) handleUnarchive(); else setArchiveOpen(true); }}
                       >
-                        <span className="mi-icon">{isArchived ? 'Unarchive' : 'Archive'}</span>
+                        <span className="v7-mi"><strong>{isArchived ? 'Unarchive' : 'Archive'}</strong><span>{isArchived ? 'นำกลับเข้า Library' : 'ซ่อนจาก Library กู้คืนได้'}</span></span>
                       </button>
                     )}
                   </div>
@@ -548,108 +565,20 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             )}
           </div>
         </div>
+        <h2 className="mtitle v7-dtitle">{agent.agentName}</h2>
 
-        <div className="mbadges">
-          <span className={`tb ${type === 'agent' ? 'tbag' : 'tbsk'}`}>{type === 'agent' ? 'AGENT' : 'SKILL'}</span>
-          <Term k={tier}><span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
-            {tier} · {tierDef.label.split(' · ')[1] || tierDef.label}
-          </span></Term>
-          <span className="ac-scope" style={{ margin: 0, color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
-            {scope === 'External' ? (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-              </svg>
-            ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="2" width="16" height="20" rx="1" />
-                <line x1="9" y1="10" x2="9" y2="10" /><line x1="15" y1="10" x2="15" y2="10" />
-                <line x1="9" y1="14" x2="9" y2="14" /><line x1="15" y1="14" x2="15" y2="14" />
-                <path d="M9 22v-4h6v4" />
-              </svg>
-            )}
-          </span>
-          {isArchived && (
-            <span
-              className="ttag"
-              style={{ color: 'var(--msg-warn-fg)', background: 'var(--msg-warn-bg)', fontWeight: 700 }}
-              title={agent.archiveReason ? `เหตุผล: ${agent.archiveReason}` : 'ถูก archive ออกจาก Library'}
-            >
-              ARCHIVED
-            </span>
-          )}
-        </div>
-
-        <div className="msec">Details</div>
-        <div>
-          {agent.description && (
-            <div className="mrow" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
-              <span className="mk">Description</span>
-              <span style={{ color: 'var(--tx2)', fontSize: 11, lineHeight: 1.45 }}>{agent.description}</span>
-            </div>
-          )}
-          {useCaseNames.length > 0 && (
-            <div className="mrow"><span className="mk">Use case</span><span style={{ color: 'var(--tx2)', fontSize: 11 }}>{useCaseNames.join(', ')}</span></div>
-          )}
-          <div className="mrow"><span className="mk">Owner</span><span>{agent.owner || '—'}</span></div>
-          <div className="mrow"><span className="mk">Creator</span><span>{agent.creator || '—'}</span></div>
-          {endpointHref && (
-            <div className="mrow">
-              <span className="mk">Endpoint</span>
-              <a
-                href={endpointHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
-                title={endpointHref}
-                onClick={(e) => {
-                  recordAgentEvent(agent.id, 'endpoint');
-                  handleEndpointClick(e, agent.endpoint);
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                  <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
-                {endpointLabel(agent.endpoint)}
-              </a>
-              {/* "ลิงก์ภายนอก" tag removed entirely (2026-08-26, user
-                  request) — the §24/§25 requirement to distinguish our own
-                  files from external links stays met by File History existing
-                  only on our own uploads; no inline tag needed here anymore. */}
-            </div>
-          )}
-          <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
-          {related.length > 0 && (
-            <div className="mrow">
-              <span className="mk">{type === 'skill' ? 'Agent' : 'Skill'}</span>
-              <span style={{ color: type === 'skill' ? 'var(--ag)' : 'var(--sk)', fontSize: 11, fontWeight: 600 }}>{related.join(', ')}</span>
-            </div>
-          )}
-          {type === 'skill' && Array.isArray(agent.compatibleAgents) && agent.compatibleAgents.length > 0 && (
-            <div className="mrow">
-              <span className="mk">Compatible</span>
-              <span style={{ color: 'var(--ag)', fontSize: 11, fontWeight: 600 }}>
-                {agent.compatibleAgents
-                  .map((id) => (allAgents || []).find((a) => a.id === id)?.agentName)
-                  .filter(Boolean)
-                  .join(', ')}
-              </span>
-            </div>
-          )}
-          <div className="mrow"><span className="mk">Role</span><span>{role || '—'}</span></div>
-          <div className="mrow"><span className="mk">Process</span><span style={{ color: 'var(--mu)', fontSize: 11 }}>{process || '—'}</span></div>
-          <div className="mrow"><span className="mk">Phase</span>
+        {/* V7 Delivery box — the same progress / deploy UI as before
+            (startEdit, cascade picker, Ready-to-Use gate, Deployment Request);
+            it just lives in its own box now. Phase + Launch moved in here. */}
+        <section className="v7-delivery" aria-label="Delivery">
+          <div className="v7-delivery-h">
+            <span>Delivery</span>
             <span className="status-pill" style={{ color: sd.color, background: sd.bg }}>
               <span className="status-dot" style={{ background: sd.dot || sd.color }} />
               <Term k={sd.lb}>{sd.lb}</Term>
             </span>
+            {!editing && <span className="v7-delivery-launch">Launch <strong>{fmtDate(agent.launchDate) || '—'}</strong></span>}
           </div>
-
-          {!editing && (
-            <div className="mrow"><span className="mk">Launch</span><span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 10.5 }}>{fmtDate(agent.launchDate) || '—'}</span></div>
-          )}
-
           {editing ? (
             <div style={{ marginTop: 8, padding: 10, background: 'var(--sf)', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-sm)' }}>
               {saveError && <div className="msg error" style={{ marginBottom: 8 }}><span className="dot" style={{ background: '#ea4335' }} />{saveError}</div>}
@@ -815,14 +744,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 <span>Progress</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{progress}%</strong>
-                  {canEdit && (
-                    <button className="mi-btn" style={{ width: 20, height: 20 }} title="Update progress" onClick={startEdit}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                    </button>
-                  )}
+
                 </span>
               </div>
               <div className="mpb">
@@ -833,16 +755,19 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   Status และ Progress ของ Skill นี้จะปรับตาม Agent หลัก
                 </div>
               )}
-              {mayEditThisAgent && !lockedSubSkill && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                  {deploymentStatus !== 'none' && (
+              {((canEdit) || (mayEditThisAgent && !lockedSubSkill)) && (
+                <div className="v7-delivery-actions">
+                  {canEdit && (
+                    <button type="button" className="v7-btn-primary-sm" onClick={startEdit}>Update Progress</button>
+                  )}
+                  {mayEditThisAgent && !lockedSubSkill && deploymentStatus !== 'none' && (
                     <span className="deploy-badge" style={{ color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `${DEPLOY_STATUS_COLOR[deploymentStatus]}15` }}>
                       {DEPLOY_STATUS_LABEL[deploymentStatus]}
                     </span>
                   )}
-                  {canRequestDeploy && (
+                  {mayEditThisAgent && !lockedSubSkill && canRequestDeploy && (
                     <button
-                      className="btn-sm rej"
+                      className="v7-btn-outline"
                       disabled={requesting}
                       onClick={() => setConfirmingDeploy(true)}
                     >
@@ -854,6 +779,65 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             </div>
           )}
 
+        </section>
+
+        <div className="msec">Details</div>
+        <div className="v7-fields">
+          {useCaseNames.length > 0 && (
+            <div className="mrow"><span className="mk">Use case</span><span style={{ color: 'var(--tx2)', fontSize: 11 }}>{useCaseNames.join(', ')}</span></div>
+          )}
+          <div className="mrow"><span className="mk">Owner</span><span>{agent.owner || '—'}</span></div>
+          <div className="mrow"><span className="mk">Creator</span><span>{agent.creator || '—'}</span></div>
+          {endpointHref && (
+            <div className="mrow">
+              <span className="mk">Endpoint</span>
+              <a
+                href={endpointHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
+                title={endpointHref}
+                onClick={(e) => {
+                  recordAgentEvent(agent.id, 'endpoint');
+                  handleEndpointClick(e, agent.endpoint);
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+                {endpointLabel(agent.endpoint)}
+              </a>
+              {/* "ลิงก์ภายนอก" tag removed entirely (2026-08-26, user
+                  request) — the §24/§25 requirement to distinguish our own
+                  files from external links stays met by File History existing
+                  only on our own uploads; no inline tag needed here anymore. */}
+            </div>
+          )}
+          <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
+          {related.length > 0 && (
+            <div className="mrow">
+              <span className="mk">{type === 'skill' ? 'Agent' : 'Skill'}</span>
+              <span style={{ color: type === 'skill' ? 'var(--ag)' : 'var(--sk)', fontSize: 11, fontWeight: 600 }}>{related.join(', ')}</span>
+            </div>
+          )}
+          {type === 'skill' && Array.isArray(agent.compatibleAgents) && agent.compatibleAgents.length > 0 && (
+            <div className="mrow">
+              <span className="mk">Compatible</span>
+              <span style={{ color: 'var(--ag)', fontSize: 11, fontWeight: 600 }}>
+                {agent.compatibleAgents
+                  .map((id) => (allAgents || []).find((a) => a.id === id)?.agentName)
+                  .filter(Boolean)
+                  .join(', ')}
+              </span>
+            </div>
+          )}
+          <div className="mrow"><span className="mk">Role</span><span>{role || '—'}</span></div>
+          <div className="mrow"><span className="mk">Process</span><span style={{ color: 'var(--mu)', fontSize: 11 }}>{process || '—'}</span></div>
+
+        </div>
+        {agent.description && <p className="v7-ddesc">{agent.description}</p>}
+        <div>
           {/* ── Rating & usage (2026-08-18) ──
               A histogram plus raw counts, never a mean: with the library's
               current traffic most entries sit at 0-2 ratings, and `★5.0 (1)` is
@@ -915,7 +899,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             </>
           )}
 
-          <div className="msec">Feedback</div>
+          <div className="v7-fb-h">
+            <h3>Feedback &amp; Review</h3>
+            <span>· {ratingView.kind === 'histogram' ? `${ratingView.total} reviews` : 'No reviews yet'}</span>
+          </div>
           <div className="mrow" style={{ alignItems: 'flex-start' }}>
             <span className="mk">Rating</span>
             <span style={{ flex: 1, minWidth: 0 }}>
@@ -1005,7 +992,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setRenameOpen(false)}>
           <div className="mbox" style={{ padding: 18, maxWidth: 420 }}>
             <button className="mclose" onClick={() => setRenameOpen(false)}>✕</button>
-            <h3 style={{ fontSize: 15, marginBottom: 6 }}>ขอเปลี่ยนชื่อ</h3>
+            <h2 className="mtitle">Request Rename</h2>
+            <div className="msub">Approver ประจำ Area หรือ Admin อนุมัติชื่อใหม่</div>
             <p style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 12 }}>
               Agent/Skill นี้เผยแพร่แล้ว การเปลี่ยนชื่อต้องได้รับอนุมัติจาก Approver ประจำ Area หรือ Admin ก่อน
               {subSkills.length > 0 && (
@@ -1024,9 +1012,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               </div>
             )}
             <div className="btn-row">
-              <button className="btn-sm rej" disabled={renameBusy} onClick={() => setRenameOpen(false)}>ปิด</button>
-              <button className="btn-sm appr" disabled={renameBusy || !renameValue.trim()} onClick={handleRequestRename}>
-                {renameBusy ? 'กำลังส่ง…' : 'ส่งคำขอ'}
+              <button className="btn btn-secondary" disabled={renameBusy} onClick={() => setRenameOpen(false)}>Close</button>
+              <button className="btn btn-primary" disabled={renameBusy || !renameValue.trim()} onClick={handleRequestRename}>
+                {renameBusy ? 'กำลังส่ง…' : 'Request Rename'}
               </button>
             </div>
           </div>
@@ -1037,14 +1025,15 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setConfirmingDeploy(false)}>
           <div className="mbox" style={{ padding: 18, maxWidth: 380 }}>
             <button className="mclose" onClick={() => setConfirmingDeploy(false)}>✕</button>
-            <h3 style={{ fontSize: 15, marginBottom: 10 }}>ยืนยัน Deployment Request</h3>
+            <h2 className="mtitle">Deployment Request</h2>
+            <div className="msub">Confirm</div>
             <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 16 }}>
               Agent/Skill ของท่านผ่านการทดสอบ (กรุณาส่งหลักฐานให้กับ Approver พิจารณา)
               และพร้อมที่จะ Deployment แล้วใช่หรือไม่?
             </p>
             <div className="btn-row">
-              <button className="btn-sm rej" onClick={() => setConfirmingDeploy(false)}>No</button>
-              <button className="btn-sm appr" onClick={handleRequestDeploy}>Yes</button>
+              <button className="btn btn-secondary" onClick={() => setConfirmingDeploy(false)}>No</button>
+              <button className="btn btn-primary" onClick={handleRequestDeploy}>Yes, request</button>
             </div>
           </div>
         </div>
@@ -1054,7 +1043,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setArchiveOpen(false)}>
           <div className="mbox" style={{ padding: 18, maxWidth: 460 }}>
             <button className="mclose" onClick={() => setArchiveOpen(false)}>✕</button>
-            <h3 style={{ fontSize: 15, marginBottom: 10 }}>Archive ออกจาก Library</h3>
+            <h2 className="mtitle">Archive from Library</h2>
+            <div className="msub">ซ่อนออกจาก Library (กู้คืนได้)</div>
             <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 14 }}>
               <strong>{agent.agentName}</strong> จะหายจากหน้า Library, การค้นหา, Dashboard และ Timeline
               โดย<strong>ไม่ถูกลบ</strong> — ข้อมูลยังอยู่สำหรับตรวจย้อนหลัง, เตือนความซ้ำซ้อน
@@ -1111,8 +1101,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             {saveError && <div className="msg error" style={{ marginBottom: 10 }}>{saveError}</div>}
 
             <div className="btn-row">
-              <button className="btn-sm rej" disabled={archiving} onClick={() => setArchiveOpen(false)}>ยกเลิก</button>
-              <button className="btn-sm appr" disabled={archiving} onClick={handleArchive}>
+              <button className="btn btn-secondary" disabled={archiving} onClick={() => setArchiveOpen(false)}>Cancel</button>
+              <button className="btn btn-danger" disabled={archiving} onClick={handleArchive}>
                 {archiving
                   ? 'กำลัง Archive…'
                   : `Archive${subSkills.length ? ` (${1 + subSkills.length - keepIds.size} items)` : ''}`}

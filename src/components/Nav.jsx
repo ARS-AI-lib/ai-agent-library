@@ -43,7 +43,7 @@ export default function Nav({
   user, role, onSignOut,
   activeTab, setActiveTab,
   onOpenExport, onOpenRoleGroups, canManageRoleGroups, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
-  onOpenMySubmissions, onOpenGlossary,
+  onOpenMySubmissions, onOpenGlossary, mySubsNeedAction = 0,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reindexing, setReindexing] = useState(false);
@@ -101,7 +101,7 @@ export default function Nav({
     <nav className="nav v7-nav">
       <div className="nav-brand">
         <span className="v7-brand-mark" aria-hidden="true">
-          <img src="/wolfy-logo.png" alt="" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9l3-5 3 4h4l3-4 3 5-2 8-6 3-6-3z" /><path d="M9.5 12.5h.01M14.5 12.5h.01" /></svg>
         </span>
         <div>
           <h1>AI Agent Library</h1>
@@ -142,10 +142,24 @@ export default function Nav({
       )}
 
       <div className="nav-r">
-        <div className="chips">
-          <div className="chip c-ag"><div className="n">{agentCount}</div><div className="l">Agents</div></div>
-          <div className="chip c-sk"><div className="n">{skillCount}</div><div className="l">Skills</div></div>
-        </div>
+        <span className="v7-count"><span className="v7-count-dot ag" /><strong>{agentCount}</strong>Agents</span>
+        <span className="v7-count"><span className="v7-count-dot sk" /><strong>{skillCount}</strong>Skills</span>
+        <span className="v7-nav-sep" aria-hidden="true" />
+
+        {/* Avatar = My submissions (board 1). The dot means at least one of
+            my items needs an action from me. */}
+        {onOpenMySubmissions && (
+          <button
+            type="button"
+            className="v7-avatar-only"
+            title="My submissions"
+            aria-label={mySubsNeedAction > 0 ? `My submissions, ${mySubsNeedAction} need your action` : 'My submissions'}
+            onClick={onOpenMySubmissions}
+          >
+            {user?.photoURL ? <img src={user.photoURL} alt="" /> : initials(user)}
+            {mySubsNeedAction > 0 && <span className="v7-avatar-dot" />}
+          </button>
+        )}
 
         <div ref={menuRef} style={{ position: 'relative' }}>
           <button
@@ -156,11 +170,8 @@ export default function Nav({
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
           >
-            {user?.photoURL
-              ? <img src={user.photoURL} alt="" />
-              : <span className="v7-avatar">{initials(user)}</span>}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-              <line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
             </svg>
           </button>
           {menuOpen && (

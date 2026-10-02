@@ -149,7 +149,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
         />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 2px', borderBottom: '1px solid var(--bd)', marginBottom: 4 }}>
-          <button className="btn-sm rej" disabled={dirSyncing} onClick={handleSyncDirectory}>
+          <button className="btn btn-secondary" disabled={dirSyncing} onClick={handleSyncDirectory}>
             {dirSyncing ? 'กำลัง sync…' : 'Sync directory now'}
           </button>
           <span style={{ fontSize: 11, color: 'var(--mu)' }}>

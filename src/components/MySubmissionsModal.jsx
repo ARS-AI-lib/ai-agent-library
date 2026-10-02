@@ -1,40 +1,57 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { isMyAgent, normalizeProgress, toJsDate, fmtDate, agentTypeLabel } from '../lib/agentUtils';
+import { isMyAgent, normalizeProgress, fmtDate, toJsDate } from '../lib/agentUtils';
 import { agentStatus, ST_DEF } from '../lib/status';
+import { getType, getTier, TIER_DEF } from '../lib/tier';
+import { nextStep } from '../lib/mySubmissions';
 import useEscapeKey from '../hooks/useEscapeKey';
 
-const DAY = 24 * 60 * 60 * 1000;
-const STALE_DAYS = 30;
-
-// V7 "My Submissions" (2026-10-01). Read-only: lists what I created and
-// computes ONE next step per item from data that already exists. Clicking a
-// row opens the normal Agent Detail modal, where the real actions live (with
-// their real permission checks) — nothing here writes.
+// V7 board 11 · My submissions. Read-only: every button opens the normal
+// Agent Detail modal, where the real actions (and their permission checks)
+// live. Nothing on this page writes.
 //
 // Sources, all already loaded or already allowed by the rules:
 //  - approved (incl. archived) → allAgents, filtered by isMyAgent (creatorEmails)
 //  - pending                   → pending, same filter
 //  - rejected                  → the same createdBy==uid query PendingApprovalModal uses
-export function nextStep(a, now = Date.now()) {
-  if (a.approvalStatus === 'rejected') return { tone: 'bad', text: 'Rejected', hint: a.rejectionReason ? `เหตุผล: ${a.rejectionReason}` : 'ถอนคำขอแล้ว' };
-  if (a.approvalStatus === 'pending') return { tone: 'wait', text: 'Waiting for review', hint: 'รอ Approver ประจำ Area ตรวจ' };
-  if (a.archived === true) return { tone: 'mute', text: 'Archived', hint: 'ไม่แสดงในไลบรารี' };
-  const p = normalizeProgress(a.devProgress);
-  if (p >= 100) return { tone: 'ok', text: 'Live', hint: 'ไม่มีอะไรต้องทำ' };
-  if ((a.deploymentStatus || 'none') === 'requested') return { tone: 'wait', text: 'Waiting for deploy approval', hint: 'ส่งคำขอ Deploy แล้ว' };
-  if (a.deploymentStatus === 'approved') return { tone: 'act', text: 'Mark Ready to Use', hint: 'เพิ่ม Endpoint หรือไฟล์ แล้วปรับเป็น 100%' };
-  const launch = toJsDate(a.launchDate);
-  if (launch && launch.getTime() < now) return { tone: 'act', text: 'Update progress', hint: `เลยวัน Launch แล้ว (${fmtDate(a.launchDate)})` };
-  const updated = toJsDate(a.updatedAt) || toJsDate(a.createdAt);
-  if (updated && now - updated.getTime() > STALE_DAYS * DAY) return { tone: 'act', text: 'Update progress', hint: `ไม่ได้อัปเดตเกิน ${STALE_DAYS} วัน` };
-  if (p >= 95) return { tone: 'act', text: 'Request deploy', hint: 'Progress ถึง 95% แล้ว' };
-  return { tone: 'mute', text: 'On track', hint: 'อัปเดต progress เมื่อมีความคืบหน้า' };
+
+const TABS = [
+  ['all', 'All'],
+  ['needs', 'Needs you'],
+  ['review', 'Waiting for review'],
+  ['progress', 'In progress'],
+  ['ready', 'Ready'],
+];
+
+function bucket(a, step) {
+  if (step.tone === 'act' || step.tone === 'bad') return 'needs';
+  if (a.approvalStatus === 'pending' || step.tone === 'wait') return 'review';
+  if (step.tone === 'ok') return 'ready';
+  return 'progress';
 }
 
-export default function MySubmissionsModal({ user, allAgents = [], pending = [], onOpenAgent, onClose }) {
+// Status pill: review / not-approved states are not library statuses, so they
+// get their own label; everything else uses the shared ST_DEF bucket.
+function statusOf(a) {
+  if (a.approvalStatus === 'rejected') return { lb: 'Not approved', cls: 'rej' };
+  if (a.approvalStatus === 'pending') return { lb: 'Waiting for review', cls: 'wait' };
+  const sd = ST_DEF[agentStatus(a)];
+  return { lb: sd.lb, sd };
+}
+
+function metaOf(a) {
+  if (a.approvalStatus === 'rejected') return a.rejectedAt ? `Decided ${fmtDate(a.rejectedAt)}` : 'Not approved';
+  if (a.approvalStatus === 'pending') return a.createdAt ? `Submitted ${fmtDate(a.createdAt)}` : 'Submitted';
+  const d = toJsDate(a.updatedAt) || toJsDate(a.createdAt);
+  if (!d) return '';
+  const days = Math.floor((Date.now() - d.getTime()) / 864e5);
+  return days <= 0 ? 'Updated today' : `Updated ${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+export default function MySubmissionsModal({ user, allAgents = [], pending = [], onOpenAgent, onClose, onNew }) {
   useEscapeKey(onClose);
+  const [tab, setTab] = useState('all');
   const [rejected, setRejected] = useState([]);
   useEffect(() => {
     if (!user?.uid) return undefined;
@@ -54,46 +71,80 @@ export default function MySubmissionsModal({ user, allAgents = [], pending = [],
     rejected.forEach((a) => byId.set(a.id, a));
     const rank = { act: 0, bad: 1, wait: 2, mute: 3, ok: 4 };
     return [...byId.values()]
-      .map((a) => ({ a, step: nextStep(a) }))
+      .map((a) => { const step = nextStep(a); return { a, step, b: bucket(a, step) }; })
       .sort((x, y) => rank[x.step.tone] - rank[y.step.tone] || String(x.a.agentName).localeCompare(String(y.a.agentName)));
   }, [allAgents, pending, rejected, user]);
 
-  const needAction = items.filter((i) => i.step.tone === 'act').length;
+  const count = (k) => (k === 'all' ? items.length : items.filter((i) => i.b === k).length);
+  const shown = tab === 'all' ? items : items.filter((i) => i.b === tab);
+  const needs = count('needs');
 
   return (
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
-      <div className="mbox wide">
-        <button className="mclose" onClick={onClose}>✕</button>
-        <h2 className="mtitle">My Submissions</h2>
-        <div className="msub">{items.length} items · {needAction} need your action · กดรายการเพื่อเปิดรายละเอียด</div>
-        {items.length === 0 ? (
-          <div className="empty-state">ยังไม่มีรายการที่คุณเป็น Creator</div>
+      <div className="mbox wide v7-subs-box">
+        <button className="mclose" onClick={onClose} aria-label="Close">✕</button>
+        <h2 className="mtitle">My submissions</h2>
+        <div className="msub">
+          {needs > 0 ? <><strong style={{ color: 'var(--tx)' }}>{needs} {needs === 1 ? 'item needs' : 'items need'} you</strong> · อื่นๆ ไม่ต้องทำอะไรตอนนี้</> : 'ไม่มีอะไรรอคุณตอนนี้'}
+        </div>
+
+        <div className="v7-subs-bar">
+          <div className="v7-inbox-filter" role="tablist" aria-label="Filter submissions">
+            {TABS.map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'active' : ''} onClick={() => setTab(k)}>
+                {label}<span>{count(k)}</span>
+              </button>
+            ))}
+          </div>
+          {onNew && (
+            <button type="button" className="btn-new" onClick={onNew}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              New
+            </button>
+          )}
+        </div>
+
+        {shown.length === 0 ? (
+          <div className="v7-inbox-empty">{items.length === 0 ? 'ยังไม่มีรายการที่คุณเป็น Creator' : 'ไม่มีรายการในหมวดนี้'}</div>
         ) : (
-          <div className="v7-subs">
-            {items.map(({ a, step }) => {
-              const sd = ST_DEF[agentStatus(a)];
+          <div className="v7-subs-grid">
+            {shown.map(({ a, step, b }) => {
+              const st = statusOf(a);
+              const tier = getTier(a);
+              const td = TIER_DEF[tier];
+              const urgent = b === 'needs';
               const openable = a.approvalStatus === 'approved' || a.approvalStatus === 'pending';
+              const btnLabel = a.approvalStatus === 'rejected' ? null
+                : step.tone === 'act' ? step.text
+                : step.tone === 'ok' ? 'See reviews'
+                : 'View';
               return (
-                <div
-                  key={a.id}
-                  className={`v7-sub-row ${openable ? '' : 'static'}`}
-                  role={openable ? 'button' : undefined}
-                  tabIndex={openable ? 0 : undefined}
-                  onClick={() => openable && onOpenAgent?.(a)}
-                  onKeyDown={(e) => { if (openable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onOpenAgent?.(a); } }}
-                >
-                  <div className="v7-sub-main">
-                    <strong>{a.agentName}</strong>
-                    <span>{agentTypeLabel(a, allAgents)} · {a.owner || '—'}</span>
+                <article key={a.id} className={`v7-sub-card ${urgent ? 'urgent' : ''}`}>
+                  <div className="v7-ac-top">
+                    <span className="tier-badge" style={{ color: td.color, background: td.bg }} title={td.label}>{tier} {getType(a) === 'agent' ? 'Agent' : 'Skill'}</span>
+                    <span className="v7-ac-scope">{a.owner || '—'}</span>
+                    <span
+                      className={`status-pill v7-ac-status ${st.cls || ''}`}
+                      style={st.sd ? { color: st.sd.color, background: st.sd.bg, borderColor: st.sd.bd } : undefined}
+                    >
+                      <span className="status-dot" style={st.sd ? { background: st.sd.dot || st.sd.color } : undefined} />
+                      {st.lb}
+                    </span>
                   </div>
-                  <span className="status-pill" style={{ color: sd.color, background: sd.bg }}>
-                    <span className="status-dot" style={{ background: sd.dot || sd.color }} />{normalizeProgress(a.devProgress)}%
-                  </span>
-                  <div className={`v7-next ${step.tone}`}>
-                    <strong>{step.text}</strong>
-                    <span>{step.hint}</span>
+                  <h3>{a.agentName}</h3>
+                  <div className={`v7-next-box ${urgent ? 'urgent' : ''}`}>
+                    <span>Next step</span>
+                    <p>{step.tone === 'act' || step.tone === 'bad' ? `${step.text} — ${step.hint}` : step.hint}</p>
                   </div>
-                </div>
+                  <div className="v7-ac-foot">
+                    <span>{metaOf(a)}{a.approvalStatus !== 'rejected' && ` · ${normalizeProgress(a.devProgress)}%`}</span>
+                    {btnLabel && openable && (
+                      <button type="button" className={`v7-sub-btn ${step.tone === 'act' ? 'pri' : ''}`} onClick={() => onOpenAgent?.(a)}>
+                        {btnLabel}
+                      </button>
+                    )}
+                  </div>
+                </article>
               );
             })}
           </div>

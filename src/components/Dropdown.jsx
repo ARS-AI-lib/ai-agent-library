@@ -17,7 +17,8 @@ import { useEffect, useRef, useState } from 'react';
  * `options` is [value, label][] so callers keep their existing value/label
  * split (ControlBar's VIEWS constant is already in that shape).
  */
-export default function Dropdown({ options, value, onChange, ariaLabel, disabled = false }) {
+// `pill` (V7): renders the field name inside the trigger, like MultiSelect.
+export default function Dropdown({ options, value, onChange, ariaLabel, disabled = false, pill, activeWhen }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0); // keyboard cursor, not the selection
   const wrapRef = useRef(null);
@@ -72,7 +73,7 @@ export default function Dropdown({ options, value, onChange, ariaLabel, disabled
       <button
         type="button"
         ref={btnRef}
-        className="dd"
+        className={pill ? `v7-fpill ${activeWhen && activeWhen(value) ? 'on' : ''}` : 'dd'}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -81,7 +82,9 @@ export default function Dropdown({ options, value, onChange, ariaLabel, disabled
         onClick={() => !disabled && (open ? setOpen(false) : openList())}
         onKeyDown={(e) => !disabled && onKeyDown(e)}
       >
+        {pill && <span className="v7-pl">{pill}</span>}
         {current ? current[1] : ''}
+        {pill && <span className="v7-caret" aria-hidden="true" />}
       </button>
       {open && (
         <div className="dd-panel" role="listbox" aria-label={ariaLabel} tabIndex={-1}>

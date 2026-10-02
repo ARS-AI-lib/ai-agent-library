@@ -1,4 +1,6 @@
+import { Fragment } from 'react';
 import { agentCategories, agentStages, categoryColor } from '../lib/agentUtils';
+import { CATEGORY_GROUP_STARTS } from '../lib/approveAreas';
 
 // Left-hand shortcut menu (2026-08) — a faster path into the 242-item
 // library alongside (not instead of) the horizontal filter bar in ControlBar.
@@ -38,6 +40,9 @@ export default function Sidebar({
 }) {
   return (
     <aside className="sidebar">
+      {/* V7 moved My AI to the quick paths in the action row; the sidebar
+          keeps it only if a caller still passes the toggle. */}
+      {onToggleMyAI && (
       <button
         type="button"
         className={`sidebar-myai ${myAI ? 'active' : ''}`}
@@ -49,15 +54,18 @@ export default function Sidebar({
         My AI
         {myAI && <span className="sidebar-on">✓</span>}
       </button>
+      )}
 
       <div className="sidebar-group">
         <div className="sidebar-h">Category</div>
         {categoryOptions.map((c) => {
           const n = countFor(agents, (a) => agentCategories(a).includes(c));
           return (
+            <Fragment key={c}>
+            {CATEGORY_GROUP_STARTS.has(c) && <span className="v7-sb-sep" aria-hidden="true" />}
             <button
-              key={c}
               type="button"
+              aria-pressed={category.has(c)}
               className={`sidebar-item ${category.has(c) ? 'active' : ''}`}
               onClick={() => setCategory(toggle(category, c))}
             >
@@ -65,6 +73,7 @@ export default function Sidebar({
               <span className="sb-label">{c}</span>
               <span className="sidebar-count">{n}</span>
             </button>
+            </Fragment>
           );
         })}
         {categoryOptions.length === 0 && (

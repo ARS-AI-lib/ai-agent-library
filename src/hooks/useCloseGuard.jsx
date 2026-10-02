@@ -44,8 +44,8 @@ export default function useCloseGuard(watched, onClose) {
         <h3 style={{ fontSize: 15, marginBottom: 8 }}>Discard changes?</h3>
         <p style={{ fontSize: 13, color: 'var(--mu)', margin: '0 0 14px' }}>ข้อมูลที่กรอกหรือแก้ไขไว้จะหายทั้งหมด ต้องการปิดจริงไหม</p>
         <div className="btn-row">
-          <button type="button" className="btn-sm" onClick={() => setAsking(false)}>Keep Editing</button>
-          <button type="button" className="btn-sm rej" onClick={() => { setAsking(false); onClose(); }}>Discard</button>
+          <button type="button" className="btn btn-secondary" onClick={() => setAsking(false)}>Keep Editing</button>
+          <button type="button" className="btn btn-danger" onClick={() => { setAsking(false); onClose(); }}>Discard</button>
         </div>
       </div>
     </div>

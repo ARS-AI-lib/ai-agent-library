@@ -308,6 +308,16 @@ export const CATEGORY_AREA = {
 };
 
 /**
+ * First category of each sidebar group (V7, 2026-10-01) — the sidebar draws a
+ * divider before these. Kept next to CATEGORY_AREA because that table's key
+ * order IS the sidebar order; the group comments above are the source.
+ */
+export const CATEGORY_GROUP_STARTS = new Set([
+  'Requirements & Product', 'UX Research', 'Architecture', 'SIT', 'DevOps & Platform',
+  VERTICAL_CATEGORIES[0],
+]);
+
+/**
  * Areas a single category routes to, always as an array. A live admin
  * override (/config/schema.categoryAreaMap, written when a proposed category
  * is approved) wins over the baked-in table. Most categories map to one area;

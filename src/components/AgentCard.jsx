@@ -33,6 +33,7 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
   const scope = isInternalOrExternal(agent);
   const ability = Array.isArray(agent.coreAbility) ? agent.coreAbility.join(', ') : agent.coreAbility;
   const endpointHref = safeEndpointUrl(agent.endpoint);
+  const isReady = st === 'ru';
 
   return (
     // The whole card is the click target, so it also has to be a real control
@@ -55,41 +56,52 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
         onClick(agent);
       }}
     >
-      <div className="ac-eyebrow">
-        <span className={`tb ${type === 'agent' ? 'tbag' : 'tbsk'}`}>{type === 'agent' ? 'AGENT' : 'SKILL'}</span>
-        <Term k={tier}><span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
-          {tier}
-        </span></Term>
-        {/* .ac-scope + .ac-link (when present) form ONE trailing group, right-
-            aligned as a unit via margin-left:auto on .ac-scope — not two
-            independently-positioned icons. That is what keeps .ac-scope
-            flush against the card's right edge on a card with no endpoint,
-            instead of leaving a gap where .ac-link would have been. Both
-            share the same box size/shape (.ac-icon) so the two never look
-            like different-weight controls sitting side by side. */}
-        <span className="ac-scope ac-icon" title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
-          {scope === 'External' ? (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-          ) : (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="4" y="2" width="16" height="20" rx="1" /><line x1="9" y1="6" x2="9" y2="6" /><line x1="15" y1="6" x2="15" y2="6" />
-              <line x1="9" y1="10" x2="9" y2="10" /><line x1="15" y1="10" x2="15" y2="10" />
-              <line x1="9" y1="14" x2="9" y2="14" /><line x1="15" y1="14" x2="15" y2="14" />
-              <path d="M9 22v-4h6v4" />
-            </svg>
-          )}
+      {/* V7 card (board 1 · 2026-10-01): tier + scope + status on top, then
+          name + what it does, progress only while it is still being built,
+          and a footer with owner, reviews, usage and — when it is live and has
+          a link — an Open button. Same data and handlers as before. */}
+      <div className="v7-ac-top">
+        <Term k={tier}>
+          <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
+            {tier} {type === 'agent' ? 'Agent' : 'Skill'}
+          </span>
+        </Term>
+        <span className="v7-ac-scope">{scope === 'External' ? 'Customer-facing' : 'Internal'}</span>
+        <span className="status-pill v7-ac-status" style={{ color: sd.color, background: sd.bg, borderColor: sd.bd }}>
+          <span className="status-dot" style={{ background: sd.dot || sd.color }} />
+          {sd.lb}
         </span>
-        {endpointHref && (
+      </div>
+
+      <div className="v7-ac-head">
+        <h3 className="ac-title">{agent.agentName}</h3>
+        {agent.description && <p className="v7-ac-desc">{agent.description}</p>}
+      </div>
+
+      {!isReady && (
+        <div className="v7-ac-prog">
+          <div className="ac-progress-track">
+            <div className={`ac-progress-fill ${progressBucket(progress)}`} style={{ width: `${progress}%` }} />
+          </div>
+          <span className="ac-progress-pct">{progress}%</span>
+          {agent.launchDate && <span className="v7-ac-launch">· expected {fmtDate(agent.launchDate)}</span>}
+        </div>
+      )}
+
+      <div className="v7-ac-foot">
+        <span className="v7-ac-owner" title="Owner">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21c1-4 4-6 8-6s7 2 8 6" /></svg>
+          {agent.owner || '—'}
+        </span>
+        <AgentCardStats stats={stats} />
+        {isReady && endpointHref && (
           <a
-            className="ac-link ac-icon"
+            className="v7-open"
             href={endpointHref}
             target="_blank"
             rel="noopener noreferrer"
             title={endpointHref}
-            aria-label={`เปิดลิงก์ใช้งาน ${agent.agentName}`}
+            aria-label={`Open ${agent.agentName}`}
             onClick={(e) => {
               e.stopPropagation();
               recordAgentEvent(agent.id, 'endpoint');
@@ -99,94 +111,31 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
             }}
             onKeyDown={(e) => e.stopPropagation()}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-              <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
+            Open
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" /></svg>
           </a>
         )}
       </div>
-
-      <h3 className="ac-title">{agent.agentName}</h3>
-
-      <div className="ac-progress-row">
-        <div className="ac-progress-track">
-          <div className={`ac-progress-fill ${progressBucket(progress)}`} style={{ width: `${progress}%` }} />
-        </div>
-        <span className="ac-progress-pct">{progress}%</span>
-      </div>
-
-      <div className="ac-meta">
-        <div className="ac-meta-item">
-          <div className="ac-meta-label">Owner</div>
-          <div className="ac-meta-value">{agent.owner || '—'}</div>
-        </div>
-        <div className="ac-meta-item">
-          <div className="ac-meta-label">Ability</div>
-          <div className="ac-meta-value">{ability || '—'}</div>
-        </div>
-        <div className="ac-meta-item">
-          <div className="ac-meta-label">Status</div>
-          <div>
-            <span className="status-pill" style={{ color: sd.color, background: sd.bg }}>
-              <span className="status-dot" style={{ background: sd.dot || sd.color }} />
-              {sd.lb}
-            </span>
-          </div>
-        </div>
-        <div className="ac-meta-item">
-          <div className="ac-meta-label">Launch</div>
-          <div className="ac-meta-value" style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{fmtDate(agent.launchDate) || '—'}</div>
-        </div>
-      </div>
-
-      {/* Rating + demand (2026-08-18). The card redesign went deliberately
-          lean, so this is ONE row, only when there is something true to say.
-          No average is rendered anywhere — see src/lib/agentStats.js for why a
-          mean over 1-2 ratings is the "ตัวเลขประมาณ" the project forbids. When
-          nobody has rated, the row shows the usage counts instead of five empty
-          stars: 239 cards of empty stars would read as an abandoned library. */}
-      <AgentCardStats stats={stats} />
     </div>
   );
 }
 
 function AgentCardStats({ stats }) {
+  // No average anywhere (src/lib/agentStats.js): a mean over 1-2 ratings is
+  // the "ตัวเลขประมาณ" the project forbids — so the star shows a COUNT.
   const s = readStats(stats);
   const rd = ratingDisplay(stats);
-  const hasUsage = s.detailOpens > 0 || s.endpointClicks > 0;
-  if (rd.kind === 'none' && !hasUsage) return null;
-
   return (
-    <div className="ac-stats">
-      {rd.kind === 'histogram' ? (
-        <span className="ac-stats-bar" title={rd.bars.map((b) => `${b.star}★ ${b.count}`).join(' · ')}>
-          {rd.bars.map((b) => (
-            <span
-              key={b.star}
-              className={`ac-stats-seg s${b.star}`}
-              style={{ flexGrow: b.count || 0.06 }}
-            />
-          ))}
-        </span>
-      ) : (
-        <span className="ac-stats-none">No reviews</span>
-      )}
-      {rd.kind === 'histogram' && <span className="ac-stats-n">{rd.total}</span>}
-      {hasUsage && (
-        <span className="ac-stats-use" title={`Viewed ${s.detailOpens} · Used ${s.endpointClicks}`}>
-          {s.detailOpens > 0 && (
-            <>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: -1 }}>
-                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-              {' '}{s.detailOpens}
-            </>
-          )}
-          {s.endpointClicks > 0 && <> ↗ {s.endpointClicks}</>}
+    <>
+      {rd.kind === 'histogram' && (
+        <span className="v7-ac-stat" title={rd.bars.map((b) => `${b.star}★ ${b.count}`).join(' · ')}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#f5a623" stroke="#f5a623" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" /></svg>
+          {rd.total} {rd.total === 1 ? 'review' : 'reviews'}
         </span>
       )}
-    </div>
+      {s.endpointClicks > 0
+        ? <span className="v7-ac-stat" title={`Viewed ${s.detailOpens} · Used ${s.endpointClicks}`}>{s.endpointClicks} used</span>
+        : s.detailOpens > 0 && <span className="v7-ac-stat">{s.detailOpens} views</span>}
+    </>
   );
 }
