@@ -48,7 +48,7 @@ export default function LoginScreen({ onSignIn, error }) {
       </div>
       <div className="signin-footer">
         <span>Copyright © 2026 Arise by Infinitas Co., Ltd. All rights reserved.</span>
-        <span className="signin-footer-brand">Powered by Wolfy<img className="signin-footer-logo" src="/wolfy-logo.png" alt="Wolfy" /></span>
+        <span className="signin-footer-brand">Powered by Wolfy<img className="signin-footer-logo" src="/alpha-logo.png" alt="Wolfy" /></span>
       </div>
     </div>
   );

@@ -73,7 +73,7 @@ export default function FileDownloadPage() {
   const wrap = (children) => (
     <div className="fdl-wrap">
       <div className="fdl-card">
-        <img src="/wolfy-logo.png" alt="" className="fdl-logo" />
+        <img src="/alpha-logo.png" alt="" className="fdl-logo" />
         {children}
         <a className="fdl-back" href="/">← กลับไปที่ AI Agent Library</a>
       </div>

@@ -810,7 +810,7 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
             onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
           />
           <div className="chat-header">
-            <span><img src="/alpha-logo.png" alt="" className="chat-hdr-logo" /> AI Agent Library Assistant</span>
+            <span>AI Agent Library Assistant</span>
             <div className="chat-header-actions">
               <button className="chat-close" onClick={handleClose}>✕</button>
             </div>
