@@ -1,7 +1,6 @@
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { fmtDate, safeEndpointUrl } from '../lib/agentUtils';
-import Term from './Term';
 import { recordAgentEvent } from '../lib/agentEvents';
 import { handleEndpointClick } from '../lib/endpointFiles';
 import { readStats, ratingDisplay } from '../lib/agentStats';
@@ -61,12 +60,9 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
           and a footer with owner, reviews, usage and — when it is live and has
           a link — an Open button. Same data and handlers as before. */}
       <div className="v7-ac-top">
-        <Term k={tier}>
-          <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
-            {tier} {type === 'agent' ? 'Agent' : 'Skill'}
-          </span>
-        </Term>
-        <span className="v7-ac-scope">{scope === 'External' ? 'Customer-facing' : 'Internal'}</span>
+        <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
+          {tier} {type === 'agent' ? 'Agent' : 'Skill'}
+        </span>
         <span className="status-pill v7-ac-status" style={{ color: sd.color, background: sd.bg, borderColor: sd.bd }}>
           <span className="status-dot" style={{ background: sd.dot || sd.color }} />
           {sd.lb}

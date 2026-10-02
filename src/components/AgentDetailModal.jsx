@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { toast } from '../lib/toast';
 import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import Term from './Term';
@@ -322,6 +323,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           }).catch(() => {});
         }
         setEditing(false);
+        toast(`Saved · ${agent.agentName}`);
       } catch (e) {
         setSaveError(e?.message || 'ปรับเป็น 100% ไม่สำเร็จ');
       } finally {
@@ -350,6 +352,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         await updateDoc(doc(db, 'agents', sk.id), patch);
       }
       setEditing(false);
+      toast(`Saved · ${agent.agentName}`);
     } catch (e) {
       setSaveError(e.message || 'บันทึกไม่สำเร็จ');
     } finally {

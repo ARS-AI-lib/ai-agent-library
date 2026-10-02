@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from '../lib/toast';
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getTier, TIER_DEF } from '../lib/tier';
@@ -362,6 +363,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
       // Once, after the whole cascade is approved: give the parent and its
       // siblings a primary Role Group. Fire-and-forget — never blocks approval.
       classifyRoleGroups([agent.id, ...siblings.map((s) => s.id)]);
+      toast(`Approved · ${agent.agentName}`);
     } catch (e) {
       setError(e.message || 'Approve failed');
     } finally {
@@ -401,6 +403,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
         await recordOutcome(sib.id, 'rejected', user?.uid);
       }
       setRejectModal(null);
+      toast(`Rejected · ${agent.agentName}`);
     } catch (e) {
       setError(e.message || 'Reject failed');
     } finally {

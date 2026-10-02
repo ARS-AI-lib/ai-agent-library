@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from '../lib/toast';
 import { notifyEvent } from '../lib/notify';
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -111,6 +112,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
       // for it and the user chose not to add one.
       notifyEvent('user.roleChanged', { targetUid: u.uid });
       setDrafts((prev) => { const n = { ...prev }; delete n[u.uid]; return n; });
+      toast(`Saved · ${u.displayName || u.email || u.uid}`);
     } catch (e) {
       setError(e.message || 'บันทึกไม่สำเร็จ');
     } finally {
@@ -124,96 +126,89 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
     ? sorted.filter((u) => `${u.displayName || ''} ${u.email || ''}`.toLowerCase().includes(q))
     : sorted;
 
+  // V7 board 6 · User Management (2026-10-02). Presentation only: the same
+  // drafts / setDraft / save(u) / protected-admin rules as before.
   return (
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
-      <div className="mbox wide">
-        <button className="mclose" onClick={onClose}>✕</button>
-        <div className="m-head">
-          <div className="m-icon" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <div>
-            <h2 className="mtitle">User Management</h2>
-            <p>{users.length} ผู้ใช้ · กำหนด role และ approve area</p>
-          </div>
-        </div>
+      <div className="mbox wide v7-um">
+        <button className="mclose" onClick={onClose} aria-label="Close">✕</button>
+        <h2 className="mtitle">User Management</h2>
+        <div className="msub">{users.length} users · กำหนด role และ approve area</div>
 
-        {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
+        {error && <div className="msg error">{error}</div>}
 
-        <input
-          type="text"
-          className="um-search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="ค้นหาชื่อหรืออีเมล…"
-        />
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 2px', borderBottom: '1px solid var(--bd)', marginBottom: 4 }}>
+        <div className="v7-um-bar">
+          <label className="v7-um-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name or email…"
+              aria-label="Search users"
+            />
+          </label>
           <button className="btn btn-secondary" disabled={dirSyncing} onClick={handleSyncDirectory}>
-            {dirSyncing ? 'กำลัง sync…' : 'Sync directory now'}
+            {dirSyncing ? 'Syncing…' : 'Sync directory now'}
           </button>
-          <span style={{ fontSize: 11, color: 'var(--mu)' }}>
-            {dirMeta
-              ? `Directory picker: ${dirMeta.count} รายชื่อ · sync ล่าสุด ${fmtSyncTime(dirMeta.updatedAt) || '—'}`
-              : 'Directory picker: ยังไม่เคย sync'}
-          </span>
         </div>
-        {dirError && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{dirError}</div>}
+        <div className="v7-um-cap">
+          {dirMeta
+            ? `Directory picker: ${dirMeta.count} รายชื่อ · sync ล่าสุด ${fmtSyncTime(dirMeta.updatedAt) || '—'}`
+            : 'Directory picker: ยังไม่เคย sync'}
+        </div>
+        {dirError && <div className="msg error">{dirError}</div>}
 
-        {q && visible.length === 0 && <div className="empty-state" style={{ padding: '20px 0' }}>ไม่พบผู้ใช้ที่ตรงกับ "{search}"</div>}
+        {q && visible.length === 0 && <div className="v7-inbox-empty">ไม่พบผู้ใช้ที่ตรงกับ “{search}”</div>}
 
-        {visible.map((u) => {
-          const d = draftFor(u);
-          const dirty = !!drafts[u.uid];
-          const isSelf = u.uid === currentUid;
-          const isProtected = (u.email || '').toLowerCase() === PROTECTED_ADMIN_EMAIL;
-          return (
-            <div key={u.uid} style={UM_ROW}>
-              <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="um-avatar">{(u.displayName || u.email || '?').trim().charAt(0).toUpperCase()}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div className="dup-name" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {u.displayName || u.email || u.uid}{isSelf && <span style={{ color: 'var(--mu)', fontWeight: 400 }}> (คุณ)</span>}
-                  </div>
-                  <div className="queue-meta" style={{ fontSize: 11 }}>{u.email || '—'}</div>
+        <div className="v7-um-list">
+          {visible.map((u) => {
+            const d = draftFor(u);
+            const dirty = !!drafts[u.uid];
+            const isSelf = u.uid === currentUid;
+            const isProtected = (u.email || '').toLowerCase() === PROTECTED_ADMIN_EMAIL;
+            return (
+              <div key={u.uid} className={`v7-um-row ${dirty ? 'dirty' : ''}`}>
+                <span className="v7-avatar">{(u.displayName || u.email || '?').trim().charAt(0).toUpperCase()}</span>
+                <div className="v7-um-who">
+                  <strong>{u.displayName || u.email || u.uid}{isSelf && <span> (คุณ)</span>}</strong>
+                  <span>{u.email || '—'}</span>
                 </div>
+                <div className="v7-um-ctl">
+                  <Dropdown
+                    pill="Role"
+                    options={ROLES.map((r) => [r, r])}
+                    value={d.role}
+                    onChange={(r) => setDraft(u.uid, { role: r })}
+                    ariaLabel={`Role ของ ${u.displayName || u.email || u.uid}`}
+                    disabled={isProtected}
+                    activeWhen={(r) => r !== 'user'}
+                  />
+                  {isProtected && <span className="v7-um-lock">🔒 Always admin</span>}
+                </div>
+                <div className="v7-um-ctl">
+                  <MultiSelect
+                    pill="Areas"
+                    label="Approve areas"
+                    options={areaOptions}
+                    selected={d.approveAreas}
+                    onChange={(sel) => setDraft(u.uid, { approveAreas: sel })}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className={dirty ? 'v7-btn-primary-sm' : 'v7-um-save-idle'}
+                  disabled={!dirty || busyId === u.uid}
+                  onClick={() => save(u)}
+                >
+                  {busyId === u.uid ? 'Saving…' : 'Save'}
+                </button>
               </div>
-              <div>
-                <div style={UM_LABEL}>Role</div>
-                {/* Last native <select> in the app — swapped for the shared
-                    listbox so the role picker matches the Approve-areas
-                    MultiSelect sitting immediately beside it in the same row. */}
-                <Dropdown
-                  options={ROLES.map((r) => [r, r])}
-                  value={d.role}
-                  onChange={(r) => setDraft(u.uid, { role: r })}
-                  ariaLabel={`Role ของ ${u.displayName || u.email || u.uid}`}
-                  disabled={isProtected}
-                />
-                {isProtected && <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 4 }}>🔒 Always admin</div>}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={UM_LABEL}>Approve areas</div>
-                <MultiSelect
-                  label="เลือก area…"
-                  options={areaOptions}
-                  selected={d.approveAreas}
-                  onChange={(s) => setDraft(u.uid, { approveAreas: s })}
-                />
-              </div>
-              <button className={`btn-sm ${dirty && busyId !== u.uid ? 'appr' : 'rej'}`} disabled={!dirty || busyId === u.uid} onClick={() => save(u)}>
-                {busyId === u.uid ? 'บันทึก…' : 'Save'}
-              </button>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
-// Compact, aligned row styling — deliberately NOT using .fg/.btn (those are
-// full-form-sized). Every control is the same 26px height so Role, Approve
-// areas and Save line up on one baseline.
-const UM_ROW = { display: 'grid', gridTemplateColumns: '1fr 110px 150px 62px', gap: 10, alignItems: 'end', padding: '9px 2px', borderBottom: '1px solid var(--bd-soft)' };
-const UM_LABEL = { fontSize: 10, fontWeight: 700, color: 'var(--mu)', marginBottom: 3, letterSpacing: '.03em' };

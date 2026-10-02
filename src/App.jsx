@@ -17,13 +17,14 @@ import Nav from './components/Nav';
 import Sidebar from './components/Sidebar';
 import LibraryTitle from './components/LibraryTitle';
 import ControlBar from './components/ControlBar';
-import CardGrid from './components/CardGrid';
+import CardGrid, { SkeletonGrid } from './components/CardGrid';
 import CategoryApprovalPanel from './components/CategoryApprovalPanel';
 import AgentDetailModal from './components/AgentDetailModal';
 import PreRegModal from './components/PreRegModal';
 import MySubmissionsModal from './components/MySubmissionsModal';
 import { nextStep } from './lib/mySubmissions';
 import GlossaryModal from './components/GlossaryModal';
+import Toast from './components/Toast';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import ChatAssistant from './components/ChatAssistant';
 import UserManagementModal from './components/UserManagementModal';
@@ -186,7 +187,6 @@ export default function App() {
   const [showExport, setShowExport] = useState(false);
   const [showRoleGroups, setShowRoleGroups] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [myAI, setMyAI] = useState(false);
 
   // Deep links from Teams notifications (2026-09-28): ?agent=<id> opens that
   // agent's detail, ?view=pending opens the approval queue. Consumed once after
@@ -287,11 +287,8 @@ export default function App() {
     if (selectedStatus.size > 0) {
       result = result.filter((a) => selectedStatus.has(agentStatus(a)));
     }
-    if (myAI) {
-      result = result.filter((a) => isMyAgent(a, user));
-    }
     return result;
-  }, [agents, type, owner, role_, tier, reusable, hasEndpoint, category, stage, platformTools, search, selectedStatus, myAI, user]);
+  }, [agents, type, owner, role_, tier, reusable, hasEndpoint, category, stage, platformTools, search, selectedStatus]);
 
   // Count "the catalogue surfaced this for a search someone actually made"
   // (2026-08-18). Three guards, because a naive version of this is worse than
@@ -342,7 +339,6 @@ export default function App() {
   const libTitle = category.size === 1 ? [...category][0]
     : stage.size === 1 ? [...stage][0]
     : platformTools ? 'Platform Tools'
-    : myAI ? 'My AI'
     : selectedStatus.size === 1 && selectedStatus.has('ru') ? 'Ready to Use'
     : 'All tools';
   const without = (set, v) => { const n = new Set(set); n.delete(v); return n; };
@@ -357,7 +353,6 @@ export default function App() {
     ...(hasEndpoint ? [{ key: 'ep', label: 'Has endpoint', onRemove: () => setHasEndpoint(false) }] : []),
     ...(search.trim() ? [{ key: 'q', label: `“${search.trim()}”`, onRemove: () => setSearch('') }] : []),
   ];
-  const readyOnly = selectedStatus.size === 1 && selectedStatus.has('ru');
   // Header avatar dot: how many of MY items have an action waiting on me.
   const mySubsNeedAction = useMemo(() => {
     const byId = new Map();
@@ -492,6 +487,7 @@ export default function App() {
         canSeeDashboard={canSeeDashboard}
       />
 
+      <Toast />
       <ChatAssistant approvedAgents={agents} allAgents={allAgents} onOpenPreReg={() => setShowPreReg(true)} onOpenAgent={setSelectedAgent} />
 
       {activeTab === 'lib' && (
@@ -506,9 +502,6 @@ export default function App() {
             reusableOptions={reusableOptions} reusable={reusable} setReusable={setReusable}
             hasEndpoint={hasEndpoint} setHasEndpoint={setHasEndpoint}
             onClear={clearFilters}
-            readyOnly={readyOnly}
-            onToggleReady={() => setSelectedStatus(readyOnly ? new Set() : new Set(['ru']))}
-            myAI={myAI} onToggleMyAI={() => setMyAI((v) => !v)}
             counts={filterCounts}
             actions={legendActions}
           />
@@ -537,7 +530,7 @@ export default function App() {
                 setLayout={setLayout}
               />
               {agentsLoading ? (
-                <div className="empty-state">Loading…</div>
+                <SkeletonGrid />
               ) : (
                 <CardGrid agents={filtered} allAgents={agents} view={view} sort={sort} onCardClick={setSelectedAgent} statsById={statsById} layout={layout} search={search} onClear={clearFilters} onNew={() => setShowPreReg(true)} />
               )}

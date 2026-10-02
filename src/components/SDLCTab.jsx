@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
-import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
+import { getType, getTier, TIER_DEF } from '../lib/tier';
 import { uniq, splitRoles, relationshipLabel, fmtDate, extractProcessId, agentProcessIds, agentUseCaseNames } from '../lib/agentUtils';
 import MultiSelect from './MultiSelect';
 import Dropdown from './Dropdown';
@@ -603,41 +603,35 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
               const ability = Array.isArray(a.coreAbility) ? a.coreAbility.join(', ') : a.coreAbility;
               const tier = getTier(a);
               const tierDef = TIER_DEF[tier];
-              const scope = isInternalOrExternal(a);
+              // V7 (2026-10-02): one compact row per agent — same data (owner,
+              // creator, ability, phase, launch, progress), same click target.
               return (
-                <div key={a.id} className="sdlc-mac" style={{ cursor: 'pointer' }} onClick={() => onAgentClick?.(a)}>
-                  <div className="sdlc-machdr">
-                    <span className={`uc-tb ${t === 'agent' ? 'tbag' : 'tbsk'}`}>{t.toUpperCase()}</span>
-                    <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>{tier}</span>
-                    <span className="sdlc-macname">{a.agentName}</span>
-                    <span className="scope-badge" style={{ position: 'static', marginLeft: 'auto', color: scope === 'External' ? '#0ea5e9' : 'var(--ag)' }} title={scope === 'External' ? 'Customer Facing' : 'Internal Use'}>
-                      {scope === 'External' ? (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
-                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                        </svg>
-                      ) : (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="4" y="2" width="16" height="20" rx="1" />
-                          <line x1="9" y1="10" x2="9" y2="10" /><line x1="15" y1="10" x2="15" y2="10" />
-                          <line x1="9" y1="14" x2="9" y2="14" /><line x1="15" y1="14" x2="15" y2="14" />
-                          <path d="M9 22v-4h6v4" />
-                        </svg>
-                      )}
+                <div
+                  key={a.id}
+                  className="sdlc-mac v7-mac"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onAgentClick?.(a)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAgentClick?.(a); } }}
+                >
+                  <div className="v7-mac-top">
+                    <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
+                      {tier} {t === 'agent' ? 'Agent' : 'Skill'}
+                    </span>
+                    <span className="v7-mac-name">{a.agentName}</span>
+                    <span className="status-pill v7-ac-status" style={{ color: sd.color, background: sd.bg, borderColor: sd.bd }}>
+                      <span className="status-dot" style={{ background: sd.dot || sd.color }} />{sd.lb}
                     </span>
                   </div>
-                  <div className="sdlc-mrow"><span className="sdlc-mk">Owner</span><span>{a.owner || '—'}</span></div>
-                  <div className="sdlc-mrow"><span className="sdlc-mk">Creator</span><span>{a.creator || '—'}</span></div>
-                  <div className="sdlc-mrow"><span className="sdlc-mk">Ability</span><span>{ability || '—'}</span></div>
-                  <div className="sdlc-mrow"><span className="sdlc-mk">Phase</span>
-                    <span className="sdlc-ph" style={{ background: sd.bg, color: sd.color, border: `1px solid ${sd.bd}` }}>{sd.lb}</span>
+                  <div className="v7-mac-meta">
+                    <span>{a.owner || '—'}</span>
+                    {ability && <span>{ability}</span>}
+                    <span>Launch {fmtDate(a.launchDate) || '—'}</span>
+                    {a.creator && <span className="v7-mac-creator" title={a.creator}>by {a.creator}</span>}
                   </div>
-                  <div className="sdlc-mrow"><span className="sdlc-mk">Launch</span><span>{fmtDate(a.launchDate) || '—'}</span></div>
-                  <div style={{ marginTop: 6 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--mu)' }}>
-                      <span>Progress</span><strong style={{ fontFamily: "'IBM Plex Mono',monospace" }}>{progress}%</strong>
-                    </div>
+                  <div className="v7-mac-prog">
                     <div className="mpb"><div className={`mpf ${progressBucket(progress)}`} style={{ width: `${progress}%` }} /></div>
+                    <strong>{progress}%</strong>
                   </div>
                 </div>
               );

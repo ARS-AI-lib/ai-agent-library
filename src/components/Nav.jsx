@@ -59,6 +59,21 @@ export default function Nav({
     return () => { document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onKey); };
   }, []);
 
+  // V7 polish F: "/" or Cmd/Ctrl+K jumps to search (not while typing).
+  const searchRef = useRef(null);
+  useEffect(() => {
+    function onKey(e) {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName) || e.target?.isContentEditable;
+      if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !typing)) {
+        if (!searchRef.current) return;
+        e.preventDefault();
+        searchRef.current.focus();
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const close = () => setMenuOpen(false);
   const go = (href) => { window.location.href = href; close(); };
 
@@ -133,17 +148,20 @@ export default function Nav({
               type="text"
               className="nav-search-inp"
               placeholder="Search name, owner, description, ability, role…"
+              ref={searchRef}
+              aria-keyshortcuts="/ Meta+K Control+K"
               aria-label="Search the library"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            {!search && <kbd className="v7-kbd" aria-hidden="true">⌘K</kbd>}
           </div>
         </div>
       )}
 
       <div className="nav-r">
-        <span className="v7-count"><span className="v7-count-dot ag" /><strong>{agentCount}</strong>Agents</span>
-        <span className="v7-count"><span className="v7-count-dot sk" /><strong>{skillCount}</strong>Skills</span>
+        <span className="v7-count"><strong><span className="v7-count-dot ag" />{agentCount}</strong><span>Agents</span></span>
+        <span className="v7-count"><strong><span className="v7-count-dot sk" />{skillCount}</strong><span>Skills</span></span>
         <span className="v7-nav-sep" aria-hidden="true" />
 
         {/* Avatar = My submissions (board 1). The dot means at least one of

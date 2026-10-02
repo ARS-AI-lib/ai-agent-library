@@ -54,7 +54,7 @@ export default function ControlBar({
     <div className="cbar v7-actrow">
       {onToggleReady && <QuickBtn on={readyOnly} onClick={onToggleReady} d={Q.ready}>Ready to use</QuickBtn>}
       {onToggleMyAI && <QuickBtn on={myAI} onClick={onToggleMyAI} d={Q.mine}>My AI</QuickBtn>}
-      <span className="v7-vsep" aria-hidden="true" />
+      {(onToggleReady || onToggleMyAI) && <span className="v7-vsep" aria-hidden="true" />}
 
       <Dropdown pill="View" options={VIEWS} value={view} onChange={setView} ariaLabel="Group by" activeWhen={(v) => v !== 'by-category'} />
       {/* Popularity is already its own ranking (demandScore) — a second sort

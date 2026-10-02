@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import AgentCard from './AgentCard';
 import AgentListTable from './AgentListTable';
 import EmptyResults from './EmptyResults';
@@ -24,6 +25,21 @@ export default function CardGrid({ agents, allAgents, view, sort = 'name', onCar
       </div>
     ));
   const empty = <EmptyResults search={search} onClear={onClear} onNew={onNew} />;
+  // V7 polish: a group header collapses its group (session-only, not saved).
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  const toggleGroup = (g) => setCollapsed((prev) => {
+    const next = new Set(prev);
+    if (next.has(g)) next.delete(g); else next.add(g);
+    return next;
+  });
+  const GroupHead = ({ id, color, label, n, muted }) => (
+    <button type="button" className="sh v7-sh" aria-expanded={!collapsed.has(id)} onClick={() => toggleGroup(id)}>
+      <span className="v7-sh-caret" aria-hidden="true" />
+      <div className="sbar" style={{ background: color }} />
+      <span className="sname" style={muted ? { color: 'var(--mu)' } : undefined}>{label}</span>
+      <span className="sbadge">{n}</span>
+    </button>
+  );
   // Popularity is a SORT, not a grouping like the other views — an agent has
   // one owner but no natural "popularity bucket". So it renders one flat,
   // ranked list. Ordering is by raw event counts (demandScore); no average is
@@ -73,25 +89,33 @@ export default function CardGrid({ agents, allAgents, view, sort = 'name', onCar
         if (!gAgents.length) return null;
         return (
           <div className="sb" key={g}>
-            <div className="sh">
-              <div className="sbar" style={{ background: categoryColor(g) }} />
-              <span className="sname">{g}</span>
-              <span className="sbadge">{gAgents.length}</span>
-            </div>
-            {body(gAgents, key)}
+            <GroupHead id={g} color={categoryColor(g)} label={g} n={gAgents.length} />
+            {!collapsed.has(g) && body(gAgents, key)}
           </div>
         );
       })}
       {unassigned.length > 0 && (
         <div className="sb">
-          <div className="sh">
-            <div className="sbar" style={{ background: 'var(--mu2)' }} />
-            <span className="sname" style={{ color: 'var(--mu)' }}>(unassigned)</span>
-            <span className="sbadge">{unassigned.length}</span>
-          </div>
-          {body(unassigned, key)}
+          <GroupHead id="__unassigned" color="var(--mu2)" label="(unassigned)" n={unassigned.length} muted />
+          {!collapsed.has('__unassigned') && body(unassigned, key)}
         </div>
       )}
     </>
+  );
+}
+
+// V7 polish: placeholder cards while the library loads (replaces "Loading…").
+export function SkeletonGrid({ count = 6 }) {
+  return (
+    <div className="agrid" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="ac v7-skel" aria-hidden="true">
+          <span className="v7-skel-line w30" />
+          <span className="v7-skel-line w70 h" />
+          <span className="v7-skel-line w90" />
+          <span className="v7-skel-line w60" />
+        </div>
+      ))}
+    </div>
   );
 }

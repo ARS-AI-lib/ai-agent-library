@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from '../lib/toast';
 import { doc, addDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill, getType } from '../lib/tier';
@@ -478,6 +479,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
       reindexAgent(agent.id);
 
       onSaved?.();
+      toast(`Saved · ${agent.agentName}`);
       onClose();
     } catch (e) {
       setError(e.message || 'บันทึกไม่สำเร็จ');
