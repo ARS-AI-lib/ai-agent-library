@@ -367,16 +367,16 @@ export default function App() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 13l2.5-7h11L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" /><path d="M4 13h5l1 2h4l1-2h5" />
           </svg>
-          Inbox
+          <span className="v7-btn-label">Inbox</span>
           {pendingCount > 0 && <span className="v7-badge">{pendingCount}</span>}
         </button>
       )}
       {canManageUsers && (
-        <button type="button" className="v7-inbox-btn" onClick={() => setShowUsers(true)}>
+        <button type="button" className="v7-inbox-btn" aria-label="Users" onClick={() => setShowUsers(true)}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
           </svg>
-          Users
+          <span className="v7-btn-label">Users</span>
         </button>
       )}
       {canSubmitIdea && (
@@ -504,6 +504,7 @@ export default function App() {
             onClear={clearFilters}
             counts={filterCounts}
             actions={legendActions}
+            resultCount={filtered.length}
           />
 
           <div className="main-row">

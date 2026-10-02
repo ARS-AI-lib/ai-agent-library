@@ -1,5 +1,8 @@
 import MultiSelect from './MultiSelect';
 import Dropdown from './Dropdown';
+import { useState } from 'react';
+import useIsMobile from '../hooks/useIsMobile';
+import FilterSheet, { FiltersButton } from './FilterSheet';
 import { TIER_ORDER } from '../lib/tier';
 import { SORT_OPTIONS } from '../lib/agentUtils';
 
@@ -35,10 +38,15 @@ export default function ControlBar({
   onClear,
   counts = {},
   actions,
+  resultCount,
 }) {
+  const mobile = useIsMobile();
+  const [sheet, setSheet] = useState(false);
+  const activeCount = owner.size + role.size + tier.size + reusable.size
+    + (type !== 'all' ? 1 : 0) + (view !== 'by-category' ? 1 : 0) + (sort !== 'created' ? 1 : 0) + (hasEndpoint ? 1 : 0);
 
-  return (
-    <div className="cbar v7-actrow">
+  const controls = (
+    <>
 
       <Dropdown pill="View" options={VIEWS} value={view} onChange={setView} ariaLabel="Group by" activeWhen={(v) => v !== 'by-category'} />
       {/* Popularity is already its own ranking (demandScore) — a second sort
@@ -68,6 +76,26 @@ export default function ControlBar({
         </svg>
       </button>
 
+    </>
+  );
+
+  // Mobile (≤760px): one row = [Filters (n)] + page actions; the SAME controls
+  // live in a bottom sheet. Desktop: the pill row as before.
+  if (mobile) {
+    return (
+      <div className="cbar v7-actrow v7-actrow-m">
+        <FiltersButton count={activeCount} onClick={() => setSheet(true)} />
+        {actions && <div className="v7-row-actions">{actions}</div>}
+        <FilterSheet open={sheet} onClose={() => setSheet(false)} onClear={onClear} count={activeCount} resultCount={resultCount}>
+          {controls}
+        </FilterSheet>
+      </div>
+    );
+  }
+
+  return (
+    <div className="cbar v7-actrow">
+      {controls}
       <button type="button" className="v7-clear" aria-label="Clear filters" title="Clear filters" onClick={onClear}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
       </button>

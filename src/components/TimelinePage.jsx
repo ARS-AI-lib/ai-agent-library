@@ -112,7 +112,7 @@ export default function TimelinePage() {
           <div className="tl-subtitle">Generative AI for SDLC — Launch Timeline</div>
         </div>
         {canEdit && (
-          <button className="btn btn-primary" style={{ fontSize: 12.5, padding: '7px 14px' }} onClick={() => setEditMs(true)}>
+          <button className="btn btn-primary" onClick={() => setEditMs(true)}>
             Manage Milestones
           </button>
         )}

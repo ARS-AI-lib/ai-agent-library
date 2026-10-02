@@ -7,6 +7,8 @@ import { uniq, splitRoles, relationshipLabel, fmtDate, extractProcessId, agentPr
 import MultiSelect from './MultiSelect';
 import Dropdown from './Dropdown';
 import LibraryTitle from './LibraryTitle';
+import useIsMobile from '../hooks/useIsMobile';
+import FilterSheet, { FiltersButton } from './FilterSheet';
 import '../styles/SDLCTab.css';
 
 // Stage palette — SINGLE source of truth (2026-07 redesign fix: this used to
@@ -100,6 +102,9 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
   const [useCases, setUseCases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showUseCases, setShowUseCases] = useState(false);
+  // V7 mobile: filters move into a bottom sheet (same controls, same state).
+  const isMobile = useIsMobile();
+  const [filterSheet, setFilterSheet] = useState(false);
   const [adoptView, setAdoptView] = useState('by-stage');
   const [stage, setStage] = useState('all');
   const [owner, setOwner] = useState(new Set());
@@ -534,6 +539,36 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
       {/* V7 boards 7–8 (2026-10-01): action row first (same filters, pill
           skin, page actions on the right), then a title row with the status
           legend — the same state and handlers as before, only re-ordered. */}
+      {isMobile && (
+        <div className="cbar v7-actrow v7-actrow-m">
+          <button className={`pill ${showUseCases ? 'on' : ''}`} aria-pressed={showUseCases} onClick={toggleUseCases}>Use Cases</button>
+          <FiltersButton
+            count={owner.size + role.size + reusable.size + (hasAgent ? 1 : 0) + (nonSdlcOnly ? 1 : 0) + (stage !== 'all' ? 1 : 0)}
+            onClick={() => setFilterSheet(true)}
+          />
+          {legendActions && <div className="v7-row-actions">{legendActions}</div>}
+        </div>
+      )}
+      <FilterSheet
+        open={isMobile && filterSheet}
+        onClose={() => setFilterSheet(false)}
+        onClear={clearFilters}
+        count={owner.size + role.size + reusable.size + (hasAgent ? 1 : 0) + (nonSdlcOnly ? 1 : 0) + (stage !== 'all' ? 1 : 0)}
+      >
+        {showUseCases && (
+          <Dropdown pill="View" options={[['by-stage', 'By Stage'], ['by-process', 'By Process']]} value={adoptView} onChange={changeAdoptView} ariaLabel="จัดกลุ่ม Use Case ตาม" />
+        )}
+        {showUseCases && adoptView === 'by-stage' && (
+          <Dropdown pill="Stage" options={[['all', 'All'], ...ALL_STAGES.map((s) => [s, s])]} value={stage} onChange={setStage} ariaLabel="กรองตาม Stage" activeWhen={(v) => v !== 'all'} />
+        )}
+        <MultiSelect pill="Owner" label="Owner" options={ownerOptions} selected={owner} onChange={setOwner} />
+        <MultiSelect pill="Role" label="Role" options={roleOptions} selected={role} onChange={setRole} />
+        <MultiSelect pill="Reusable" label="Reusable" options={reusableOptions} selected={reusable} onChange={setReusable} />
+        <button className={`pill ${hasAgent ? 'on' : ''}`} aria-pressed={hasAgent} onClick={() => setHasAgent((v) => !v)}>Has agent</button>
+        <button className={`pill ${nonSdlcOnly ? 'on' : ''}`} aria-pressed={nonSdlcOnly} onClick={() => setNonSdlcOnly((v) => !v)}>Non-SDLC</button>
+      </FilterSheet>
+
+      {!isMobile && (
       <div className="cbar v7-actrow">
         <button className={`pill ${showUseCases ? 'on' : ''}`} aria-pressed={showUseCases} onClick={toggleUseCases}>Use Cases</button>
         <span className="v7-vsep" aria-hidden="true" />
@@ -569,6 +604,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
         </button>
         {legendActions && <div className="v7-row-actions">{legendActions}</div>}
       </div>
+      )}
 
       <div className="v7-sdlc-title">
         <LibraryTitle

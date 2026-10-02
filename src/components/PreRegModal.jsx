@@ -1033,7 +1033,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               <div style={{ marginTop: 6, padding: '12px 14px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf2)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>Cascade Skills</div>
-                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 12, whiteSpace: 'nowrap' }} onClick={addSkill}>+ Add Skill</button>
+                  <button type="button" className="btn btn-secondary v7-btn-compact" onClick={addSkill}>+ Add Skill</button>
                 </div>
 
                 {form.skills.map((s, idx) => (
