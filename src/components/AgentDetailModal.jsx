@@ -11,6 +11,7 @@ import { recordAgentEvent, submitRating } from '../lib/agentEvents';
 import { handleEndpointClick, isLibraryFileUrl, markAgentReady, attachEndpointFile, validateUploadFile, formatBytes, listEndpointVersions, downloadEndpointFile, ACCEPT_ATTR, ALLOWED_EXT, MAX_UPLOAD_BYTES } from '../lib/endpointFiles';
 import { notifyEvent } from '../lib/notify';
 import { readStats, ratingDisplay, canRateAgent, STAR_LEVELS } from '../lib/agentStats';
+import { failMsg } from '../lib/copy';
 
 // Firestore Timestamp / Date / string → "YYYY-MM-DD" for <input type="date">.
 function toDateInputValue(d) {
@@ -24,7 +25,7 @@ function toDateInputValue(d) {
   }
 }
 
-const DEPLOY_STATUS_LABEL = { requested: 'Deploy Pending', approved: 'Deploy Approved', rejected: 'Deploy Rejected' };
+const DEPLOY_STATUS_LABEL = { requested: 'Deploy requested', approved: 'Deploy approved', rejected: 'Deploy rejected' };
 const DEPLOY_STATUS_COLOR = { requested: 'var(--warn)', approved: 'var(--ok)', rejected: 'var(--late)' };
 
 export default function AgentDetailModal({ agent, allAgents, onClose, user, userRole, isAdmin, onEditAgent, approveAreas = [], schema = {} }) {
@@ -136,7 +137,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       await submitRating({ agentId: agent.id, rating: myRating, comment: myComment });
       setRateOpen(false);
     } catch (e) {
-      setSaveError(e?.message || 'ส่งคะแนนไม่สำเร็จ');
+      setSaveError(failMsg('ส่งคะแนน', e));
     } finally {
       setRating(false);
     }
@@ -251,7 +252,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   async function handleSave() {
     const clamped = Math.max(0, Math.min(100, Math.round(Number(editProgress) || 0)));
     if (clamped > 95 && deploymentStatus !== 'approved') {
-      setSaveError('ไม่สามารถตั้งค่าเกิน 95% ได้จนกว่าจะได้รับอนุมัติ Deployment Request (ปุ่มขออนุมัติอยู่ใต้แถบ Progress ด้านล่าง)');
+      setSaveError('ตั้งเกิน 95% ได้หลัง Deploy ได้รับอนุมัติ — กด Request deploy ใต้แถบ Progress');
       return;
     }
     // ── The 100% transition is a different operation, not a bigger number ──
@@ -324,7 +325,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         setEditing(false);
         toast(`Saved · ${agent.agentName}`);
       } catch (e) {
-        setSaveError(e?.message || 'ปรับเป็น 100% ไม่สำเร็จ');
+        setSaveError(failMsg('ปรับเป็น 100%', e));
       } finally {
         setSaving(false);
       }
@@ -353,7 +354,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       setEditing(false);
       toast(`Saved · ${agent.agentName}`);
     } catch (e) {
-      setSaveError(e.message || 'บันทึกไม่สำเร็จ');
+      setSaveError(failMsg('บันทึก', e));
     } finally {
       setSaving(false);
     }
@@ -397,7 +398,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       setArchiveOpen(false);
       onClose?.();
     } catch (e) {
-      setSaveError(e.message || 'Archive ไม่สำเร็จ');
+      setSaveError(failMsg('Archive', e));
     } finally {
       setArchiving(false);
     }
@@ -418,7 +419,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       });
       onClose?.();
     } catch (e) {
-      setSaveError(e.message || 'ยกเลิก Archive ไม่สำเร็จ');
+      setSaveError(failMsg('ยกเลิก Archive', e));
     } finally {
       setArchiving(false);
     }
@@ -432,7 +433,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // paired sub-skills' matchingAgent so the pairing survives.
   async function handleRequestRename() {
     const next = renameValue.trim();
-    if (!next) { setRenameMsg('กรุณาระบุชื่อใหม่'); return; }
+    if (!next) { setRenameMsg('ใส่ชื่อใหม่ก่อน'); return; }
     if (next === String(agent.agentName || '').trim()) { setRenameMsg('ชื่อใหม่ซ้ำกับชื่อเดิม'); return; }
     setRenameBusy(true);
     setRenameMsg('');
@@ -450,7 +451,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       setRenameMsg('ส่งคำขอแล้ว — รอ Approver ประจำ Area หรือ Admin อนุมัติ');
       setRenameValue('');
     } catch (e) {
-      setRenameMsg(e?.message || 'ส่งคำขอไม่สำเร็จ');
+      setRenameMsg(failMsg('ส่งคำขอ', e));
     } finally {
       setRenameBusy(false);
     }
@@ -484,7 +485,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         await updateDoc(doc(db, 'agents', sk.id), patch);
       }
     } catch (e) {
-      setSaveError(e.message || 'ขออนุมัติไม่สำเร็จ');
+      setSaveError(failMsg('ขออนุมัติ', e));
     } finally {
       setRequesting(false);
     }
@@ -770,7 +771,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                       disabled={requesting}
                       onClick={() => setConfirmingDeploy(true)}
                     >
-                      {requesting ? 'Sending…' : 'Deployment Request'}
+                      {requesting ? 'Sending…' : 'Request deploy'}
                     </button>
                   )}
                 </div>
@@ -885,7 +886,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                         onClick={async () => {
                           setVersionBusy(v.version);
                           try { await downloadEndpointFile(agent.id, v.version); } catch (e) {
-                            setSaveError(e?.message || 'ดาวน์โหลดไม่สำเร็จ');
+                            setSaveError(failMsg('ดาวน์โหลด', e));
                           } finally { setVersionBusy(''); }
                         }}
                       >
@@ -982,7 +983,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               Agent/Skill นี้เผยแพร่แล้ว การเปลี่ยนชื่อต้องได้รับอนุมัติจาก Approver ประจำ Area หรือ Admin ก่อน
               {subSkills.length > 0 && (
                 <span style={{ display: 'block', marginTop: 6, color: 'var(--mu)', fontSize: 11 }}>
-                  ระบบจะอัปเดตการผูกของ Skill ลูก {subSkills.length} ตัวให้อัตโนมัติเมื่อได้รับอนุมัติ
+                  เมื่ออนุมัติ Skill ที่ผูกอยู่ {subSkills.length} ตัวจะเปลี่ยนตามให้เอง
                 </span>
               )}
             </p>
@@ -1009,15 +1010,14 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setConfirmingDeploy(false)}>
           <div className="mbox" style={{ padding: 18, maxWidth: 380 }}>
             <button className="mclose" onClick={() => setConfirmingDeploy(false)}>✕</button>
-            <h2 className="mtitle">Deployment Request</h2>
+            <h2 className="mtitle">Request deploy</h2>
             <div className="msub">Confirm</div>
             <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 16 }}>
-              Agent/Skill ของท่านผ่านการทดสอบ (กรุณาส่งหลักฐานให้กับ Approver พิจารณา)
-              และพร้อมที่จะ Deployment แล้วใช่หรือไม่?
+              ทดสอบผ่านแล้วและพร้อมเปิดใช้? แนบหลักฐานการทดสอบให้ Approver ดูด้วย
             </p>
             <div className="btn-row">
-              <button className="btn btn-secondary" onClick={() => setConfirmingDeploy(false)}>No</button>
-              <button className="btn btn-primary" onClick={handleRequestDeploy}>Yes, request</button>
+              <button className="btn btn-secondary" onClick={() => setConfirmingDeploy(false)}>Not yet</button>
+              <button className="btn btn-primary" onClick={handleRequestDeploy}>Request deploy</button>
             </div>
           </div>
         </div>

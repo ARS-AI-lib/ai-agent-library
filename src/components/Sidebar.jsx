@@ -115,7 +115,7 @@ export default function Sidebar({
 
       {isAdmin && pendingProposalCount > 0 && (
         <button type="button" className="sidebar-admin" onClick={onOpenProposals}>
-          หมวดใหม่รออนุมัติ <span className="sidebar-badge">{pendingProposalCount}</span>
+          New categories <span className="sidebar-badge">{pendingProposalCount}</span>
         </button>
       )}
     </aside>

@@ -17,7 +17,7 @@ import TagMultiSelect from './TagMultiSelect';
  * legend (ST_DEF[k].dot); they are not a CVD-safe categorical set, so every
  * segment also carries a text label/tooltip and the legend has names.
  */
-const DP = { lb: 'Deploy Pending', dot: '#c2418b' };
+const DP = { lb: 'Deploy requested', dot: '#c2418b' };
 const SLICES = [...ST_ORDER.slice(0, 3), 'dp', ST_ORDER[3]]; // td ip pilot dp ru
 const sliceDef = (k) => (k === 'dp' ? DP : ST_DEF[k]);
 const TOP = 8;

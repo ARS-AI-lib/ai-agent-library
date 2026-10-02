@@ -212,7 +212,7 @@ function templateAnswer(name, args, result) {
     const lines = result.suggestions.map((s) => `@@ ${s.target} | ${s.type} — ${s.reason}`).join('\n');
     return { text: `**ต่อกับตัวนี้ได้**\n${lines}`, csv: null };
   }
-  return { text: 'ขอโทษครับ ประมวลผลไม่สำเร็จ', csv: null };
+  return { text: 'ขอโทษครับ ตอนนี้ตอบไม่ได้ ลองถามใหม่อีกครั้งนะครับ', csv: null };
 }
 
 // ── Rich-text rendering for chat bubbles ───────────────────────────────
@@ -431,7 +431,7 @@ function RecommendationList({ recs, library, onOpen }) {
             <span>{r.name}{r.reason ? ` — ${r.reason}` : ''}</span>
           </div>
         ))}
-        <div className="chat-rec-note">ไม่พบรายการเหล่านี้ในไลบรารี — โปรดตรวจสอบชื่ออีกครั้งครับ</div>
+        <div className="chat-rec-note">ไม่เจอชื่อเหล่านี้ในไลบรารีครับ ลองเช็กตัวสะกดอีกครั้ง</div>
       </div>
     );
   }
@@ -862,13 +862,13 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
             <input
               ref={inputRef}
               className="chat-input"
-              placeholder="Ask ALPHA..."
+              placeholder="Ask ALPHA…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               disabled={thinking}
             />
-            <button className="chat-send" onClick={handleSend} disabled={thinking || !input.trim()} title="ส่ง" aria-label="ส่ง">
+            <button className="chat-send" onClick={handleSend} disabled={thinking || !input.trim()} title="Send" aria-label="Send">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
             </button>
           </div>

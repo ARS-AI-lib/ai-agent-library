@@ -16,12 +16,12 @@ const STALE_DAYS = 30;
 //  - rejected                  → the same createdBy==uid query PendingApprovalModal uses
 export function nextStep(a, now = Date.now()) {
   if (a.approvalStatus === 'rejected') return { tone: 'bad', text: 'Rejected', hint: a.rejectionReason ? `เหตุผล: ${a.rejectionReason}` : 'ถอนคำขอแล้ว' };
-  if (a.approvalStatus === 'pending') return { tone: 'wait', text: 'Waiting for review', hint: 'รอ Approver ประจำ Area ตรวจ' };
+  if (a.approvalStatus === 'pending') return { tone: 'wait', text: 'Waiting for review', hint: 'รอ Approver ของ area นี้ตรวจ' };
   if (a.archived === true) return { tone: 'mute', text: 'Archived', hint: 'ไม่แสดงในไลบรารี' };
   const p = normalizeProgress(a.devProgress);
-  if (p >= 100) return { tone: 'ok', text: 'Live', hint: 'ไม่มีอะไรต้องทำ' };
-  if ((a.deploymentStatus || 'none') === 'requested') return { tone: 'wait', text: 'Waiting for deploy approval', hint: 'ส่งคำขอ Deploy แล้ว' };
-  if (a.deploymentStatus === 'approved') return { tone: 'act', text: 'Mark Ready to Use', hint: 'เพิ่ม Endpoint หรือไฟล์ แล้วปรับเป็น 100%' };
+  if (p >= 100) return { tone: 'ok', text: 'Ready to use', hint: 'ใช้งานได้แล้ว ไม่มีอะไรต้องทำ' };
+  if ((a.deploymentStatus || 'none') === 'requested') return { tone: 'wait', text: 'Deploy requested', hint: 'รอ Approver อนุมัติการเปิดใช้' };
+  if (a.deploymentStatus === 'approved') return { tone: 'act', text: 'Mark ready to use', hint: 'เพิ่ม Endpoint หรือไฟล์ แล้วปรับเป็น 100%' };
   const launch = toJsDate(a.launchDate);
   if (launch && launch.getTime() < now) return { tone: 'act', text: 'Update progress', hint: `เลยวัน Launch แล้ว (${fmtDate(a.launchDate)})` };
   const updated = toJsDate(a.updatedAt) || toJsDate(a.createdAt);

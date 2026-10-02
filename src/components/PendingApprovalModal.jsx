@@ -12,6 +12,7 @@ import { notifyEvent } from '../lib/notify';
 import { classifyRoleGroups } from '../lib/roleGroupClassify';
 import AgentDetailModal from './AgentDetailModal';
 import useEscapeKey from '../hooks/useEscapeKey';
+import { failMsg } from '../lib/copy';
 
 // One .tier-badge-styled chip per area (2026-08-10) — replaces a single
 // comma-joined text span. Area is the field a reviewer actually decides
@@ -229,7 +230,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
       await httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'decideLinkSuggestion')({ skillId, verdict });
       notifyEvent('link.decided', { agentId: skillId });
     } catch (e) {
-      setError(e?.message || 'ตัดสินคำขอผูกไม่สำเร็จ');
+      setError(failMsg('ตัดสินคำขอผูก', e));
     } finally {
       setBusyId(null);
     }
@@ -242,7 +243,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
       await decideRenameRequest({ requestId: reqId, verdict });
       notifyEvent('rename.decided', { requestId: reqId });
     } catch (e) {
-      setError(e?.message || 'ตัดสินคำขอเปลี่ยนชื่อไม่สำเร็จ');
+      setError(failMsg('ตัดสินคำขอเปลี่ยนชื่อ', e));
     } finally {
       setBusyId(null);
     }
@@ -464,7 +465,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
             return (
             <div className="queue-row v7-qrow" key={agent.id}>
               <div className="queue-content">
-                <div className="dup-name"><span className="v7-kind new">NEW</span><span className="v7-qname" role="button" tabIndex={0} onClick={() => setDetailAgent(agent)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setDetailAgent(agent)}>{agent.agentName}</span></div>
+                <div className="dup-name"><span className="v7-kind new">New</span><span className="v7-qname" role="button" tabIndex={0} onClick={() => setDetailAgent(agent)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setDetailAgent(agent)}>{agent.agentName}</span></div>
                 <div className="queue-meta">
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
                     <span>{agentTypeLabel(agent, agents)}</span>
@@ -532,7 +533,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                       autoFocus
                       value={rejectModal.reason}
                       onChange={(e) => setRejectModal((m) => ({ ...m, reason: e.target.value }))}
-                      placeholder="ระบุเหตุผลให้ creator ทราบ เช่น ทับซ้อนกับ Agent เดิม / ขอบเขตยังไม่ชัด…"
+                      placeholder="บอกเหตุผลให้ Creator แก้แล้วส่งใหม่ได้ เช่น ซ้ำกับ Agent เดิม / ขอบเขตยังไม่ชัด"
                     />
                     <div className="queue-actions">
                       <span className="v7-rej-note">ผู้ส่งจะได้รับเหตุผลนี้ผ่านการแจ้งเตือนของระบบ</span>
@@ -579,7 +580,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
             return (
               <div className="queue-row v7-qrow" key={agent.id}>
                 <div className="queue-content">
-                  <div className="dup-name"><span className="v7-kind deploy">DEPLOY</span><span className="v7-qname" role="button" tabIndex={0} onClick={() => setDetailAgent(agent)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setDetailAgent(agent)} title="คลิกเพื่อดูรายละเอียด">{agent.agentName}</span></div>
+                  <div className="dup-name"><span className="v7-kind deploy">Deploy</span><span className="v7-qname" role="button" tabIndex={0} onClick={() => setDetailAgent(agent)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setDetailAgent(agent)} title="คลิกเพื่อดูรายละเอียด">{agent.agentName}</span></div>
                   <div className="queue-meta">
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '3px 10px' }}>
                       <span>Owner: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{agent.owner || '—'}</strong></span>
@@ -634,7 +635,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                     onClick={() => setDetailAgent(agent)}
                     title="คลิกเพื่อดูรายละเอียด"
                   >
-                    <span className="v7-kind rename">RENAME</span>
+                    <span className="v7-kind rename">Rename</span>
                     <span style={{ color: 'var(--mu)', textDecoration: 'line-through' }}>{r.currentName || agent.agentName}</span>
                     {' → '}
                     <span style={{ textDecoration: 'underline', textDecorationStyle: 'dotted' }}>{r.requestedName}</span>
@@ -649,7 +650,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                       <span style={{ color: tierDef.color, fontWeight: 700 }}>{tierDef.label}</span>
                       {kids.length > 0 && (
                         <span style={{ color: 'var(--msg-warn-fg)' }}>
-                          จะอัปเดตการผูกของ Skill ลูก {kids.length} ตัวให้อัตโนมัติ
+                          Skill ที่ผูกอยู่ {kids.length} ตัวจะเปลี่ยนตามให้เอง
                         </span>
                       )}
                     </div>
@@ -678,7 +679,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
             <div className="queue-row v7-qrow" key={skill.id}>
               <div className="queue-content">
                 <div className="dup-name">
-                  <span className="v7-kind link">LINK</span>
+                  <span className="v7-kind link">Link</span>
                   <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }} onClick={() => setDetailAgent(skill)} title="คลิกเพื่อดูรายละเอียด">{skill.agentName}</span>
                   {' → '}
                   <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }} onClick={() => setDetailAgent(target)} title="คลิกเพื่อดูรายละเอียด">{target.agentName}</span>
@@ -712,7 +713,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
 
         {kind === 'all' && myRejected.length > 0 && (
           <>
-            <div className="sec-title" style={{ marginTop: 16 }}>ถูก Reject (ของฉัน)</div>
+            <div className="sec-title" style={{ marginTop: 16 }}>My rejected items</div>
             <div className="msub">{myRejected.length} รายการ · เหตุผลจากผู้ตรวจ</div>
             {myRejected.map((agent) => (
               <div className="queue-row" key={agent.id}>

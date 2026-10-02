@@ -6,6 +6,7 @@ import { AREA_ORDER } from '../lib/approveAreas';
 import { downloadCsv } from '../lib/csv';
 import { fmtDate } from '../lib/agentUtils';
 import '../styles/UsageReport.css';
+import { failMsg } from '../lib/copy';
 
 /**
  * Agent/Skill Usage — the adoption report (2026-08-26).
@@ -47,7 +48,7 @@ export default function UsageReportPage() {
         setRows(data?.rows || []);
         setScoped(!!data?.scoped);
       } catch (e) {
-        if (alive) setError(e?.message || 'โหลดข้อมูลไม่สำเร็จ');
+        if (alive) setError(failMsg('โหลดข้อมูล', e));
       }
     })();
     return () => { alive = false; };
@@ -98,8 +99,8 @@ export default function UsageReportPage() {
   if (!user) {
     return (
       <div className="tl-center">
-        <h2>กรุณาเข้าสู่ระบบ</h2>
-        <p style={{ color: 'var(--mu)' }}>เปิดหน้านี้จากในแอปหลังจาก sign in แล้ว</p>
+        <h2>Sign in to continue</h2>
+        <p style={{ color: 'var(--mu)' }}>sign in ที่หน้า Library ก่อน แล้วค่อยเปิดหน้านี้</p>
       </div>
     );
   }
@@ -107,9 +108,9 @@ export default function UsageReportPage() {
   if (!canView) {
     return (
       <div className="tl-center">
-        <h2>ไม่มีสิทธิ์เข้าถึง</h2>
+        <h2>No access</h2>
         <p style={{ color: 'var(--mu)', fontSize: 13 }}>
-          บัญชี {user.email} ไม่มีสิทธิ์ดูรายงานการใช้งาน (เฉพาะ Admin, Committee, Staff และ Approver)
+          รายงานนี้เปิดได้เฉพาะ Admin, Committee, Staff และ Approver
         </p>
       </div>
     );

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { rebuildAllVectors } from '../lib/reindex';
 import ThemeToggle from './ThemeToggle';
+import { toast } from '../lib/toast';
+import { failMsg } from '../lib/copy';
 
 // V7 header (2026-10-01). Same items and the same role conditions as before —
 // only the layout changed: segmented tabs with icons, and the ☰ menu grouped
@@ -81,9 +83,9 @@ export default function Nav({
     setReindexing(true);
     try {
       const r = await rebuildAllVectors();
-      window.alert(`Search index rebuilt\n\nScanned ${r.scanned} · Re-indexed ${r.embedded} · Already current ${r.skipped} · Removed ${r.pruned}`);
+      toast(`Search updated · ${r.scanned} รายการ, อัปเดต ${r.embedded}`);
     } catch (e) {
-      window.alert(`Rebuild failed: ${e?.message || e}`);
+      toast(failMsg('อัปเดตการค้นหา', e));
     } finally {
       setReindexing(false);
       close();

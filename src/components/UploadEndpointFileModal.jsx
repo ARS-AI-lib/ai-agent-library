@@ -5,6 +5,7 @@ import {
   ACCEPT_ATTR, ALLOWED_EXT, MAX_UPLOAD_BYTES,
   attachEndpointFile, formatBytes, validateUploadFile,
 } from '../lib/endpointFiles';
+import { failMsg } from '../lib/copy';
 
 /**
  * Attach a file to an agent's `endpoint` (2026-08-18).
@@ -102,7 +103,7 @@ export default function UploadEndpointFileModal({
       setFile(null);
       if (inputRef.current) inputRef.current.value = '';
     } catch (e) {
-      setError(e?.message || 'อัปโหลดไม่สำเร็จ');
+      setError(failMsg('อัปโหลด', e));
     } finally {
       setBusy(false);
     }
@@ -123,8 +124,8 @@ export default function UploadEndpointFileModal({
           <div className="msg info" style={{ fontSize: 11.5 }}>
             <span className="dot" style={{ background: '#4a6fa5' }} />
             {isAdmin
-              ? 'ยังไม่มี Agent/Skill ที่ deployment ผ่านการอนุมัติ'
-              : `ไม่มีรายการที่คุณมีสิทธิ์แนบไฟล์ — ต้องเป็น Agent ที่คุณสร้างเอง หรืออยู่ใน Approve Area ของคุณ (${(approveAreas || []).join(', ') || 'ยังไม่ได้กำหนด area'})`}
+              ? 'ยังไม่มี Agent/Skill ที่ Deploy ได้รับอนุมัติ'
+              : `ยังไม่มีรายการที่คุณแนบไฟล์ได้ — ต้องเป็นของที่คุณสร้าง หรืออยู่ใน area ของคุณ (${(approveAreas || []).join(', ') || 'ยังไม่มี area'})`}
           </div>
         ) : (
           <>

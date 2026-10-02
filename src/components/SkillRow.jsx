@@ -98,11 +98,11 @@ export default function SkillRow({
           <div className="grid2">
             <div className="fg">
               <label>Core Ability <span className="req">*</span></label>
-              <MultiSelect label="เลือก Core Ability…" options={abilityOptions} selected={skill.ability} onChange={(v) => onField('ability', v)} />
+              <MultiSelect label="Choose ability…" options={abilityOptions} selected={skill.ability} onChange={(v) => onField('ability', v)} />
             </div>
             <div className="fg">
               <label>Related Role <span className="req">*</span></label>
-              <TagMultiSelect label="เลือก Related Role…" options={roleOptions} selected={skill.relatedRole} onChange={(v) => onField('relatedRole', v)} onAddNew={onAddRelatedRole} />
+              <TagMultiSelect label="Choose role…" options={roleOptions} selected={skill.relatedRole} onChange={(v) => onField('relatedRole', v)} onAddNew={onAddRelatedRole} />
             </div>
           </div>
           <div className="grid2">
@@ -181,15 +181,15 @@ export function validateSkillRows(rows, allAgents) {
       if (!allAgents.some((a) => a.id === s.link.id)) return `${n}: ไม่พบ Skill ที่ผูกไว้`;
       continue;
     }
-    if (!s.link?.name?.trim()) return `${n}: กรุณากรอกชื่อ Skill`;
-    if (!s.description.trim()) return `${n}: กรุณากรอก Description`;
-    if (s.ability.size === 0) return `${n}: กรุณาเลือก Core Ability`;
-    if (s.relatedRole.size === 0) return `${n}: กรุณาเลือก Related Role`;
-    if (!s.input.trim()) return `${n}: กรุณากรอก Input`;
-    if (!s.output.trim()) return `${n}: กรุณากรอก Output`;
-    if (!s.reusable) return `${n}: กรุณาเลือก Reusable`;
-    if (s.reusable === 'Reusable with Conditions' && !s.reuseCondition.trim()) return `${n}: กรุณากรอก Reuse Conditions`;
-    if (s.hml && !s.humanJob.trim()) return `${n}: กรุณากรอก Human Job`;
+    if (!s.link?.name?.trim()) return `${n}: ใส่ชื่อ Skill`;
+    if (!s.description.trim()) return `${n}: ใส่ Description`;
+    if (s.ability.size === 0) return `${n}: เลือก Core Ability`;
+    if (s.relatedRole.size === 0) return `${n}: เลือก Related Role`;
+    if (!s.input.trim()) return `${n}: ใส่ Input`;
+    if (!s.output.trim()) return `${n}: ใส่ Output`;
+    if (!s.reusable) return `${n}: เลือก Reusable`;
+    if (s.reusable === 'Reusable with Conditions' && !s.reuseCondition.trim()) return `${n}: ใส่ Reuse Conditions`;
+    if (s.hml && !s.humanJob.trim()) return `${n}: ใส่ Human Job`;
   }
   // Two rows pointing at the same existing skill would create a duplicate link.
   const ids = rows.filter((s) => s.link?.mode === 'existing').map((s) => s.link.id);

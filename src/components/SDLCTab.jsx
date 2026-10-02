@@ -285,7 +285,7 @@ export default function SDLCTab({ agents = [], search = '', onVisibleAgentsChang
       >
         <div className="aproc-num">Non-SDLC</div>
         <div className="aproc-name">Agent / Skill not mapped to an SDLC process — not shown in the table above</div>
-        <div className="aproc-count">{STATUS_ICON[dominant]} Total {ags.length} items{breakdown ? ` · ${breakdown}` : ''}</div>
+        <div className="aproc-count">{STATUS_ICON[dominant]} {ags.length} total{breakdown ? ` · ${breakdown}` : ''}</div>
       </div>
     );
   }

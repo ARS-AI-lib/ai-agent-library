@@ -28,7 +28,7 @@ export default function LibraryTitle({
       <div className="v7-title-text">
         <h1>{title}{count && <span className="v7-title-count"> · {count}</span>}</h1>
         {!count && <p>
-          Showing <strong>{n} {n === 1 ? 'tool' : 'tools'}</strong>
+          Showing <strong>{n}</strong> Agents &amp; Skills
           {sortLabel && <> · Sorted by {sortLabel}</>}
           {chips.map((c) => (
             <span key={c.key} className="v7-chip">

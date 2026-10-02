@@ -8,6 +8,7 @@ import { isMyAgent, normalizeProgress } from '../lib/agentUtils';
 import { readStats, STAR_LEVELS } from '../lib/agentStats';
 import { useAgentStats } from '../hooks/useAgentStats';
 import useEscapeKey from '../hooks/useEscapeKey';
+import { failMsg } from '../lib/copy';
 
 // ratingScore is a CSV-only exception to agentStats.js's "never render a
 // computed average" rule. That rule protects a casual card/modal viewer from
@@ -177,7 +178,7 @@ export default function ExportDataModal({ onClose, approvedAgents, user, role, i
         setPending(pendingSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
         setRejected(rejectedSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
       })
-      .catch((e) => { if (alive) setError(e.message || 'โหลดข้อมูลไม่สำเร็จ'); })
+      .catch((e) => { if (alive) setError(failMsg('โหลดข้อมูล', e)); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);

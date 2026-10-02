@@ -5,6 +5,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { fetchEndpointFile, triggerDownload, formatBytes } from '../lib/endpointFiles';
 import { recordAgentEvent } from '../lib/agentEvents';
+import { failMsg } from '../lib/copy';
 
 /**
  * `/f/{agentId}` — the SSO gate for library-hosted files.
@@ -51,7 +52,7 @@ export default function FileDownloadPage() {
       triggerDownload(await fetchEndpointFile(agentId));
       setStatus('done');
     } catch (e) {
-      setError(e?.message || 'ดาวน์โหลดไม่สำเร็จ');
+      setError(failMsg('ดาวน์โหลด', e));
       setStatus('error');
     }
   }, [agentId]);
@@ -81,18 +82,18 @@ export default function FileDownloadPage() {
     </div>
   );
 
-  if (!agentId) return wrap(<><h2>ลิงก์ไม่ถูกต้อง</h2><p className="fdl-mu">URL นี้ไม่ได้ระบุว่าเป็นไฟล์ของ Agent ตัวไหน</p></>);
+  if (!agentId) return wrap(<><h2>Link not found</h2><p className="fdl-mu">ลิงก์นี้ไม่ได้บอกว่าเป็นไฟล์ของ Agent ตัวไหน</p></>);
   if (loading) return wrap(<><div className="spin" /><p className="fdl-mu">กำลังตรวจสอบสิทธิ์…</p></>);
 
   if (!user) {
     return wrap(
       <>
-        <h2>ต้องเข้าสู่ระบบก่อนดาวน์โหลด</h2>
+        <h2>Sign in to download</h2>
         <p className="fdl-mu">
-          ไฟล์ในไลบรารีนี้เปิดให้เฉพาะบัญชีขององค์กร กรุณาลงชื่อเข้าใช้เพื่อดาวน์โหลด
+          ไฟล์นี้โหลดได้เฉพาะบัญชีองค์กร — sign in แล้วจะเริ่มโหลดให้
         </p>
         {domainError && <div className="msg error" style={{ marginBottom: 12 }}><span className="dot" style={{ background: '#ea4335' }} />{domainError}</div>}
-        <button className="btn btn-primary" onClick={() => signIn().catch((e) => setError(e?.message || 'เข้าสู่ระบบไม่สำเร็จ'))}>
+        <button className="btn btn-primary" onClick={() => signIn().catch((e) => setError(failMsg('เข้าสู่ระบบ', e)))}>
           ลงชื่อเข้าใช้ด้วย Google
         </button>
         {error && <p className="fdl-err">{error}</p>}

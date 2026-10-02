@@ -4,8 +4,9 @@ import { db } from '../lib/firebase';
 import useEscapeKey from '../hooks/useEscapeKey';
 import Dropdown from './Dropdown';
 import { AREA_ORDER, categoryAreas } from '../lib/approveAreas';
+import { failMsg } from '../lib/copy';
 
-const AREA_OPTIONS = [['', 'เลือก Approve Area…'], ...AREA_ORDER.map((a) => [a, a])];
+const AREA_OPTIONS = [['', 'Choose approve area…'], ...AREA_ORDER.map((a) => [a, a])];
 
 // Admin-only approve/reject queue for AI-proposed Category shortcuts
 // (2026-08). A proposal is created by analyzeDuplicate (or the backfill
@@ -78,7 +79,7 @@ export default function CategoryApprovalPanel({ onClose, user, schema = {} }) {
         status: 'approved', decidedBy: user?.uid || '', decidedAt: serverTimestamp(),
       });
     } catch (e) {
-      setError(e.message || 'อนุมัติไม่สำเร็จ');
+      setError(failMsg('อนุมัติ', e));
     } finally {
       setBusyId(null);
     }
@@ -108,7 +109,7 @@ export default function CategoryApprovalPanel({ onClose, user, schema = {} }) {
         status: 'rejected', resolvedCategory: pick, decidedBy: user?.uid || '', decidedAt: serverTimestamp(),
       });
     } catch (e) {
-      setError(e.message || 'ปฏิเสธไม่สำเร็จ');
+      setError(failMsg('ปฏิเสธ', e));
     } finally {
       setBusyId(null);
     }
@@ -125,7 +126,7 @@ export default function CategoryApprovalPanel({ onClose, user, schema = {} }) {
             </div>
             <div>
               <h2 className="mtitle">Category Proposals</h2>
-              <p>หมวดใหม่รออนุมัติ</p>
+              <p>Categories proposed by AI, waiting for a decision</p>
             </div>
           </div>
 

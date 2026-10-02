@@ -82,7 +82,7 @@ export default function TimelinePage() {
     return <div className="tl-center"><div className="spin" /><span>กำลังโหลด…</span></div>;
   }
   if (!user) {
-    return <div className="tl-center"><h2>กรุณาเข้าสู่ระบบ</h2><p style={{ color: 'var(--mu)' }}>เปิดหน้านี้จากในแอปหลังจาก sign in แล้ว</p></div>;
+    return <div className="tl-center"><h2>Sign in to continue</h2><p style={{ color: 'var(--mu)' }}>sign in ที่หน้า Library ก่อน แล้วค่อยเปิดหน้านี้</p></div>;
   }
   if (!roleReady || !cfgLoaded) {
     return <div className="tl-center"><div className="spin" /><span>กำลังตรวจสิทธิ์…</span></div>;
@@ -90,8 +90,8 @@ export default function TimelinePage() {
   if (!canView) {
     return (
       <div className="tl-center">
-        <h2>ไม่มีสิทธิ์เข้าถึง</h2>
-        <p style={{ color: 'var(--mu)', fontSize: 13 }}>บัญชี {user.email} ไม่อยู่ในรายชื่อผู้มีสิทธิ์ดู SDLC Timeline</p>
+        <h2>No access</h2>
+        <p style={{ color: 'var(--mu)', fontSize: 13 }}>{user.email} ยังไม่มีสิทธิ์ดู SDLC Timeline — ขอสิทธิ์จาก admin</p>
       </div>
     );
   }
@@ -119,7 +119,7 @@ export default function TimelinePage() {
       </div>
 
       <div className="tl-mobile-banner">
-        หน้านี้แสดงผลได้ดีที่สุดบนจอกว้าง — บนมือถือกรุณาเลื่อนซ้าย-ขวาเพื่อดู Timeline หรือหมุนจอเป็นแนวนอน
+        ดูบนจอกว้างจะดีที่สุด — บนมือถือเลื่อนซ้าย–ขวา หรือหมุนจอเป็นแนวนอน
       </div>
 
       <div className="tl-legend">

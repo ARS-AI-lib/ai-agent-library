@@ -8,6 +8,7 @@ import MultiSelect from './MultiSelect';
 import Dropdown from './Dropdown';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { AREA_ORDER } from '../lib/approveAreas';
+import { failMsg } from '../lib/copy';
 
 function fmtSyncTime(ts) {
   if (!ts) return '';
@@ -61,7 +62,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
       setDirError(
         code.includes('popup') || code.includes('cancelled')
           ? 'ยกเลิก/ปิดหน้าต่างให้สิทธิ์ Google — ลอง Sync ใหม่แล้วกด Allow เพื่อเข้าถึง directory'
-          : (e.message || 'Sync ไม่สำเร็จ')
+          : (failMsg('ดึงรายชื่อจาก Directory', e))
       );
     } finally {
       setDirSyncing(false);
@@ -114,7 +115,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
       setDrafts((prev) => { const n = { ...prev }; delete n[u.uid]; return n; });
       toast(`Saved · ${u.displayName || u.email || u.uid}`);
     } catch (e) {
-      setError(e.message || 'บันทึกไม่สำเร็จ');
+      setError(failMsg('บันทึก', e));
     } finally {
       setBusyId(null);
     }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { failMsg } from '../lib/copy';
 
 // Firestore Timestamp | Date | string → 'YYYY-MM-DD' for <input type=date>.
 function toDateInput(v) {
@@ -59,7 +60,7 @@ export default function MilestoneEditor({ milestones, defaultColors, onSave, onC
       await onSave(next);
       onClose();
     } catch (e) {
-      setError(e.message || 'บันทึกไม่สำเร็จ');
+      setError(failMsg('บันทึก', e));
     } finally {
       setSaving(false);
     }

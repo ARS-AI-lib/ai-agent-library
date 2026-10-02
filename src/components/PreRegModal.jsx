@@ -249,8 +249,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   }
 
   function validate() {
-    if (!form.agentName.trim()) return 'กรุณากรอกชื่อ Agent/Skill';
-    if (!form.description.trim()) return 'กรุณากรอก Description';
+    if (!form.agentName.trim()) return 'ใส่ชื่อ Agent/Skill';
+    if (!form.description.trim()) return 'ใส่ Description';
     // Quality gate (deliberately NOT surfaced on the field itself — enforced
     // only after the user hits submit, so it reads as a nudge to elaborate
     // rather than an upfront hurdle): Description & Business Value must be
@@ -258,20 +258,20 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     if (form.description.trim().length < MIN_DETAIL_LEN) {
       return `Description สั้นเกินไป — ช่วยขยายความให้ครบถ้วน (อย่างน้อย ${MIN_DETAIL_LEN} ตัวอักษร, ตอนนี้ ${form.description.trim().length})`;
     }
-    if (form.coreAbility.size === 0) return 'กรุณาเลือก Core Ability อย่างน้อย 1 ค่า';
-    if (form.relatedRole.size === 0) return 'กรุณาเลือก Related Role อย่างน้อย 1 ค่า';
-    if (!form.input.trim()) return 'กรุณากรอก Input';
-    if (!form.output.trim()) return 'กรุณากรอก Output';
-    if (!form.businessValue.trim()) return 'กรุณากรอก Business Value';
+    if (form.coreAbility.size === 0) return 'เลือก Core Ability อย่างน้อย 1 อย่าง';
+    if (form.relatedRole.size === 0) return 'เลือก Related Role อย่างน้อย 1 อย่าง';
+    if (!form.input.trim()) return 'ใส่ Input';
+    if (!form.output.trim()) return 'ใส่ Output';
+    if (!form.businessValue.trim()) return 'ใส่ Business Value';
     if (form.businessValue.trim().length < MIN_DETAIL_LEN) {
       return `Business Value สั้นเกินไป — ช่วยอธิบายคุณค่าทางธุรกิจให้ชัด (อย่างน้อย ${MIN_DETAIL_LEN} ตัวอักษร, ตอนนี้ ${form.businessValue.trim().length})`;
     }
-    if (!form.owner.trim()) return 'กรุณาระบุ Owner';
-    if (!form.reusable) return 'กรุณาเลือก Reusable';
+    if (!form.owner.trim()) return 'ใส่ Owner team';
+    if (!form.reusable) return 'เลือก Reusable';
     if (form.reusable === 'Reusable with Conditions' && !form.reuseCondition.trim()) {
-      return 'กรุณากรอก Reuse Conditions';
+      return 'ใส่ Reuse Conditions';
     }
-    if (form.hml && !form.humanJob.trim()) return 'กรุณากรอก Human Job (เมื่อเปิด HML)';
+    if (form.hml && !form.humanJob.trim()) return 'ใส่ Human Job (เมื่อเปิด HML)';
     if (form.type === 'Agent+Skill') {
       const skErr = validateSkillRows(form.skills, allAgents);
       if (skErr) return skErr;
@@ -891,7 +891,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               <div className="fg">
                 <label>Compatible Agents <span style={{ fontWeight: 400, color: 'var(--mu)' }}>(optional)</span></label>
                 <AgentMultiSelect
-                  label="เลือก Agent ที่ใช้ร่วมกันได้..."
+                  label="Choose compatible agents…"
                   agents={approvedAgents}
                   selected={new Set(form.compatibleAgents)}
                   onChange={(s) => setField('compatibleAgents', [...s])}
@@ -907,11 +907,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             <div className="grid2">
               <div className="fg">
                 <label>Core Ability <span className="req">*</span></label>
-                <MultiSelect label="เลือก Core Ability…" options={abilityOptions} selected={form.coreAbility} onChange={(s) => setField('coreAbility', s)} />
+                <MultiSelect label="Choose ability…" options={abilityOptions} selected={form.coreAbility} onChange={(s) => setField('coreAbility', s)} />
               </div>
               <div className="fg">
                 <label>Related Role <span className="req">*</span></label>
-                <TagMultiSelect label="เลือก Related Role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
+                <TagMultiSelect label="Choose role…" options={roleOptions} selected={form.relatedRole} onChange={(s) => setField('relatedRole', s)} onAddNew={onAddRelatedRole} />
               </div>
             </div>
 
@@ -934,7 +934,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             {/* Owner + Creator/Team member — half width each */}
             <div className="grid2">
               <div className="fg">
-                <label>Owner <span className="req">*</span> <span className="hint">(ทีม/แผนก)</span></label>
+                <label>Owner team <span className="req">*</span></label>
                 <ComboInput value={form.owner} onChange={(v) => setField('owner', v)} options={ownerOptions} placeholder="เช่น Wolfy" />
               </div>
               <div className="fg">
@@ -990,14 +990,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 <div className="grid2">
                   <div className="fg">
                     <label>SDLC Stage</label>
-                    <MultiSelect label="เลือก SDLC Stage…" options={stageOptions} selected={form.sdlcStage} onChange={(s) => setField('sdlcStage', s)} />
+                    <MultiSelect label="Choose SDLC stage…" options={stageOptions} selected={form.sdlcStage} onChange={(s) => setField('sdlcStage', s)} />
                   </div>
                   <div className="fg">
                     <label>SDLC Process Mapping</label>
                     {form.sdlcStage.size === 0 ? (
                       <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Stage ก่อน เพื่อดูรายการ Process ที่ผูกกับ Stage นั้น</div>
                     ) : (
-                      <MultiSelect label="เลือก Process…" options={processOptions} selected={form.sdlcProcessMapping} onChange={(s) => setField('sdlcProcessMapping', s)} />
+                      <MultiSelect label="Choose process…" options={processOptions} selected={form.sdlcProcessMapping} onChange={(s) => setField('sdlcProcessMapping', s)} />
                     )}
                   </div>
                 </div>
@@ -1006,7 +1006,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                   {form.sdlcProcessMapping.size === 0 ? (
                     <div style={{ fontSize: 11, color: 'var(--mu)', padding: '8px 0' }}>เลือก SDLC Process Mapping ก่อน เพื่อดูรายการ Use Case ที่ผูกกับ Process นั้น</div>
                   ) : (
-                    <MultiSelect label="เลือก Use Case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
+                    <MultiSelect label="Choose use case…" options={useCaseOptions} selected={form.useCase} onChange={(s) => setField('useCase', s)} />
                   )}
                 </div>
             </>
@@ -1098,7 +1098,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 {blockedByHardLimit && blockingCandidate && (
                   <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />
                     ไม่สามารถ Submit ได้ — <strong>{blockingCandidate.agentName}</strong> ซ้ำซ้อนถึง {blockingCandidate.confidence}%
-                    {blockingCandidate.verdict === 'clear_duplicate' ? ' (AI ตัดสินว่าเป็นตัวเดียวกัน)' : ' (เกือบเหมือนกันทั้งหมด)'} — กรุณาปรับ idea ให้แตกต่าง หรือพิจารณาใช้ของเดิมแทน
+                    {blockingCandidate.verdict === 'clear_duplicate' ? ' (AI มองว่าเป็นตัวเดียวกัน)' : ' (เกือบเหมือนกันทั้งหมด)'} — ปรับให้ต่างจากของเดิม หรือใช้ของเดิมแทน
                   </div>
                 )}
 
@@ -1147,7 +1147,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                         </label>
                       )}
                       {abilityDiffers && <div>แนะนำ Core Ability: <strong>{aiResult.suggested_ability}</strong></div>}
-                      {areas.length > 0 && <div>สายงานที่จะเป็นผู้อนุมัติ: <strong>{areas.join(' + ')}</strong></div>}
+                      {areas.length > 0 && <div>Approve area: <strong>{areas.join(' + ')}</strong></div>}
                       {areas.length > 0 && aiResult.approve_area_reason && <div style={{ color: 'var(--mu)', fontSize: 12 }}>{aiResult.approve_area_reason}</div>}
                     </div>
                   );
