@@ -17,6 +17,7 @@ const ICON = {
   attach: 'M21 12l-9 9a6 6 0 0 1-8-8l9-9a4 4 0 0 1 6 6l-9 9a2 2 0 0 1-3-3l8-8',
   timeline: 'M4 6h10M4 12h16M4 18h7',
   usage: 'M4 20V10M10 20V4M16 20v-7',
+  gov: 'M12 2l8 3v6c0 5-3.5 9.5-8 11-4.5-1.5-8-6-8-11V5l8-3zM9 12l2 2 4-4',
   workshop: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
   roles: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21c1-4 4-6 8-6s7 2 8 6',
   reindex: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5',
@@ -213,6 +214,9 @@ export default function Nav({
               <Item k="export" label="Export Data" on={() => { onOpenExport?.(); close(); }} />
               {/* Visible to admin/staff/approver; the callable re-checks role + area. */}
               {canUploadFiles && <Item k="attach" label="Attach Endpoint File" on={() => { onOpenUpload?.(); close(); }} />}
+
+              <div className="v7-menu-head">Related Apps</div>
+              <Item k="gov" label="AI Governance" on={() => { window.open('https://wolfy-ai-governance.web.app/', '_blank', 'noopener,noreferrer'); close(); }} />
 
               {reports.length > 0 && <div className="v7-menu-head">Reports</div>}
               {reports.map((r) => <Item key={r.k} {...r} />)}
