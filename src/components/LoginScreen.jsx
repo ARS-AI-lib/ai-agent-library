@@ -43,8 +43,8 @@ export default function LoginScreen({ onSignIn, error }) {
       <main className="v7-si-main">
         <img className="v7-si-logo" src="/ai-library-logo.png" alt="" />
         <p className="v7-si-name">AI Agent Library</p>
-        <h1>Build once.<br />Reuse everywhere.</h1>
-        <p className="v7-si-sub">Every AI agent and skill your teams create, in one place.</p>
+        <h1>Your team&apos;s AI,<br />all in one place.</h1>
+        <p className="v7-si-sub">Discover, reuse and share AI agents and skills across the organization.</p>
 
         <div className="v7-si-card">
           <button className="v7-google-btn" onClick={() => onSignIn()}>

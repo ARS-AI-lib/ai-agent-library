@@ -899,3 +899,21 @@ body.v7 .v7-fab-m-logo { display: none; }
 /* AI Agent Library mark = the "A" logo (no blue tile). The wolf stays Wolfy's. */
 body.v7 .v7-brand-mark { background: transparent !important; box-shadow: none !important; width: 36px; height: 36px; }
 body.v7 .v7-brand-mark img { width: 34px; height: 34px; }
+
+/* Sign-in round 3: lighter background, transparent card, white org logos */
+.v7-si { background: radial-gradient(1200px 760px at 50% 20%, #3a6fd6 0%, #2552b0 42%, #183b86 100%); }
+.v7-si::before { opacity: .12; }
+.v7-si-glow { background: radial-gradient(circle, rgba(120,210,255,.40), transparent 65%); }
+.v7-si-name { color: #dbe6ff; }
+.v7-si-sub { color: #dde6fb; }
+.v7-si h1 { background: linear-gradient(180deg, #ffffff 0%, #e2ebff 100%); -webkit-background-clip: text; background-clip: text; }
+.v7-si-card { background: transparent; box-shadow: none; padding: 0; gap: 22px; max-width: 360px; }
+.v7-si-card .v7-google-btn { border: none; box-shadow: 0 10px 30px rgba(6,20,60,.30); }
+.v7-si-orgs { border-top: none; padding-top: 0; opacity: .9; }
+.v7-si-orgs img { filter: brightness(0) invert(1); }
+.v7-si-orgs span { background: rgba(255,255,255,.35); }
+.v7-si-foot { color: #cbd8f6; }
+.v7-si-card .v7-signin-err { background: rgba(255,255,255,.95); }
+
+.v7-si-logo { width: 88px; height: 88px; padding: 16px; box-sizing: border-box; border-radius: 24px; background: #fff; box-shadow: 0 14px 40px rgba(6,20,60,.30); filter: none; }
+@media (max-width: 760px) { .v7-si-logo { width: 72px; height: 72px; padding: 13px; border-radius: 20px; } }
