@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ALLOWED_DOMAINS_LABEL, USING_EMULATOR } from '../lib/firebase';
+import { USING_EMULATOR } from '../lib/firebase';
 
 // Local emulator only — never rendered in a real build.
 const EMU_ACCOUNTS = ['tinnapat.p@arise.tech', 'emu.approver@arise.tech', 'emu.user@arise.tech'];
@@ -33,33 +33,20 @@ export default function LoginScreen({ onSignIn, error }) {
     };
   }, []);
 
-  // V7 split layout (2026-10-01). The mockup's live stat tiles are left out on
-  // purpose: nothing in Firestore is readable before sign-in.
-  const domains = ALLOWED_DOMAINS_LABEL.split('/').map((d) => d.trim()).filter(Boolean);
+  // V7 sign-in, round 2 (2026-10-02): one centred screen, English only,
+  // AI Agent Library mark (the "A") up top, Wolfy (the wolf) credited in the
+  // footer. Domain list + first-sign-in note removed on request — a wrong
+  // account still gets the explicit error below.
   return (
-    <div className="v7-signin">
-      <section className="v7-signin-hero">
-        <div className="v7-signin-brand">
-          <span className="v7-brand-mark"><img src="/alpha-logo-white.png" alt="" /></span>
-          <div><strong>AI Agent Library</strong><span>Powered by Wolfy</span></div>
-        </div>
-        <div className="v7-signin-copy">
-          <h1>Find the AI tool your team already built.</h1>
-          <p>รวม Agent และ Skill ที่ทีมในองค์กรพัฒนาไว้ในที่เดียว ค้นหาตามงานที่ต้องการ เปิดใช้งานได้ทันที หรือลงทะเบียนรายการใหม่ให้ทีมอื่นนำไปใช้ต่อ</p>
-        </div>
-        <p className="v7-signin-copy-foot">Copyright © 2026 Arise by Infinitas Co., Ltd. All rights reserved.</p>
-      </section>
-      <section className="v7-signin-panel">
-        <div className="v7-signin-box">
-          <div className="signin-logos">
-            <img src="/logo1.png" alt="Infinitas by Krungthai" />
-            <span className="signin-logos-sep" aria-hidden="true" />
-            <img src="/logo2.png" alt="Arise by Infinitas" />
-          </div>
-          <div>
-            <h2>Sign in</h2>
-            <p className="v7-muted">ใช้บัญชีองค์กรของคุณเพื่อเข้าใช้งาน</p>
-          </div>
+    <div className="v7-si">
+      <div className="v7-si-glow" aria-hidden="true" />
+      <main className="v7-si-main">
+        <img className="v7-si-logo" src="/ai-library-logo.png" alt="" />
+        <p className="v7-si-name">AI Agent Library</p>
+        <h1>Build once.<br />Reuse everywhere.</h1>
+        <p className="v7-si-sub">Every AI agent and skill your teams create, in one place.</p>
+
+        <div className="v7-si-card">
           <button className="v7-google-btn" onClick={() => onSignIn()}>
             <GoogleGlyph />
             Sign in with Google
@@ -75,13 +62,17 @@ export default function LoginScreen({ onSignIn, error }) {
               {EMU_ACCOUNTS.map((em) => <button key={em} className="btn-sm" onClick={() => onSignIn(em)}>{em}</button>)}
             </div>
           )}
-          <div className="v7-signin-domains">
-            <span>Accounts that can sign in</span>
-            <div>{domains.map((d) => <span key={d} className="v7-pill">{d}</span>)}</div>
+          <div className="v7-si-orgs">
+            <img src="/logo1.png" alt="Infinitas by Krungthai" />
+            <span aria-hidden="true" />
+            <img src="/logo2.png" alt="Arise by Infinitas" />
           </div>
-          <p className="v7-muted small">เข้าใช้ครั้งแรกจะได้สิทธิ์ผู้ใช้ทั่วไป ถ้าต้องการสิทธิ์อนุมัติให้ติดต่อ admin</p>
         </div>
-      </section>
+      </main>
+      <footer className="v7-si-foot">
+        <span>© 2026 Arise by Infinitas Co., Ltd.</span>
+        <span className="v7-si-wolfy">Powered by Wolfy <img src="/alpha-logo.png" alt="" /></span>
+      </footer>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import ThemeToggle from './ThemeToggle';
 export function BrandMark() {
   return (
     <span className="v7-brand-mark" aria-hidden="true">
-      <img src="/alpha-logo-white.png" alt="" />
+      <img src="/ai-library-logo.png" alt="" />
     </span>
   );
 }

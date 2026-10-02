@@ -118,7 +118,7 @@ export default function Nav({
     <nav className="nav v7-nav">
       <div className="nav-brand">
         <span className="v7-brand-mark" aria-hidden="true">
-          <img src="/alpha-logo-white.png" alt="" />
+          <img src="/ai-library-logo.png" alt="" />
         </span>
         <div>
           <h1>AI Agent Library</h1>

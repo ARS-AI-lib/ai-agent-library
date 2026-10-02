@@ -864,3 +864,38 @@ body.v7 .v7-fab-m-logo { display: none; }
 /* White wolf logo inside the blue brand mark (header, standalone pages, sign-in, file page) */
 .v7-brand-mark img { width: 24px; height: 24px; object-fit: contain; display: block; }
 .v7-signin-brand .v7-brand-mark img, .fdl-card .v7-brand-mark img { width: 28px; height: 28px; }
+
+/* ════════════════ Sign-in, round 2 (centred, English only) ════════════════ */
+.v7-si { position: relative; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: #fff;
+  background: radial-gradient(1200px 700px at 50% 18%, #1d3f8f 0%, #13285c 45%, #0b1633 100%); }
+.v7-si::before { content: ''; position: absolute; inset: 0; opacity: .10; pointer-events: none;
+  background-image: linear-gradient(rgba(157,184,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(157,184,255,.5) 1px, transparent 1px);
+  background-size: 56px 56px; -webkit-mask-image: radial-gradient(ellipse at 50% 35%, #000 0%, transparent 70%); mask-image: radial-gradient(ellipse at 50% 35%, #000 0%, transparent 70%); }
+.v7-si-glow { position: absolute; left: 50%; top: 120px; width: 420px; height: 420px; transform: translateX(-50%); border-radius: 50%;
+  background: radial-gradient(circle, rgba(64,180,255,.35), transparent 65%); filter: blur(10px); pointer-events: none; }
+.v7-si-main { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 56px 20px 24px; }
+.v7-si-logo { width: 84px; height: 84px; object-fit: contain; filter: drop-shadow(0 10px 30px rgba(47,140,255,.45)); }
+.v7-si-name { margin: 14px 0 0; font-size: 14px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #9db8ff; }
+.v7-si h1 { margin: 18px 0 0; font-size: clamp(34px, 5vw, 56px); line-height: 1.08; letter-spacing: -.025em; font-weight: 700;
+  background: linear-gradient(180deg, #ffffff 0%, #c9d8ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.v7-si-sub { margin: 16px 0 0; max-width: 460px; font-size: 16px; line-height: 1.6; color: #c3cfee; }
+.v7-si-card { margin-top: 34px; width: 100%; max-width: 380px; padding: 22px; border-radius: 18px; background: #fff; color: #182135;
+  box-shadow: 0 24px 60px rgba(4,12,40,.45); display: flex; flex-direction: column; gap: 14px; text-align: left; }
+.v7-si-card .v7-google-btn { width: 100%; }
+.v7-si-orgs { display: flex; align-items: center; justify-content: center; gap: 16px; padding-top: 12px; border-top: 1px solid #eef1f6; }
+.v7-si-orgs img { height: 30px; width: auto; object-fit: contain; }
+.v7-si-orgs img:first-child { height: 34px; }
+.v7-si-orgs span { width: 1px; height: 24px; background: #dde3ee; }
+.v7-si-foot { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 28px; font-size: 12px; color: #8fa1c8; }
+.v7-si-wolfy { display: inline-flex; align-items: center; gap: 8px; }
+.v7-si-wolfy img { width: 22px; height: 22px; object-fit: contain; }
+@media (max-width: 760px) {
+  .v7-si-main { padding: 40px 16px 16px; }
+  .v7-si-logo { width: 64px; height: 64px; }
+  .v7-si-sub { font-size: 14.5px; }
+  .v7-si-foot { flex-direction: column; padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+}
+
+/* AI Agent Library mark = the "A" logo (no blue tile). The wolf stays Wolfy's. */
+body.v7 .v7-brand-mark { background: transparent !important; box-shadow: none !important; width: 36px; height: 36px; }
+body.v7 .v7-brand-mark img { width: 34px; height: 34px; }
