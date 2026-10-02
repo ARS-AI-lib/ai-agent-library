@@ -797,7 +797,7 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
           branding on the always-visible entry point. */}
       <button className={`chat-fab ${open ? 'chat-fab-closed' : ''}`} onClick={() => setOpen((v) => !v)} title="AI Agent Library Chat Assistant">
         {open ? (
-          <img src="/wolfy-chat.png" alt="" className="chat-fab-logo" />
+          <img src="/alpha-logo-white.png" alt="" className="chat-fab-logo" />
         ) : (
           <span className="chat-fab-label">Ask ALPHA</span>
         )}
@@ -810,7 +810,7 @@ export default function ChatAssistant({ approvedAgents = [], allAgents = [], onO
             onMouseDown={(e) => { e.preventDefault(); setResizing(true); }}
           />
           <div className="chat-header">
-            <span><img src="/wolfy-logo.png" alt="" className="chat-hdr-logo" /> AI Agent Library Assistant</span>
+            <span><img src="/alpha-logo.png" alt="" className="chat-hdr-logo" /> AI Agent Library Assistant</span>
             <div className="chat-header-actions">
               <button className="chat-close" onClick={handleClose}>✕</button>
             </div>
