@@ -11,3 +11,5 @@ Hosting only — no rules/functions/data changes. Git: main == origin/main at 25
 
 **Why:** user approved V7 after testing the v7-rc channel; asked for guaranteed rollback.
 **How to apply:** further UI work goes on main now; branch redesign-v7 is merged.
+
+2026-10-02 later: AI Governance menu link shipped (live index-D-kj81L5.js, commit 4d912b5). Backup of the V7 release before it = channel `prod-backup-v7` (index-BRkMncB7.js, expires ~2026-10-09).
