@@ -3,7 +3,7 @@ import { toast } from '../lib/toast';
 import { doc, addDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill, getType } from '../lib/tier';
-import { splitRoles, uniq, pairedSubSkills, childSkillIdList, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditOwner, canEditReadyToUseFields, agentUseCaseNames } from '../lib/agentUtils';
+import { splitRoles, uniq, pairedSubSkills, childSkillIdList, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditOwner, canEditReadyToUseFields, agentUseCaseNames, isValidTeamName } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import { AREA_ORDER, agentApproveAreas, categoryAreas } from '../lib/approveAreas';
@@ -268,6 +268,10 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   }
 
   async function handleSave() {
+    if (canSeeOwner && form.owner.trim() !== (agent.owner || '') && !isValidTeamName(form.owner)) {
+      setError('ชื่อ Owner team ต้องมีอย่างน้อย 2 ตัวอักษร');
+      return;
+    }
     // Validate the Tier A required set only when the user can actually edit it
     // (a pure approver-role edits SDLC only and leaves Tier A untouched).
     if (canEditTierA) {

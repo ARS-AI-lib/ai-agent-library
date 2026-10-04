@@ -7,7 +7,7 @@ import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
-import { uniq, splitRoles, extractProcessId, processLabel, agentUseCaseNames } from '../lib/agentUtils';
+import { uniq, splitRoles, extractProcessId, processLabel, agentUseCaseNames, isValidTeamName } from '../lib/agentUtils';
 import { notifyEvent } from '../lib/notify';
 import { isInternalToolName } from '../lib/internalTool';
 import { categoryAreas, isMultiAreaCategory } from '../lib/approveAreas';
@@ -268,6 +268,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       return `Business Value สั้นเกินไป — ช่วยอธิบายคุณค่าทางธุรกิจให้ชัด (อย่างน้อย ${MIN_DETAIL_LEN} ตัวอักษร, ตอนนี้ ${form.businessValue.trim().length})`;
     }
     if (!form.owner.trim()) return 'ใส่ Owner team';
+    if (!isValidTeamName(form.owner)) return 'ชื่อ Owner team ต้องมีอย่างน้อย 2 ตัวอักษร';
     if (!form.reusable) return 'เลือก Reusable';
     if (form.reusable === 'Reusable with Conditions' && !form.reuseCondition.trim()) {
       return 'ใส่ Reuse Conditions';

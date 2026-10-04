@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isValidTeamName } from '../lib/agentUtils';
 import { doc, onSnapshot, updateDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -128,7 +129,7 @@ export function useConfigSchema(enabled = true) {
   // and only allows appending.
   async function addTeams(newTeams) {
     const existing = new Set((schema.team || []).map((t) => t.toLowerCase()));
-    const toAdd = [...new Set(newTeams.map((t) => t.trim()).filter(Boolean))]
+    const toAdd = [...new Set(newTeams.map((t) => t.trim()).filter(isValidTeamName))]
       .filter((t) => !existing.has(t.toLowerCase()));
     if (!toAdd.length) return;
     const ref = doc(db, 'config', 'schema');

@@ -602,3 +602,13 @@ export function categoryColor(name) {
   }
   return `var(--c${(Math.abs(h) % 6) + 1})`;
 }
+
+/**
+ * Owner team names must be at least 2 characters (2026-10-04: a stray "8"
+ * got into /config/schema.team). Single source of truth for the form checks
+ * and for useConfigSchema.addTeams().
+ */
+export const MIN_TEAM_NAME = 2;
+export function isValidTeamName(name) {
+  return String(name ?? '').trim().length >= MIN_TEAM_NAME;
+}
