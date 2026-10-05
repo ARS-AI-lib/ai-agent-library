@@ -2091,6 +2091,9 @@ exports.manageRoleGroups = onCall(
 // Tasks; a digest already marked `sent` is a no-op, so a retried task or a
 // retried scheduler can never mail anyone twice.
 //
+// Run status: 'queued' while tasks are pending → 'done' once every item has a
+// final status (finishRunIfComplete, called by the worker after each item).
+//
 // Switch: /config/alerts { enabled, dryRun, reviewers[] }. Missing doc = off.
 // dryRun: only digests whose recipient is in `reviewers` are really sent;
 // every other digest is built, queued and logged as `dry-run` (not sent).
@@ -2173,6 +2176,13 @@ exports.delayAlertsThu = onSchedule(
   () => runDelayAlerts('thu-1300'),
 );
 
+const FINAL_ITEM = new Set(['sent', 'dry-run', 'skipped']);
+async function finishRunIfComplete(runRef) {
+  const items = await runRef.collection('items').get();
+  if (items.empty || !items.docs.every((d) => FINAL_ITEM.has(d.data().status))) return;
+  await runRef.update({ status: 'done', finishedAt: FieldValue.serverTimestamp() });
+}
+
 exports.sendDelayDigest = onTaskDispatched(
   {
     retryConfig: { maxAttempts: 5, minBackoffSeconds: 60 },
@@ -2203,6 +2213,7 @@ exports.sendDelayDigest = onTaskDispatched(
         type: 'delay.digest', runId, subject: note.subject, to: note.to, status: 'dry-run', provider: 'alerts',
         items: it.items.length, createdAt: FieldValue.serverTimestamp(),
       });
+      await finishRunIfComplete(runRef);
       return;
     }
 
@@ -2220,6 +2231,7 @@ exports.sendDelayDigest = onTaskDispatched(
     const done = result.status === 'sent' ? 'sent' : 'skipped';
     await itemRef.update({ status: done, mailStatus: result.status, at: FieldValue.serverTimestamp() });
     await runRef.update(done === 'sent' ? { sent: FieldValue.increment(1) } : { skipped: FieldValue.increment(1) });
+    await finishRunIfComplete(runRef);
   },
 );
 

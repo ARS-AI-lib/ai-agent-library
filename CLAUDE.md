@@ -1411,4 +1411,7 @@ banking chatbot ติด AI Engineer → Software Engineer)
 - **Delivery = queue:** schedulers `delayAlertsMon`/`delayAlertsThu` only build `/alertRuns/{runId}` + `/items/{sha1(email)}` and enqueue one Cloud Task per digest, 10 s apart, to `sendDelayDigest` (retries 5×, concurrency 1). runId = Bangkok wall clock → a retried scheduler reuses the same run + task ids; a digest already `sent` is a no-op.
 - **Switch `/config/alerts`** `{ enabled, dryRun, reviewers[] }`. Missing doc = off. `dryRun` (default true): only digests addressed to `reviewers` are really sent; the rest are logged as `dry-run` in `/mailLog` (`type: delay.digest`).
 - Deploy scoped: `--only functions:delayAlertsMon,delayAlertsThu,sendDelayDigest` (needs Cloud Scheduler + Cloud Tasks APIs).
+- ⚠️ **IAM (granted by the user 2026-10-05):** the compute SA `526359843242-compute@developer.gserviceaccount.com` needs `roles/cloudtasks.enqueuer` + `roles/iam.serviceAccountUser` (no condition). Without them the scheduler fails with "lacks IAM permission cloudtasks.tasks.create" and nothing is queued. `gcloud add-iam-policy-binding` asks for a condition because of the Wiz binding — answer **None**.
+- Run status: `queued` → `done` when every item is final (`finishRunIfComplete`). runId = Bangkok minute, so a manual re-trigger makes a NEW run (only a retry within the same minute is deduped).
+- **Live since 2026-10-05:** test run `2026-10-05-1626` sent 1 real + 45 dry-run, 9.0–10.3 s apart. Then `/config/alerts.dryRun = false` → first real round is the next schedule (Thu 13:00).
 
