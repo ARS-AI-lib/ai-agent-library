@@ -2152,7 +2152,7 @@ async function runDelayAlerts(slot) {
     // Snapshot of what this person is told — the worker renders from it, so
     // the message matches the run even if data changes before it is sent.
     const items = dg.items.map((x) => ({
-      id: x.id, name: x.name, category: x.category, progress: x.progress, phase: x.phase, bdays: x.bdays,
+      id: x.id, name: x.name, category: x.category, progress: x.progress, phase: x.phase, bdays: x.bdays ?? null, days: x.days ?? null,
       launchDay: x.launchDay ? x.launchDay.toISOString().slice(0, 10) : null,
     }));
     const live = !cfg.dryRun || cfg.reviewers.includes(dg.email);

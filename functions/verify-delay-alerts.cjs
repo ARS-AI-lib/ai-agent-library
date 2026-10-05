@@ -38,10 +38,18 @@ const agents = [
   mk('done', { devProgress: 100, launchDate: ts('2026-09-01') }),
   mk('archived', { devProgress: 10, launchDate: ts('2026-09-01'), archived: true }),
   mk('pending', { devProgress: 10, launchDate: ts('2026-09-01'), approvalStatus: 'pending' }),
-  mk('staleIp', { devProgress: 40, phaseSince: ts('2026-06-01') }),          // ~90 bd > 60
-  mk('freshIp', { devProgress: 40, phaseSince: ts('2026-09-01') }),          // ~25 bd
-  mk('stalePilot', { devProgress: 92, phaseSince: ts('2026-08-01') }),       // ~45 bd > 30
-  mk('freshPilot', { devProgress: 92, phaseSince: ts('2026-09-10') }),       // ~18 bd
+  // v2 stuck rules — calendar days, createdAt fallback (now = 2026-10-05)
+  mk('todoOld', { devProgress: 5, createdAt: ts('2026-09-01') }),                       // 34 d > 30
+  mk('todoNew', { devProgress: 5, createdAt: ts('2026-09-10') }),                       // 25 d
+  mk('todoLaunchFar', { devProgress: 0, createdAt: ts('2026-08-01'), launchDate: ts('2026-12-31') }), // any launch state
+  mk('ipStale', { devProgress: 40, createdAt: ts('2026-08-01'), progressUpdatedAt: ts('2026-09-01') }), // 34 d no update
+  mk('ipFresh', { devProgress: 40, createdAt: ts('2026-06-01'), progressUpdatedAt: ts('2026-09-20'), phaseSince: ts('2026-09-20') }),
+  mk('ipNoLaunch', { devProgress: 40, createdAt: ts('2026-06-01'), progressUpdatedAt: ts('2026-09-20'), phaseSince: ts('2026-07-01') }), // 96 d, no launch
+  mk('ipFallback', { devProgress: 40, createdAt: ts('2026-08-20') }),                    // no progressUpdatedAt → createdAt 46 d
+  mk('pilotNoLaunch', { devProgress: 92, createdAt: ts('2026-06-01'), phaseSince: ts('2026-08-20') }),   // 46 d > 30
+  mk('pilotNoLaunchNew', { devProgress: 92, createdAt: ts('2026-06-01'), phaseSince: ts('2026-09-20') }),
+  mk('pilotLaunch', { devProgress: 92, phaseSince: ts('2026-07-01'), launchDate: ts('2026-12-31') }),     // 96 d > 60
+  mk('pilotLaunchNew', { devProgress: 92, phaseSince: ts('2026-09-01'), launchDate: ts('2026-12-31') }),  // 34 d
   mk('parent', { devProgress: 100, childSkillIds: ['child'] }),
   mk('child', { devProgress: 20, aiAgent: false, skillMd: true, launchDate: ts('2026-09-01') }),
   mk('noMail', { devProgress: 20, launchDate: ts('2026-09-01'), creatorEmails: [] }),
@@ -57,8 +65,14 @@ ok(cat.due === 'due5', 'launch in 5 bd (Pilot) → due5');
 ok(!cat.far, 'launch in 6 bd and on track → nothing');
 ok(cat.risky === 'risk10', 'launch in 9 bd and behind → risk10');
 ok(!cat.done && !cat.archived && !cat.pending, 'done / archived / pending excluded');
-ok(cat.staleIp === 'stale' && !cat.freshIp, 'In Progress stale > 60 bd only');
-ok(cat.stalePilot === 'stale' && !cat.freshPilot, 'Pilot stale > 30 bd only');
+ok(cat.todoOld === 'todo30' && !cat.todoNew, 'To Do > 30 calendar days from createdAt');
+ok(cat.todoLaunchFar === 'todo30', 'To Do rule applies with a future launch date too');
+ok(cat.ipStale === 'ipStale30' && !cat.ipFresh, 'In Progress with no progress update > 30 days');
+ok(cat.ipNoLaunch === 'ipNoLaunch60', 'In Progress > 60 days without a launch date');
+ok(cat.ipFallback === 'ipStale30', 'missing progressUpdatedAt falls back to createdAt');
+ok(cat.pilotNoLaunch === 'pilotNoLaunch30' && !cat.pilotNoLaunchNew, 'Pilot > 30 days without launch date');
+ok(cat.pilotLaunch === 'pilotLaunch60' && !cat.pilotLaunchNew, 'Pilot > 60 days with a future launch date');
+ok(R.calendarDaysBetween(D('2026-09-05'), D('2026-10-05')) === 30, 'calendar days: 30 is not > 30');
 ok(!cat.child, 'linked sub-skill excluded');
 ok(!cat.noMail, 'no creatorEmails → no digest');
 const order = digests[0].items.map((i) => i.category);
@@ -121,7 +135,7 @@ async function live(preview) {
   if (preview) {
     for (const d of ds) {
       console.log(`\n  → ${d.email} (${d.items.length})`);
-      d.items.forEach((i) => console.log(`     [${i.category}] ${i.name} · ${i.progress}% · ${i.launchDay ? i.launchDay.toISOString().slice(0, 10) : 'no launch'} · ${i.bdays} bd`));
+      d.items.forEach((i) => console.log(`     [${i.category}] ${i.name} · ${i.progress}% · ${i.launchDay ? i.launchDay.toISOString().slice(0, 10) : 'no launch'} · ${i.bdays ?? i.days}`));
     }
   }
 }

@@ -124,7 +124,7 @@ service cloud.firestore {
         // already approved (2026-07-02 Deploy Approval feature) — going past
         // 95 requires the doc's deploymentStatus to already be 'approved'
         // when this write lands.
-        || (affectedKeys().hasOnly(['devProgress', 'launchDate', 'developmentPhase', 'phaseSince', 'updatedAt'])
+        || (affectedKeys().hasOnly(['devProgress', 'launchDate', 'developmentPhase', 'phaseSince', 'progressUpdatedAt', 'updatedAt'])
             && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid || resource.data.approvedBy == request.auth.uid)
             && (resource.data.get('devProgress', 0) == null || resource.data.get('devProgress', 0) < 100)
             && (request.resource.data.devProgress <= 95 || resource.data.get('deploymentStatus', 'none') == 'approved'))
@@ -134,7 +134,7 @@ service cloud.firestore {
         // 95 AND files the request, no separate "save to 95 first" step
         // required. Only while no request is already in flight (re-request
         // allowed after a rejection).
-        || (affectedKeys().hasOnly(['devProgress', 'deploymentStatus', 'deployRequestedBy', 'deployRequestedAt', 'phaseSince', 'updatedAt'])
+        || (affectedKeys().hasOnly(['devProgress', 'deploymentStatus', 'deployRequestedBy', 'deployRequestedAt', 'phaseSince', 'progressUpdatedAt', 'updatedAt'])
             && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid || resource.data.approvedBy == request.auth.uid)
             && resource.data.get('devProgress', 0) < 100
             && resource.data.get('deploymentStatus', 'none') in ['none', 'rejected', null]
@@ -176,7 +176,7 @@ service cloud.firestore {
         || (affectedKeys().hasOnly([
               'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing', 'internalUse',
               'coreAbility', 'relatedRole', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
-              'humanJob', 'launchDate', 'devProgress', 'developmentPhase', 'phaseSince', 'updatedAt',
+              'humanJob', 'launchDate', 'devProgress', 'developmentPhase', 'phaseSince', 'progressUpdatedAt', 'updatedAt',
             ])
             && isOwnerCreatorOrApprover(resource.data)
             && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved'])

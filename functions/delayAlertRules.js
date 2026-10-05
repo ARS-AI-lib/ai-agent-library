@@ -14,14 +14,20 @@
 
 const TZ = 'Asia/Bangkok';
 const DAY = 864e5;
-const RANK = { delayed: 0, due5: 1, risk10: 2, stale: 3 };
+const RANK = { delayed: 0, due5: 1, risk10: 2, todo30: 3, ipStale30: 4, ipNoLaunch60: 5, pilotNoLaunch30: 6, pilotLaunch60: 7 };
 const CATEGORY_LABEL = {
   delayed: 'เลย Launch Date แล้ว',
   due5: 'ใกล้ถึง Launch Date (ภายใน 5 วันทำการ)',
   risk10: 'เสี่ยงล่าช้า (At risk · ภายใน 10 วันทำการ)',
-  stale: 'ไม่มี Launch Date และสถานะค้างนาน',
+  todo30: 'To Do ค้างเกิน 30 วันนับจากวันที่สร้าง',
+  ipStale30: 'In Progress ไม่มีการอัปเดต Progress เกิน 30 วัน',
+  ipNoLaunch60: 'In Progress เกิน 60 วันแล้วยังไม่มี Launch Date',
+  pilotNoLaunch30: 'Pilot เกิน 30 วันแล้วยังไม่มี Launch Date',
+  pilotLaunch60: 'Pilot เกิน 60 วันแล้วยังไม่ถึง 100%',
 };
-const STALE_LIMIT = { td: 60, ip: 60, pilot: 30 };
+// Stuck-item limits (2026-10-05 v2) — CALENDAR days (user decision), unlike the
+// business-day launch windows above.
+const STUCK_DAYS = { todo: 30, ipNoUpdate: 30, ipNoLaunch: 60, pilotNoLaunch: 30, pilotWithLaunch: 60 };
 const PHASE_LABEL = { td: 'To Do', ip: 'In Progress', pilot: 'Pilot', ru: 'Ready to Use' };
 
 // ── value helpers ────────────────────────────────────────────────────
@@ -54,6 +60,7 @@ function bkkDay(d) {
     .formatToParts(d).reduce((o, x) => ((o[x.type] = x.value), o), {});
   return new Date(Date.UTC(+p.year, +p.month - 1, +p.day));
 }
+const calendarDaysBetween = (from, to) => Math.round((to - from) / DAY);
 const isWeekday = (d) => { const w = d.getUTCDay(); return w !== 0 && w !== 6; };
 
 // Business days (Mon–Fri) strictly after `from` up to and including `to`.
@@ -146,13 +153,26 @@ function classify(a, ctx) {
     if (bd <= 10 && ctx.axisStart && timelineStatus(progress, ld, ctx.axisStart, ctx.today) === 'risk') {
       return { category: 'risk10', launchDay: ld, progress, phase, bdays: bd };
     }
-    return null;
   }
 
-  const since = toDate(a.phaseSince) || toDate(a.updatedAt) || toDate(a.createdAt);
-  if (!since) return null;
-  const age = businessDaysBetween(bkkDay(since), ctx.today);
-  if (age > STALE_LIMIT[phase]) return { category: 'stale', launchDay: null, progress, phase, bdays: age };
+  // Stuck items (v2). Clocks fall back to createdAt (user decision for the
+  // first rounds: old items have no reliable phase/progress history).
+  const created = toDate(a.createdAt);
+  const age = (v) => { const d = toDate(v) || created; return d ? calendarDaysBetween(bkkDay(d), ctx.today) : -1; };
+  const base = { launchDay: launch ? bkkDay(launch) : null, progress, phase };
+  if (phase === 'td') {
+    const n = age(a.createdAt);
+    if (n > STUCK_DAYS.todo) return { category: 'todo30', ...base, days: n };
+  } else if (phase === 'ip') {
+    const n = age(a.progressUpdatedAt);
+    if (n > STUCK_DAYS.ipNoUpdate) return { category: 'ipStale30', ...base, days: n };
+    const m = age(a.phaseSince);
+    if (!launch && m > STUCK_DAYS.ipNoLaunch) return { category: 'ipNoLaunch60', ...base, days: m };
+  } else if (phase === 'pilot') {
+    const m = age(a.phaseSince);
+    if (!launch && m > STUCK_DAYS.pilotNoLaunch) return { category: 'pilotNoLaunch30', ...base, days: m };
+    if (launch && m > STUCK_DAYS.pilotWithLaunch) return { category: 'pilotLaunch60', ...base, days: m };
+  }
   return null;
 }
 
@@ -191,8 +211,11 @@ const fmtDay = (d) => (d ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', mo
 
 function itemNote(it) {
   if (it.category === 'delayed') return `Launch ${fmtDay(it.launchDay)} · เลยมา ${it.bdays} วันทำการ`;
-  if (it.category === 'stale') return `${PHASE_LABEL[it.phase]} มา ${it.bdays} วันทำการ · ยังไม่มี Launch Date`;
-  return `Launch ${fmtDay(it.launchDay)} · อีก ${it.bdays} วันทำการ`;
+  if (it.category === 'due5' || it.category === 'risk10') return `Launch ${fmtDay(it.launchDay)} · อีก ${it.bdays} วันทำการ`;
+  const launch = it.launchDay ? `Launch ${fmtDay(it.launchDay)}` : 'ยังไม่มี Launch Date';
+  if (it.category === 'todo30') return `สร้างมาแล้ว ${it.days} วัน · ${launch}`;
+  if (it.category === 'ipStale30') return `ไม่มีการอัปเดตมา ${it.days} วัน · ${launch}`;
+  return `${PHASE_LABEL[it.phase]} มา ${it.days} วัน · ${launch}`;
 }
 
 /** { subject, title, text, html, link, to } for one digest. `forEmail` labels dry-run copies. */
@@ -221,13 +244,13 @@ function renderDigest(digest, { forEmail = '' } = {}) {
 ${body}
 <p style="margin:22px 0 0"><a href="${link}" style="display:inline-block;background:#2f6bff;color:#fff;text-decoration:none;padding:9px 16px;border-radius:6px;font-weight:600">Update Progress</a></p>
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 0 10px" />
-<p style="font-size:11.5px;color:#9ca3af;margin:0">แจ้งเตือนอัตโนมัติทุกวันจันทร์ 09:30 และวันพฤหัสบดี 13:00 · นับเฉพาะวันจันทร์–ศุกร์</p>
+<p style="font-size:11.5px;color:#9ca3af;margin:0">แจ้งเตือนอัตโนมัติทุกวันจันทร์ 09:30 และวันพฤหัสบดี 13:00 · Launch Date นับเฉพาะวันจันทร์–ศุกร์ · สถานะค้างนับเป็นวันปฏิทิน</p>
 </div>`;
   return { subject, title, text: `${text}\n${APP_URL}`, html, link, to: [forEmail || digest.email] };
 }
 
 module.exports = {
-  TZ, RANK, CATEGORY_LABEL, STALE_LIMIT,
+  TZ, RANK, CATEGORY_LABEL, STUCK_DAYS, calendarDaysBetween,
   normalizeProgress, phaseForProgress, toDate, bkkDay, businessDaysBetween,
   getType, isPairedSubSkill, isLive, autoFitStart, timelineStatus, classify, buildDigests, renderDigest,
 };

@@ -458,6 +458,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
               developmentPhase: 'To Do',
               devProgress: 0,
               phaseSince: serverTimestamp(),
+              progressUpdatedAt: serverTimestamp(),
               deploymentStatus: 'none',
               launchDate: null,
               approvalStatus: 'pending',

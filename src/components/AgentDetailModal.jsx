@@ -339,6 +339,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         devProgress: clamped,
         developmentPhase: developmentPhaseLabel(clamped),
         launchDate: editLaunch ? new Date(editLaunch) : null,
+        // Every progress save — even one that stays in the same bucket — is
+        // "movement" for the In Progress no-update alert (delayAlertRules.js).
+        progressUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
       // phaseSince per doc: parent and each child can sit in different buckets.
@@ -470,6 +473,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         deploymentStatus: 'requested',
         deployRequestedBy: user?.uid || '',
         deployRequestedAt: serverTimestamp(),
+        progressUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
       const withPhase = (d) => (phaseChanged(d.devProgress, 95) ? { ...patch, phaseSince: serverTimestamp() } : patch);
