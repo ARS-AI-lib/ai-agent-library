@@ -375,16 +375,19 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
 
   // reason: required when an approver/admin rejects someone else's idea (so the
   // creator knows why); empty for a base user's self-withdraw of their OWN
-  // idea (no explanation owed, and the self-withdraw firestore rule only allows
-  // approvalStatus+updatedAt — so we deliberately DON'T write reason fields
-  // there).
+  // idea (no explanation owed; the self-withdraw firestore rule allows
+  // approvalStatus/updatedAt/rejectedBy/rejectedAt — no reason field).
   async function handleReject(agent, reason = '') {
     setBusyId(agent.id);
     setError('');
     try {
-      const rejectFields = reason.trim()
-        ? { rejectionReason: reason.trim(), rejectedBy: user?.uid || '', rejectedAt: serverTimestamp() }
-        : {};
+      // Always stamp who/when; only an approver's reject carries a reason
+      // (a creator's self-withdraw has none — that is how the UI tells them apart).
+      const rejectFields = {
+        rejectedBy: user?.uid || '',
+        rejectedAt: serverTimestamp(),
+        ...(reason.trim() ? { rejectionReason: reason.trim() } : {}),
+      };
       // Soft reject — keep the record for audit trail, hide it from the dashboard.
       await updateDoc(doc(db, 'agents', agent.id), {
         approvalStatus: 'rejected',

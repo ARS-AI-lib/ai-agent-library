@@ -110,8 +110,10 @@ service cloud.firestore {
             && affectedKeys().hasOnly(['approvalStatus', 'approvedBy', 'updatedAt', 'rejectionReason', 'rejectedBy', 'rejectedAt']))
         // Self-withdraw: creator can reject (never approve) their OWN
         // still-pending idea — covers the base "user" tier's "reject idea
-        // ของตัวเอง" requirement.
-        || (affectedKeys().hasOnly(['approvalStatus', 'updatedAt'])
+        // ของตัวเอง" requirement. The withdrawal stamps who/when
+        // (rejectedBy must be the creator) — no reason owed.
+        || (affectedKeys().hasOnly(['approvalStatus', 'updatedAt', 'rejectedBy', 'rejectedAt'])
+            && request.resource.data.get('rejectedBy', request.auth.uid) == request.auth.uid
             && resource.data.createdBy == request.auth.uid
             && resource.data.approvalStatus == 'pending'
             && request.resource.data.approvalStatus == 'rejected')
