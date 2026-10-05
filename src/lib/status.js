@@ -37,6 +37,17 @@ export function developmentPhaseLabel(p) {
   return ST_DEF[phaseForProgress(p)].lb;
 }
 
+// Delay alerts (2026-10-05): `phaseSince` records when an item ENTERED its
+// current status bucket, so "Pilot for more than 30 business days" can be
+// measured. Writers stamp it only when the bucket actually changes — a save
+// that moves 40% → 60% stays In Progress and must not reset the clock.
+// `oldRaw` may be the stored string form ("90%"), hence the local parse
+// (same rule as agentUtils.normalizeProgress; importing it would be circular).
+export function phaseChanged(oldRaw, newProgress) {
+  const n = typeof oldRaw === 'number' ? oldRaw : parseInt(String(oldRaw || '').replace('%', ''), 10);
+  return phaseForProgress(isNaN(n) ? 0 : n) !== phaseForProgress(newProgress);
+}
+
 export function agentStatus(agent) {
   const progress = typeof agent?.devProgress === 'number' ? agent.devProgress : 0;
   return phaseForProgress(progress);

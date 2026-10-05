@@ -1398,3 +1398,17 @@ banking chatbot ติด AI Engineer → Software Engineer)
   - 🔴 **The seed script was overwriting categories approved through the UI**. This is why "Orchestration & Automation" disappeared. Now `mergeCategories()` keeps any category still in the schema that has a `categoryAreaMap` entry, placed after the code order (`--self-test`). To retire one, delete its `categoryAreaMap` entry first.
   - The "Orchestration & Automation" proposal now has `status:'retired'` and was not restored.
   - `verify-notify.cjs` covers all 13 events; `verify-agent-ready.cjs` computes from live data. Every suite passes.
+
+---
+
+## Delay / at-risk alerts to Creators (2026-10-05)
+
+- **What:** Mon 09:30 + Thu 13:00 (Asia/Bangkok) each Creator gets ONE digest (Teams card + email via the existing `teams-flow` transport) of their items to update. Business days = Mon–Fri only, no holiday calendar.
+- **Categories (one per item, in this priority):** Delayed (launchDate passed) → due within 5 business days (any status, incl. Pilot) → At risk within 10 business days (`timelineStatus()==='risk'`, same axis as Dashboard/Timeline) → no launchDate and To Do/In Progress > 60 bd or Pilot > 30 bd (from `phaseSince`).
+- **Excluded:** not approved, archived, 100%, linked sub-skills (`isPairedSubSkill`). Recipients = `creatorEmails` only (no approvers).
+- **Rules:** `functions/delayAlertRules.js` (pure). It PORTS `timelineStatus`/`autoFitRange`/`getType`/`normalizeProgress`/`isPairedSubSkill` — `verify-delay-alerts.cjs --live` loads the real `src/lib` files and fails on any drift. Edit both sides together.
+- **`phaseSince`** (new agent field) = when the item entered its current status bucket. Stamped only when the bucket changes (`phaseChanged()` in `src/lib/status.js`): progress save + its cascade, deploy request + cascade, create (PreRegModal, EditAgentModal new skill). `markAgentReady` (→100%) does not stamp it (alerts ignore Ready to Use). Existing docs backfilled from `updatedAt` (approximate) by `backfill-phase-since.cjs`. Added to the 3 progress `hasOnly` lists in `firestore.rules`.
+- **Delivery = queue:** schedulers `delayAlertsMon`/`delayAlertsThu` only build `/alertRuns/{runId}` + `/items/{sha1(email)}` and enqueue one Cloud Task per digest, 10 s apart, to `sendDelayDigest` (retries 5×, concurrency 1). runId = Bangkok wall clock → a retried scheduler reuses the same run + task ids; a digest already `sent` is a no-op.
+- **Switch `/config/alerts`** `{ enabled, dryRun, reviewers[] }`. Missing doc = off. `dryRun` (default true): only digests addressed to `reviewers` are really sent; the rest are logged as `dry-run` in `/mailLog` (`type: delay.digest`).
+- Deploy scoped: `--only functions:delayAlertsMon,delayAlertsThu,sendDelayDigest` (needs Cloud Scheduler + Cloud Tasks APIs).
+

@@ -2082,3 +2082,144 @@ exports.manageRoleGroups = onCall(
     return { ok: true, groups: res.groups };
   },
 );
+
+// ── Delay / at-risk alerts (2026-10-05) ──────────────────────────────
+// Mon 09:30 + Thu 13:00 Asia/Bangkok. Rules live in delayAlertRules.js
+// (verify-delay-alerts.cjs). The schedulers only BUILD a run; delivery is a
+// Cloud Tasks queue, one task per Creator digest, 10 s apart (user
+// requirement: every alert goes out, throttled). Retries come from Cloud
+// Tasks; a digest already marked `sent` is a no-op, so a retried task or a
+// retried scheduler can never mail anyone twice.
+//
+// Switch: /config/alerts { enabled, dryRun, reviewers[] }. Missing doc = off.
+// dryRun: only digests whose recipient is in `reviewers` are really sent;
+// every other digest is built, queued and logged as `dry-run` (not sent).
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onTaskDispatched } = require('firebase-functions/v2/tasks');
+const { getFunctions: getAdminFunctions } = require('firebase-admin/functions');
+const delayRules = require('./delayAlertRules');
+const crypto = require('crypto');
+
+const ALERT_GAP_SECONDS = 10;
+
+async function loadAlertConfig() {
+  const snap = await db.collection('config').doc('alerts').get();
+  const d = snap.exists ? snap.data() : {};
+  return {
+    enabled: d.enabled === true,
+    dryRun: d.dryRun !== false,               // safe by default
+    reviewers: (Array.isArray(d.reviewers) ? d.reviewers : []).map((e) => String(e).trim().toLowerCase()).filter(Boolean),
+  };
+}
+
+// Run id from the Bangkok wall clock, so a retried scheduler invocation lands
+// on the SAME run doc and the same task ids (dedupe), never a second run.
+function alertRunId(now = new Date()) {
+  const p = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(now).reduce((o, x) => ((o[x.type] = x.value), o), {});
+  return `${p.year}-${p.month}-${p.day}-${p.hour}${p.minute}`;
+}
+
+async function runDelayAlerts(slot) {
+  const cfg = await loadAlertConfig();
+  const runId = alertRunId();
+  const runRef = db.collection('alertRuns').doc(runId);
+  if (!cfg.enabled) {
+    await runRef.set({ slot, status: 'disabled', createdAt: FieldValue.serverTimestamp() }, { merge: true });
+    return;
+  }
+  const [agentsSnap, tl] = await Promise.all([db.collection('agents').get(), db.doc('config/timeline').get()]);
+  const agents = agentsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const milestones = tl.exists ? (tl.data().milestones || []) : [];
+  const digests = delayRules.buildDigests(agents, { milestones, now: new Date() });
+
+  const counts = {};
+  digests.forEach((d) => d.items.forEach((i) => { counts[i.category] = (counts[i.category] || 0) + 1; }));
+  await runRef.set({
+    slot, status: 'queued', dryRun: cfg.dryRun, digests: digests.length, items: counts,
+    sent: 0, dryRunCount: 0, skipped: 0, createdAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const queue = getAdminFunctions().taskQueue('locations/asia-southeast1/functions/sendDelayDigest');
+  let i = 0;
+  for (const dg of digests) {
+    const key = crypto.createHash('sha1').update(dg.email).digest('hex').slice(0, 16);
+    const itemRef = runRef.collection('items').doc(key);
+    // Snapshot of what this person is told — the worker renders from it, so
+    // the message matches the run even if data changes before it is sent.
+    const items = dg.items.map((x) => ({
+      id: x.id, name: x.name, category: x.category, progress: x.progress, phase: x.phase, bdays: x.bdays,
+      launchDay: x.launchDay ? x.launchDay.toISOString().slice(0, 10) : null,
+    }));
+    const live = !cfg.dryRun || cfg.reviewers.includes(dg.email);
+    await itemRef.create({ email: dg.email, items, live, status: 'queued', createdAt: FieldValue.serverTimestamp() })
+      .catch((e) => { if (e.code !== 6) throw e; });   // 6 = ALREADY_EXISTS (scheduler retry)
+    try {
+      await queue.enqueue({ runId, key }, { id: `${runId}-${key}`, scheduleDelaySeconds: i * ALERT_GAP_SECONDS });
+    } catch (e) {
+      if (e.code !== 'functions/task-already-exists') throw e;
+    }
+    i += 1;
+  }
+}
+
+exports.delayAlertsMon = onSchedule(
+  { schedule: '30 9 * * 1', timeZone: 'Asia/Bangkok', timeoutSeconds: 300, retryCount: 2 },
+  () => runDelayAlerts('mon-0930'),
+);
+exports.delayAlertsThu = onSchedule(
+  { schedule: '0 13 * * 4', timeZone: 'Asia/Bangkok', timeoutSeconds: 300, retryCount: 2 },
+  () => runDelayAlerts('thu-1300'),
+);
+
+exports.sendDelayDigest = onTaskDispatched(
+  {
+    retryConfig: { maxAttempts: 5, minBackoffSeconds: 60 },
+    rateLimits: { maxConcurrentDispatches: 1 },
+    timeoutSeconds: 120,
+    secrets: [TEAMS_FLOW_URL],
+  },
+  async (req) => {
+    const { runId, key } = req.data || {};
+    if (!runId || !key) return;
+    const runRef = db.collection('alertRuns').doc(runId);
+    const itemRef = runRef.collection('items').doc(key);
+    const snap = await itemRef.get();
+    if (!snap.exists) return;
+    const it = snap.data();
+    if (['sent', 'dry-run', 'skipped'].includes(it.status)) return;   // idempotent
+
+    const digest = {
+      email: it.email,
+      items: it.items.map((x) => ({ ...x, launchDay: x.launchDay ? new Date(`${x.launchDay}T00:00:00Z`) : null })),
+    };
+    const note = delayRules.renderDigest(digest);
+
+    if (!it.live) {
+      await itemRef.update({ status: 'dry-run', at: FieldValue.serverTimestamp() });
+      await runRef.update({ dryRunCount: FieldValue.increment(1) });
+      await db.collection('mailLog').add({
+        type: 'delay.digest', runId, subject: note.subject, to: note.to, status: 'dry-run', provider: 'alerts',
+        items: it.items.length, createdAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    const result = await sendMail(db, note);
+    await db.collection('mailLog').add({
+      type: 'delay.digest', runId, subject: note.subject, to: note.to, status: result.status, provider: result.provider,
+      error: result.error || null, heldFrom: result.heldFrom || [], teams: result.teams || null,
+      skippedDomain: result.skippedDomain || [], items: it.items.length, createdAt: FieldValue.serverTimestamp(),
+    });
+    if (result.status === 'error') {
+      await itemRef.update({ status: 'error', error: String(result.error || 'send failed').slice(0, 300), attempts: FieldValue.increment(1) });
+      throw new Error(`delay digest send failed for ${key}: ${result.error || 'unknown'}`);   // Cloud Tasks retries
+    }
+    // sent / dry-run (mail provider none) / held / skipped-domain / disabled: final, no retry.
+    const done = result.status === 'sent' ? 'sent' : 'skipped';
+    await itemRef.update({ status: done, mailStatus: result.status, at: FieldValue.serverTimestamp() });
+    await runRef.update(done === 'sent' ? { sent: FieldValue.increment(1) } : { skipped: FieldValue.increment(1) });
+  },
+);
+

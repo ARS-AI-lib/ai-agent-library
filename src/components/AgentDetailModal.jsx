@@ -3,7 +3,7 @@ import { toast } from '../lib/toast';
 import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
-import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel } from '../lib/status';
+import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
@@ -341,7 +341,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         launchDate: editLaunch ? new Date(editLaunch) : null,
         updatedAt: serverTimestamp(),
       };
-      await updateDoc(doc(db, 'agents', agent.id), patch);
+      // phaseSince per doc: parent and each child can sit in different buckets.
+      const withPhase = (d) => (phaseChanged(d.devProgress, clamped) ? { ...patch, phaseSince: serverTimestamp() } : patch);
+      await updateDoc(doc(db, 'agents', agent.id), withPhase(agent));
       // Live cascade (2026-07-06): keep paired sub-skills in lock-step with the
       // parent Agent's progress/launch. Only an Agent has sub-skills; a skill
       // never reaches this branch because its own edit button is hidden.
@@ -350,7 +352,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // dragged backwards — 18 standalone skills sit at 100% today.
       // ...and then only the ones the user ticked in the picker above.
       for (const sk of cascadeTargets(agent, allAgents || []).filter((x) => cascadePick.has(x.id))) {
-        await updateDoc(doc(db, 'agents', sk.id), patch);
+        await updateDoc(doc(db, 'agents', sk.id), withPhase(sk));
       }
       setEditing(false);
       toast(`Saved · ${agent.agentName}`);
@@ -470,7 +472,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         deployRequestedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
-      await updateDoc(doc(db, 'agents', agent.id), patch);
+      const withPhase = (d) => (phaseChanged(d.devProgress, 95) ? { ...patch, phaseSince: serverTimestamp() } : patch);
+      await updateDoc(doc(db, 'agents', agent.id), withPhase(agent));
       // Parent only: the cascade below writes one doc per sub-skill, and a
       // 7-child parent would otherwise produce 8 emails for one request.
       notifyEvent('deploy.requested', { agentId: agent.id });
@@ -483,7 +486,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // than its parent (its own 100%, its own deploy approval) must not be
       // dragged backwards — 18 standalone skills sit at 100% today.
       for (const sk of cascadeTargets(agent, allAgents || [])) {
-        await updateDoc(doc(db, 'agents', sk.id), patch);
+        await updateDoc(doc(db, 'agents', sk.id), withPhase(sk));
       }
     } catch (e) {
       setSaveError(failMsg('ขออนุมัติ', e));
