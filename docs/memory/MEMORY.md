@@ -12,3 +12,5 @@
 - [English headers rule](feedback_english_headers.md) — labels/headers always English, Thai only for explanatory copy — applies everywhere in the app
 - [Chat regression suite is flaky](feedback_regression_flaky.md) — ~16/17 with a rotating failure; always baseline before blaming a prompt edit
 - [Redesign v4 approved](project_redesign_v4.md) — UI mockup approved 2026-10-01, not implemented yet; link + locked decisions
+- [Redesign V7 shipped](project_redesign_v7.md) — LIVE since 2026-10-02 (hosting only); rollback via prod-backup channels / Console / tag prod-pre-v7
+- [Thai summaries](feedback_thai_summaries.md) — always report results to the user in Thai (order 2026-10-05)
