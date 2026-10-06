@@ -54,20 +54,28 @@
 
 ## 3. สร้างโฟลเดอร์และ clone
 
-แนะนำให้ใช้ path เดิมเพื่อให้ทุกอย่าง (รวม memory key) เหมือนเดิม:
+**Layout ใหม่ (ตัดสินใจ 2026-10-06):** รวมไว้ที่ `~/Downloads/Claude/` เหมือนโปรเจกต์อื่น
+และ**เปิด Claude ที่ `agent-library` โดยตรง** (ไม่มีโฟลเดอร์แม่ `claude_AIApp` อีกต่อไป)
+
+```
+~/Downloads/Claude/
+├── agent-library/        ← repo นี้ (เปิด Claude ที่นี่)
+├── AICommitteDeck/
+├── Portfolio/portfolio-app/
+├── Vote/ ...
+```
 
 ```bash
-mkdir -p ~/Downloads/claude_AIApp
-cd ~/Downloads/claude_AIApp
+mkdir -p ~/Downloads/Claude
+cd ~/Downloads/Claude
 git clone https://github.com/ARS-AI-lib/ai-agent-library.git agent-library
 cd agent-library
 npm install
 cd functions && npm install && cd ..
 ```
 
-> ถ้าใช้ path อื่น ได้เหมือนกัน แต่ memory key ในขั้นที่ 6 จะเปลี่ยนตาม
-
----
+> ไม่มีโค้ดหรือสคริปต์ไหนผูกกับ path `claude_AIApp` — สคริปต์ใน `functions/` หา `src/lib` ด้วย path แบบ relative
+> สิ่งเดียวที่ขึ้นกับ path คือ **memory key ของ Claude** (ขั้นที่ 6) และ `launch.json` (ขั้นที่ 7)
 
 ## 4. สร้าง `.env.local` (สำคัญที่สุด)
 
@@ -98,16 +106,16 @@ gcloud config set project wolfy-481609
 Claude Code อ่าน memory จาก `~/.claude/projects/<key>/memory/`
 `<key>` = path ของโฟลเดอร์ที่เปิด Claude **แทน `/` ด้วย `-`**
 
-| เปิด Claude ที่โฟลเดอร์ | key |
-|---|---|
-| `~/Downloads/claude_AIApp` (แบบที่ใช้อยู่ตอนนี้) | `-Users-<username>-Downloads-claude-AIApp` |
-| `~/Downloads/claude_AIApp/agent-library` | `-Users-<username>-Downloads-claude-AIApp-agent-library` |
+เปิด Claude ที่ `~/Downloads/Claude/agent-library` → key = `-Users-<username>-Downloads-Claude-agent-library`
 
 ```bash
-KEY="-Users-$(whoami)-Downloads-claude-AIApp"      # ปรับตามโฟลเดอร์ที่จะเปิด
+KEY="-Users-$(whoami)-Downloads-Claude-agent-library"
 mkdir -p ~/.claude/projects/$KEY/memory
-cp ~/Downloads/claude_AIApp/agent-library/docs/memory/*.md ~/.claude/projects/$KEY/memory/
+cp ~/Downloads/Claude/agent-library/docs/memory/*.md ~/.claude/projects/$KEY/memory/
+ls ~/.claude/projects/$KEY/memory/      # ต้องเห็น MEMORY.md + ไฟล์ feedback_/project_ ทั้งหมด
 ```
+
+> ถ้าไม่แน่ใจว่า key ถูก: เปิด Claude ที่โฟลเดอร์นั้นครั้งแรก แล้วดูชื่อโฟลเดอร์ที่เพิ่งเกิดใน `~/.claude/projects/` — ชื่อนั้นคือ key
 
 **กฎถาวร:** `docs/memory/` ใน repo คือ **ต้นฉบับ** — Claude แก้ memory เมื่อไหร่ต้องคัดลอกกลับมาที่ `docs/memory/` แล้ว commit
 
@@ -115,20 +123,9 @@ cp ~/Downloads/claude_AIApp/agent-library/docs/memory/*.md ~/.claude/projects/$K
 
 ## 7. ตั้งค่า Claude Desktop (Code tab)
 
-1. เปิดโปรเจกต์ที่โฟลเดอร์ `~/Downloads/claude_AIApp` (หรือ `agent-library` — ให้ตรงกับ key ในขั้นที่ 6)
-2. ไฟล์ preview server `.claude/launch.json` (ให้ Claude เปิดเว็บ local ได้):
-   - ถ้าเปิดที่ `claude_AIApp` สร้าง `~/Downloads/claude_AIApp/.claude/launch.json`:
-     ```json
-     {
-       "version": "0.0.1",
-       "configurations": [
-         { "name": "vite-dev", "runtimeExecutable": "npm",
-           "runtimeArgs": ["run", "dev", "--prefix", "agent-library"],
-           "port": 5173, "autoPort": true }
-       ]
-     }
-     ```
-   - ถ้าเปิดที่ `agent-library` ใช้ `agent-library/.claude/launch.json` ที่อยู่ใน repo แล้ว
+1. เปิดโปรเจกต์ที่โฟลเดอร์ `~/Downloads/Claude/agent-library` (ให้ตรงกับ key ในขั้นที่ 6)
+2. ไฟล์ preview server ใช้ `agent-library/.claude/launch.json` ที่อยู่ใน repo แล้ว (รัน `npm run dev` ในโฟลเดอร์นี้) — ไม่ต้องสร้างเพิ่ม
+   - `CLAUDE.md` ที่ root ของ repo จะถูกโหลดอัตโนมัติ · ไฟล์ `CLAUDE.md` ในโฟลเดอร์แม่เดิม (`claude_AIApp/CLAUDE.md`) เป็นสำเนาเก่า ส.ค. **ไม่ต้องย้ายตาม**
 3. Plugin / connector ที่เคยใช้ (design-superpowers, design, frontend-design ฯลฯ) — ติดตั้งใหม่ผ่าน Claude Desktop ถ้ายังต้องการ
 4. ข้อความแรกที่แนะนำให้พิมพ์:
    > เพิ่งย้ายเครื่อง อ่าน CLAUDE.md, docs/SYSTEM-OVERVIEW.md และ docs/MOVE-TO-NEW-MACHINE.md แล้วช่วยตรวจขั้นที่ 9 ให้หน่อย
@@ -152,7 +149,7 @@ cp ~/Downloads/claude_AIApp/agent-library/docs/memory/*.md ~/.claude/projects/$K
 ## 9. ตรวจว่าเครื่องใหม่พร้อม (ทำให้ครบก่อน deploy อะไรก็ตาม)
 
 ```bash
-cd ~/Downloads/claude_AIApp/agent-library
+cd ~/Downloads/Claude/agent-library
 git log -1                                            # เห็น commit ล่าสุดเหมือนบน GitHub
 git rev-list --left-right --count origin/main...HEAD  # ต้องได้ 0 0
 npm run build                                         # ผ่าน = .env.local + deps ครบ
