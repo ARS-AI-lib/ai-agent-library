@@ -15,3 +15,4 @@
 - [Redesign V7 shipped](project_redesign_v7.md) — LIVE since 2026-10-02 (hosting only); rollback via prod-backup channels / Console / tag prod-pre-v7
 - [Attach file for creators](project_attach_file_creators.md) — 2026-10-07: base-user creators see Attach Endpoint File (own items) + file.updated notification; link.* client fix
 - [Thai summaries](feedback_thai_summaries.md) — always report results to the user in Thai (order 2026-10-05)
+- [Functions deps upgrade (deferred)](project_functions_deps_upgrade.md) — 2026-10-07: patched deps not deployed to functions yet; bundle with firebase-admin 14 / firebase-functions 7 upgrade
