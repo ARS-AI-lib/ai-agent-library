@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import useEscapeKey from '../hooks/useEscapeKey';
-import { isMyAgent } from '../lib/agentUtils';
 import {
   ACCEPT_ATTR, ALLOWED_EXT, MAX_UPLOAD_BYTES,
-  attachEndpointFile, formatBytes, validateUploadFile,
+  attachEndpointFile, canAttachFileTo, formatBytes, validateUploadFile,
 } from '../lib/endpointFiles';
+import { notifyEvent } from '../lib/notify';
 import { failMsg } from '../lib/copy';
 import Hint from './Hint';
 
@@ -40,23 +40,14 @@ export default function UploadEndpointFileModal({
   useEscapeKey(onClose);
 
   const eligible = useMemo(() => {
-    const mine = new Set(approveAreas || []);
+    const viewer = { isAdmin, role, approveAreas, user };
     return agents
-      .filter((a) => a.approvalStatus === 'approved' && a.archived !== true)
-      .filter((a) => a.deploymentStatus === 'approved')
-      // Non-admins are scoped to their own Approve Areas. The check uses the
-      // agent's STORED approveArea, matching what the server enforces — all 26
-      // eligible agents carry one, and an agent without a stored area is
-      // admin-only rather than silently open to everyone.
-      // 2026-08-19: creators included. This filter used to be area-only, which
-      // silently excluded the person who actually built the thing whenever
-      // they hold no Approve Area — measured: 8 base-'user' creators own a
-      // deploy-approved agent. Mirrors checkAgentActor() server-side.
-      .filter((a) => isAdmin
-        || isMyAgent(a, user)
-        || !!(a.createdBy && a.createdBy === user?.uid)
-        || ((role === 'approver' || role === 'staff')
-            && Array.isArray(a.approveArea) && a.approveArea.some((x) => mine.has(x))))
+      // Admin: all · creator: own items · approver/staff: stored approveArea.
+      // A base-'user' therefore sees ONLY what they created. 2026-08-19:
+      // creators included (8 base-'user' creators own a deploy-approved agent);
+      // 2026-10-07: moved into canAttachFileTo() so App.jsx can decide whether
+      // to show the menu at all with the exact same rule.
+      .filter((a) => canAttachFileTo(a, viewer))
       .sort((a, b) => {
         // Most-recently deploy-approved first. `deployDecidedAt` (set by
         // decideDeploy() in PendingApprovalModal on every approve/reject) is
@@ -101,6 +92,9 @@ export default function UploadEndpointFileModal({
     try {
       const r = await attachEndpointFile({ agentId: selected.id, file });
       setResult(r);
+      // One notification per upload. An identical re-upload is a server no-op
+      // (no new version), so there is nothing to announce.
+      if (!r?.unchanged) notifyEvent('file.updated', { agentId: selected.id });
       setFile(null);
       if (inputRef.current) inputRef.current.value = '';
     } catch (e) {

@@ -116,6 +116,7 @@ function check(label, got, want) {
     // 2026-09-30 link requests: doc = the skill, ctx.agent = the target agent.
     'link.requested': [{ ...approved, linkSuggestion: { agentId: parent?.id, agentName: parent?.agentName, status: 'pending' } }, { agent: parent }],
     'link.decided': [{ ...approved, linkSuggestion: { agentId: parent?.id, agentName: parent?.agentName, status: 'accepted' } }, { agent: parent }],
+    'file.updated': [{ ...approved, endpointFileVersion: 3, endpointFile: { name: 'skill.zip', storagePath: `endpointFiles/${approved.id}/v3/skill.zip`, uploadedAt: new Date(), uploadedBy: 'x' } }, {}],
   };
   check('every declared event type has a test case', Object.keys(cases).length, EVENT_TYPES.length);
   let rendered = 0;
@@ -148,6 +149,42 @@ function check(label, got, want) {
       return `     ${t.padEnd(18)} -> ${n ? n.to.length : 0} recipient(s)`;
     });
   rows.forEach((r) => console.log(r));
+
+  // ── 7. file.updated (2026-10-07) ────────────────────────────────────
+  console.log('\n7) file.updated — creators + area approvers, minus the uploader');
+  const fresh = (a, at = new Date()) => ({
+    ...a,
+    endpointFileVersion: 2,
+    endpointFile: { name: 'f.zip', storagePath: `endpointFiles/${a.id}/v2/f.zip`, uploadedAt: at, uploadedBy: 'x' },
+  });
+  const fa = live.find((a) => (a.approveArea || []).length && (a.creatorEmails || []).length >= 1 && !a.matchingAgent);
+  const fu = build('file.updated', fresh(fa));
+  const want = new Set([
+    ...(fa.creatorEmails || []).map((e) => e.toLowerCase()),
+    ...areaApprovers(fa, users).map((u) => u.email?.toLowerCase()).filter(Boolean),
+  ]);
+  check(`recipients = creatorEmails ∪ areaApprovers for "${fa.agentName}" (${want.size})`,
+    !!fu && fu.to.length === want.size && fu.to.every((e) => want.has(e)), true);
+
+  const actor = fa.creatorEmails[0];
+  const fuActor = buildNotification({ type: 'file.updated', doc: fresh(fa), agent: fresh(fa), users, actorEmail: actor.toUpperCase() });
+  check('the uploader (case-insensitive) is excluded',
+    !!fuActor && !fuActor.to.includes(actor.toLowerCase()) && fuActor.to.length === want.size - 1, true);
+  check('excludeActor does NOT leak into other events (agent.ready keeps the creator)',
+    buildNotification({ type: 'agent.ready', doc: { ...fa, devProgress: 100 }, agent: fa, users, actorEmail: actor }).to.includes(actor.toLowerCase()), true);
+
+  const ov = ['override@arise.tech'];
+  const fuOv = buildNotification({ type: 'file.updated', doc: fresh(fa), agent: fresh(fa), users, approverOverride: ov });
+  check('approverOverride replaces area approvers (creators unaffected)',
+    !!fuOv && fuOv.to.includes(ov[0]) && fuOv.to.length === new Set([...(fa.creatorEmails || []).map((e) => e.toLowerCase()), ov[0]]).size, true);
+
+  check('stale upload (11 min old) -> null',
+    build('file.updated', fresh(fa, new Date(Date.now() - 11 * 60 * 1000))), null);
+  check('no endpointFile -> null',
+    build('file.updated', { ...fa, endpointFile: null }), null);
+  const sub = agents.find((a) => a.matchingAgent && (a.creatorEmails || []).length);
+  check(`a sub-skill upload IS notified ("${sub?.agentName}")`,
+    !!build('file.updated', fresh(sub)), true);
 
   console.log(`\n${fail === 0 ? '✓ ALL PASS' : '✗ FAILURES'} — ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

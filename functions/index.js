@@ -1765,7 +1765,12 @@ exports.notifyEvent = onCall(
 
     // approverOverride: approver-side routing replaced by a fixed list (rollout).
     const { approverOverride } = await loadConfig(db);
-    const note = buildNotification({ type, doc, agent, users, subSkillCount, approverOverride });
+    // actorEmail comes from the auth token, never the client payload: events
+    // flagged excludeActor (file.updated) drop the person who did the action.
+    const note = buildNotification({
+      type, doc, agent, users, subSkillCount, approverOverride,
+      actorEmail: request.auth.token?.email || '',
+    });
     if (!note) return { ok: false, reason: 'no-recipients-or-unverified' };
 
     const result = await sendMail(db, note);

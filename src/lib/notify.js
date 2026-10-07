@@ -26,6 +26,7 @@ const TYPES = new Set([
   'deploy.rejected',
   'agent.archived',
   'agent.ready',
+  'file.updated',
   'rename.requested',
   'rename.decided',
   'user.roleChanged',

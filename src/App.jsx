@@ -8,6 +8,7 @@ import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from 
 import { getType, getTier } from './lib/tier';
 import { queueViewer, pendingBadgeCount } from './lib/pendingQueue';
 import { recordSearchHits } from './lib/agentEvents';
+import { canAttachFileTo } from './lib/endpointFiles';
 import { useAgentStats } from './hooks/useAgentStats';
 import { ALLOWED_DOMAINS_LABEL } from './lib/firebase';
 import { agentStatus } from './lib/status';
@@ -100,7 +101,17 @@ export default function App() {
   // 'user' Creator still attaches a file inside Agent Detail when marking the
   // agent Ready to Use (markAgentReady flow); replacing a file later now needs
   // an approver/staff/admin. Server checks (checkAgentActor) are unchanged.
-  const canUploadFiles = !!user && !!role && role !== 'user';
+  // 2026-10-07 (user decision, supersedes V7 for creators): a base 'user' sees
+  // the menu again, but ONLY when they created at least one deploy-approved
+  // item — so they can publish a new file version. canAttachFileTo() is the
+  // same rule the modal's picker uses, so the list they open shows exactly
+  // their own items. Other roles are unchanged (always see the menu).
+  const canUploadFiles = useMemo(() => {
+    if (!user || !role) return false;
+    if (role !== 'user') return true;
+    const viewer = { isAdmin, role, approveAreas, user };
+    return allAgents.some((a) => canAttachFileTo(a, viewer));
+  }, [user, role, isAdmin, approveAreas, allAgents]);
   // Agent/Skill Usage (2026-08-26). Plain role gating — the roles were named
   // exactly, so unlike Timeline/Dashboard there is no /config allowlist. The
   // callable re-checks this and additionally scopes staff/approver to their

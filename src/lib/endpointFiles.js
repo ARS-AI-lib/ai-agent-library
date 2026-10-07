@@ -1,4 +1,5 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { isMyAgent } from './agentUtils';
 
 // Endpoint file attachments + SSO-gated download (2026-08-18).
 //
@@ -59,6 +60,32 @@ export const ACCEPT_ATTR = ALLOWED_EXT.map((e) => `.${e}`).join(',');
  * 728 KB, and the existing skill zips are ~5 KB each.
  */
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+/**
+ * May this viewer attach/replace this agent's endpoint file? (2026-10-07)
+ *
+ * Client mirror of checkUploadPermission() → checkAgentActor() in
+ * functions/endpointFileRules.js + agentReadyRules.js — edit both together.
+ * UX only: the callable re-checks everything.
+ *
+ * One predicate drives BOTH the Attach Endpoint File picker and whether the
+ * menu item shows at all for a base-'user' creator, so the two can never
+ * disagree (a menu that opens onto an empty list, or a list nobody can reach).
+ *
+ * Area scoping reads the STORED approveArea, matching the server; an agent
+ * without one is admin/creator-only.
+ */
+export function canAttachFileTo(agent, { isAdmin, role, approveAreas, user } = {}) {
+  if (!agent || !user) return false;
+  if (agent.approvalStatus !== 'approved' || agent.archived === true) return false;
+  if (agent.deploymentStatus !== 'approved') return false;
+  if (isAdmin) return true;
+  if (isMyAgent(agent, user)) return true;
+  if (agent.createdBy && agent.createdBy === user.uid) return true;
+  if (role !== 'approver' && role !== 'staff') return false;
+  const mine = new Set(approveAreas || []);
+  return Array.isArray(agent.approveArea) && agent.approveArea.some((x) => mine.has(x));
+}
 
 /** Lowercased extension without the dot, or '' when there isn't one. */
 export function fileExt(name) {

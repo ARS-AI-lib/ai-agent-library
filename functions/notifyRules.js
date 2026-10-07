@@ -44,6 +44,16 @@ const fmtDate = (ts) => {
   }).format(d);
 };
 
+// Firestore Timestamp / Date / millis -> millis (0 when absent).
+const toMillis = (ts) => {
+  if (!ts) return 0;
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (ts instanceof Date) return ts.getTime();
+  if (typeof ts === 'number') return ts;
+  return 0;
+};
+const FILE_UPDATE_WINDOW_MS = 10 * 60 * 1000;
+
 const progressOf = (raw) => {
   if (typeof raw === 'number') return raw;
   const m = String(raw || '').match(/\d+/);
@@ -132,6 +142,22 @@ const EVENTS = {
     verify: (a) => progressOf(a.devProgress) === 100,
     to: (a, users, ctx) => [...creatorAddresses(a), ...approverEmails(a, users, ctx)],
   },
+  // Endpoint file replaced via the Attach Endpoint File menu (2026-10-07).
+  // The first attach during the 100% flow is NOT this event — that path
+  // already sends agent.ready, and one action = one notification.
+  'file.updated': {
+    scope: 'agent',
+    // Fresh upload only: a replayed/forged call minutes later describes
+    // nothing that just happened. `now` is passed in (this file reads no clock).
+    verify: (a, ctx) => !!a.endpointFile?.storagePath
+      && ctx.now - toMillis(a.endpointFile.uploadedAt) <= FILE_UPDATE_WINDOW_MS,
+    to: (a, users, ctx) => [...creatorAddresses(a), ...approverEmails(a, users, ctx)],
+    // A sub-skill upload is its own action, not a cascade — so the
+    // one-email-per-action skip below does not apply.
+    allowSubSkill: true,
+    // The uploader already knows; never mail them about their own upload.
+    excludeActor: true,
+  },
   'rename.requested': {
     scope: 'renameRequest',
     verify: (r) => r.status === 'pending',
@@ -195,19 +221,24 @@ const quote = (s) => `<blockquote style="margin:10px 0;padding:10px 14px;backgro
  * Build the full notification, or null when nothing should be sent.
  * Returns { subject, text, html, to[] }.
  */
-function buildNotification({ type, doc, agent, users = [], subSkillCount = 0, approverOverride = [] }) {
+function buildNotification({
+  type, doc, agent, users = [], subSkillCount = 0, approverOverride = [],
+  actorEmail = '', now = Date.now(),
+}) {
   const def = EVENTS[type];
   if (!def) return null;
   if (!doc) return null;
-  if (!def.verify(doc)) return null;             // forged or stale -> nothing
+  const ctx = { agent, approverOverride, now };
+  if (!def.verify(doc, ctx)) return null;        // forged or stale -> nothing
 
   // One email per logical action: a cascaded sub-skill is never its own event.
-  if (def.scope === 'agent' && doc.matchingAgent) return null;
+  if (def.scope === 'agent' && doc.matchingAgent && !def.allowSubSkill) return null;
 
-  const ctx = { agent, approverOverride };
+  const actor = String(actorEmail || '').trim().toLowerCase();
   const to = [...new Set((def.to(doc, users, ctx) || [])
     .map((e) => String(e || '').trim().toLowerCase())
-    .filter(Boolean))];
+    .filter(Boolean))]
+    .filter((e) => !(def.excludeActor && actor && e === actor));
   if (!to.length) return null;
 
   const a = def.scope === 'agent' ? doc : (agent || {});
@@ -277,6 +308,16 @@ ${row('รายการ', name)}
 ${row('ช่องทางใช้งาน', a.endpointFile?.name ? `ไฟล์แนบในระบบ · ${a.endpointFile.name} (ต้อง login ก่อนดาวน์โหลด)` : (a.endpoint || '—'))}
 ${a.launchDate ? row('Launch date', fmtDate(a.launchDate)) : ''}${row('ดำเนินการโดย', nameOf(a.readyMarkedBy, users))}`;
       break;
+
+    case 'file.updated': {
+      const v = a.endpointFileVersion ? `v${a.endpointFileVersion}` : '';
+      subject = `อัปเดตไฟล์${v ? ` ${v}` : ''}: ${name}`;
+      body = `<h2 style="font-size:17px;margin:0 0 12px">อัปเดตไฟล์ Endpoint</h2>
+${row('รายการ', name)}${row('เวอร์ชัน', v)}${row('ไฟล์', a.endpointFile?.name || '—')}
+${row('อัปโหลดโดย', nameOf(a.endpointFile?.uploadedBy, users))}${row('เมื่อ', fmtDate(a.endpointFile?.uploadedAt))}
+<p style="margin:14px 0 0;color:#6b7280">ไฟล์เวอร์ชันก่อนหน้ายังดูได้ใน File History ของรายการนี้ (ต้อง login ก่อนดาวน์โหลด)</p>`;
+      break;
+    }
 
     case 'rename.requested':
       subject = `ขอเปลี่ยนชื่อ: ${doc.currentName} → ${doc.requestedName}`;
@@ -360,6 +401,7 @@ ${row('บทบาท', doc.role || 'user')}${row('Approve Area', (doc.approveA
 
 module.exports = {
   APP_URL, EVENTS, EVENT_TYPES,
-  areaApprovers, creatorAddresses, nameOf, progressOf, fmtDate,
+  areaApprovers, creatorAddresses, nameOf, progressOf, fmtDate, toMillis,
+  FILE_UPDATE_WINDOW_MS,
   buildNotification,
 };
