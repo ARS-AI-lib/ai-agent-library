@@ -1419,3 +1419,17 @@ banking chatbot ติด AI Engineer → Software Engineer)
 - Run status: `queued` → `done` when every item is final (`finishRunIfComplete`). runId = Bangkok minute, so a manual re-trigger makes a NEW run (only a retry within the same minute is deduped).
 - **Live since 2026-10-05:** test run `2026-10-05-1626` sent 1 real + 45 dry-run, 9.0–10.3 s apart. Then `/config/alerts.dryRun = false` → first real round is the next schedule (Thu 13:00).
 
+---
+
+## Attach Endpoint File for creators + `file.updated` (2026-10-07)
+
+- **Menu:** ☰ Attach Endpoint File now shows for role `user` **only when they created ≥1 deploy-approved item**, and the picker lists only their own items. This reverses the 2026-10-01 V7 hide for creators. Other roles are unchanged.
+- **One predicate:** `canAttachFileTo()` in `src/lib/endpointFiles.js` drives both the menu (`App.jsx`) and the picker (`UploadEndpointFileModal.jsx`). It mirrors `checkUploadPermission()`/`checkAgentActor()` on the server; edit both together.
+- **New event `file.updated`** (`functions/notifyRules.js`):
+  - Recipients: creators + area approvers (`approverOverride` applies). The uploader is excluded, using the email from the auth token, never the client.
+  - Sub-skills are notified (`allowSubSkill`); fresh uploads only (within 10 min).
+  - Fired only from the menu upload. Not for identical re-uploads (`unchanged`), and not in the 100% flow, which already sends `agent.ready`.
+  - `excludeActor` / `allowSubSkill` are per-event flags; other events behave exactly as before.
+- **Client whitelist bug fixed the same day:** `TYPES` in `src/lib/notify.js` lacked `link.requested`/`link.decided`, so those calls were dropped before reaching the server (0 rows in `/mailLog`). ⛔ Keep `TYPES` equal to `EVENT_TYPES` in `functions/notifyRules.js`.
+- Tests: `verify-notify.cjs` (21/21, 7 new `file.updated` cases). `verify-endpoint-files.cjs` now asserts approver reach over **all** their areas (it assumed one area and drifted 26 vs 44).
+

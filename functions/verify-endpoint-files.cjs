@@ -88,9 +88,14 @@ function check(label, got, want) {
 
   const platform = approvers.find((u) => (u.approveAreas || []).includes('Platform, DevOps & Operations'));
   if (platform) {
-    const wantPlat = eligible.filter((a) => (a.approveArea || []).includes('Platform, DevOps & Operations')).length;
-    check(`\n   ${platform.email} reaches exactly the ${wantPlat} Platform/DevOps agents`,
-      countAllowed(platform), wantPlat);
+    // 2026-10-07: was "exactly the Platform/DevOps agents", which assumed this
+    // approver holds ONE area. They now hold six, so the count drifted (26 vs
+    // 44) with no code change. The rule is: reach = agents whose stored area
+    // overlaps ANY of the approver's areas.
+    const myAreas = new Set(platform.approveAreas || []);
+    const wantReach = eligible.filter((a) => (a.approveArea || []).some((ar) => myAreas.has(ar))).length;
+    check(`\n   ${platform.email} reaches exactly the ${wantReach} agents in their ${myAreas.size} area(s)`,
+      countAllowed(platform), wantReach);
     const security = eligible.find((a) => (a.approveArea || []).includes('Security'));
     if (security) {
       check(`   ...and is blocked on "${security.agentName}" (Security area)`,

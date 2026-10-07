@@ -29,6 +29,11 @@ const TYPES = new Set([
   'file.updated',
   'rename.requested',
   'rename.decided',
+  // 2026-10-07: these two were missing, so PreRegModal / PendingApprovalModal
+  // calls were silently dropped here (0 link.* rows in /mailLog). Keep this
+  // list in sync with EVENT_TYPES in functions/notifyRules.js.
+  'link.requested',
+  'link.decided',
   'user.roleChanged',
 ]);
 
