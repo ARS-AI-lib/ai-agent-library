@@ -1,6 +1,6 @@
 'use strict';
 // ── Delay / at-risk alerts (2026-10-05) ──────────────────────────────
-// Twice a week (Mon 09:30, Thu 13:00 Asia/Bangkok) every Creator gets ONE
+// Once a week (Mon 13:00 Asia/Bangkok) every Creator gets ONE
 // digest of their items that are late or about to be, asking them to update
 // progress. Pure + offline-testable (verify-delay-alerts.cjs); index.js only
 // loads data, enqueues and sends.

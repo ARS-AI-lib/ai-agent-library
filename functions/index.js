@@ -2089,7 +2089,7 @@ exports.manageRoleGroups = onCall(
 );
 
 // ── Delay / at-risk alerts (2026-10-05) ──────────────────────────────
-// Mon 09:30 + Thu 13:00 Asia/Bangkok. Rules live in delayAlertRules.js
+// Mon 13:00 Asia/Bangkok (weekly). Rules live in delayAlertRules.js
 // (verify-delay-alerts.cjs). The schedulers only BUILD a run; delivery is a
 // Cloud Tasks queue, one task per Creator digest, 10 s apart (user
 // requirement: every alert goes out, throttled). Retries come from Cloud
@@ -2173,12 +2173,8 @@ async function runDelayAlerts(slot) {
 }
 
 exports.delayAlertsMon = onSchedule(
-  { schedule: '30 9 * * 1', timeZone: 'Asia/Bangkok', timeoutSeconds: 300, retryCount: 2 },
-  () => runDelayAlerts('mon-0930'),
-);
-exports.delayAlertsThu = onSchedule(
-  { schedule: '0 13 * * 4', timeZone: 'Asia/Bangkok', timeoutSeconds: 300, retryCount: 2 },
-  () => runDelayAlerts('thu-1300'),
+  { schedule: '0 13 * * 1', timeZone: 'Asia/Bangkok', timeoutSeconds: 300, retryCount: 2 },
+  () => runDelayAlerts('mon-1300'),
 );
 
 const FINAL_ITEM = new Set(['sent', 'dry-run', 'skipped']);

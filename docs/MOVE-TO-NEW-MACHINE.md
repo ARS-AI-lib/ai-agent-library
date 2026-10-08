@@ -140,7 +140,7 @@ ls ~/.claude/projects/$KEY/memory/      # ต้องเห็น MEMORY.md + �
 | Firestore | named DB `ai-agent-lib` (rules publish ผ่าน Console เท่านั้น) |
 | Cloud Functions | project `wolfy-481609` region `asia-southeast1` (แชร์กับ Portfolio — deploy แบบ scoped เท่านั้น) |
 | Secret | Secret Manager `TEAMS_FLOW_URL` (Teams/อีเมล) — ห้ามคัดลอกออกมา |
-| แจ้งเตือน Delay/At-risk | Cloud Scheduler (จ. 09:30 / พฤ. 13:00) + Cloud Tasks queue `sendDelayDigest` · สวิตช์ `/config/alerts` |
+| แจ้งเตือน Delay/At-risk | Cloud Scheduler (จ. 13:00 สัปดาห์ละครั้ง) + Cloud Tasks queue `sendDelayDigest` · สวิตช์ `/config/alerts` |
 | IAM ที่เพิ่มเมื่อ 2026-10-05 | compute SA มี `roles/cloudtasks.enqueuer` + `roles/iam.serviceAccountUser` (ไม่มี condition) |
 | แจ้งเตือนอีเมล/Teams ทั่วไป | `/config/mail` (`provider: teams-flow`, `approverOverride`) |
 
