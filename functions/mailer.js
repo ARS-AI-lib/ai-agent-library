@@ -21,7 +21,7 @@
  */
 
 const PROVIDERS = ['none', 'gmail-oauth', 'smtp-relay', 'resend', 'teams-flow'];
-const APP_URL = 'https://wolfy-ai-library.web.app';
+const { APP_URL, NAME_TOKEN, personalize, salutation } = require('./messageFrame');
 
 const DEFAULT_CONFIG = {
   // Ships OFF and dry-run. Every event is verified in this mode — recipients
@@ -143,26 +143,35 @@ async function sendViaGmailOAuth({ from, replyTo, to, subject, text, html }) {
 // channel card, pointed at a person instead. The webhook URL can post as the
 // bot, so it is a Secret Manager value (TEAMS_FLOW_URL), never Firestore/git.
 
-/** Adaptive Card 1.4 for one notification — pure, checked by verify-teams.cjs. */
-function buildTeamsCard({ subject, title, text, link, endpoint }) {
-  // `text` (from notifyRules) opens with the subject line and then the email's
-  // <h2> heading — both repeat the title, so the first two lines are dropped.
-  // The trailing app URL is replaced by the button.
-  const lines = String(text || '').split('\n').filter((l) => l.trim()).slice(2)
-    .filter((l) => l.trim() !== APP_URL);
-  const actions = [{ type: 'Action.OpenUrl', title: 'Open AI Library', url: link || `${APP_URL}/` }];
-  if (endpoint) actions.push({ type: 'Action.OpenUrl', title: 'Open Endpoint', url: endpoint });
-  return {
+/**
+ * Adaptive Card 1.4 for one notification — pure, checked by verify-teams.cjs.
+ * `cardLines` (from notifyRules / renderDigest) are the message rows: markdown
+ * links are allowed, and a line wrapped in ** becomes a bold group heading.
+ * The button appears only when the message is about ONE item (`ctaLabel`);
+ * a multi-item digest carries its links on the rows and has no button.
+ */
+function buildTeamsCard({ subject, title, cardLines = [], link, endpoint, ctaLabel }) {
+  const actions = [];
+  if (ctaLabel) actions.push({ type: 'Action.OpenUrl', title: ctaLabel, url: link || `${APP_URL}/` });
+  if (endpoint) actions.push({ type: 'Action.OpenUrl', title: 'เปิด Endpoint', url: endpoint });
+  const card = {
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
     type: 'AdaptiveCard',
     version: '1.4',
     body: [
       { type: 'TextBlock', text: 'AI Agent Library', size: 'Small', isSubtle: true },
       { type: 'TextBlock', text: title || String(subject || '').replace(/^\[AI Library\]\s*/, ''), weight: 'Bolder', size: 'Medium', wrap: true },
-      ...lines.map((l) => ({ type: 'TextBlock', text: l, wrap: true, spacing: 'Small' })),
+      { type: 'TextBlock', text: `เรียน ${NAME_TOKEN}`, wrap: true, spacing: 'Small' },
+      ...cardLines.map((l) => {
+        const h = /^\*\*(.+)\*\*$/.exec(l);
+        return h
+          ? { type: 'TextBlock', text: h[1], weight: 'Bolder', wrap: true, spacing: 'Medium' }
+          : { type: 'TextBlock', text: l, wrap: true, spacing: 'Small' };
+      }),
     ],
-    actions,
   };
+  if (actions.length) card.actions = actions;
+  return card;
 }
 
 /**
@@ -192,18 +201,24 @@ function splitTeamsRecipients(to, domains) {
   return { send, skipped };
 }
 
-async function sendViaTeamsFlow({ deliveries, subject, title, text, html, link, endpoint }) {
+async function sendViaTeamsFlow({ deliveries, subject, title, html, link, endpoint, cardLines, ctaLabel, names = {} }) {
   const url = process.env.TEAMS_FLOW_URL;
   if (!url) throw new Error('TEAMS_FLOW_URL secret is not set');
-  const card = buildTeamsCard({ subject, title, text, link, endpoint });
+  const cardJson = JSON.stringify(buildTeamsCard({ subject, title, cardLines, link, endpoint, ctaLabel }));
   const results = [];
   for (const { recipient, teams, email } of deliveries) {
     try {
+      const who = names[String(recipient).toLowerCase()] || '';
       const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // teams/email tell the Flow which branch to run for this person.
-        body: JSON.stringify({ recipient, subject, card, teams, email, html: email ? html : '' }),
+        // {{name}} is filled per recipient (greeting).
+        body: JSON.stringify({
+          recipient, subject, teams, email,
+          card: JSON.parse(personalize(cardJson, who, { json: true })),
+          html: email ? personalize(html, who) : '',
+        }),
       });
       results.push({ email: recipient, http: r.status, viaTeams: teams, viaEmail: email });
     } catch (e) {
@@ -218,7 +233,7 @@ async function sendViaTeamsFlow({ deliveries, subject, title, text, html, link, 
  * /mailLog, including for dry runs and failures — the log is the audit trail
  * and the thing verification reads.
  */
-async function sendMail(db, { to, subject, text, html, title, link, endpoint }) {
+async function sendMail(db, { to, subject, text, html, title, link, endpoint, cardLines, ctaLabel, names = {} }) {
   const cfg = await loadConfig(db);
 
   if (!cfg.enabled) {
@@ -244,7 +259,8 @@ async function sendMail(db, { to, subject, text, html, title, link, endpoint }) 
 
   try {
     if (cfg.provider === 'gmail-oauth') {
-      const r = await sendViaGmailOAuth({ ...cfg, to: finalTo, subject, text, html });
+      const who = finalTo.length === 1 ? (names[finalTo[0].toLowerCase()] || '') : '';
+      const r = await sendViaGmailOAuth({ ...cfg, to: finalTo, subject, text: String(text).split(NAME_TOKEN).join(salutation(who)), html: personalize(html, who) });
       return { status: 'sent', provider: cfg.provider, to: finalTo, heldFrom: held, subject, messageId: r.id || '' };
     }
     if (cfg.provider === 'teams-flow') {
@@ -252,7 +268,7 @@ async function sendMail(db, { to, subject, text, html, title, link, endpoint }) 
       if (!deliveries.length) {
         return { status: 'skipped-domain', provider: cfg.provider, to: finalTo, skippedDomain: skipped, heldFrom: held, subject };
       }
-      const teams = await sendViaTeamsFlow({ deliveries, subject, title, text, html, link, endpoint });
+      const teams = await sendViaTeamsFlow({ deliveries, subject, title, html, link, endpoint, cardLines, ctaLabel, names });
       const allOk = teams.every((x) => x.http >= 200 && x.http < 300);
       return { status: allOk ? 'sent' : 'error', provider: cfg.provider, to: deliveries.map((d) => d.recipient), skippedDomain: skipped, heldFrom: held, subject, teams };
     }

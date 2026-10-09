@@ -18,12 +18,12 @@ const RANK = { delayed: 0, due5: 1, risk10: 2, todo30: 3, ipStale30: 4, ipNoLaun
 const CATEGORY_LABEL = {
   delayed: 'เลย Launch Date แล้ว',
   due5: 'ใกล้ถึง Launch Date (ภายใน 5 วันทำการ)',
-  risk10: 'เสี่ยงล่าช้า (At risk · ภายใน 10 วันทำการ)',
-  todo30: 'To Do ค้างเกิน 30 วันนับจากวันที่สร้าง',
-  ipStale30: 'In Progress ไม่มีการอัปเดต Progress เกิน 30 วัน',
-  ipNoLaunch60: 'In Progress เกิน 60 วันแล้วยังไม่มี Launch Date',
-  pilotNoLaunch30: 'Pilot เกิน 30 วันแล้วยังไม่มี Launch Date',
-  pilotLaunch60: 'Pilot เกิน 60 วันแล้วยังไม่ถึง 100%',
+  risk10: 'เสี่ยงล่าช้า (ภายใน 10 วันทำการ)',
+  todo30: 'ยังเป็น To Do เกิน 30 วัน',
+  ipStale30: 'ไม่มีการอัปเดต Progress เกิน 30 วัน',
+  ipNoLaunch60: 'In Progress เกิน 60 วัน ยังไม่ระบุ Launch Date',
+  pilotNoLaunch30: 'Pilot เกิน 30 วัน ยังไม่ระบุ Launch Date',
+  pilotLaunch60: 'Pilot เกิน 60 วัน ยังไม่ถึง 100%',
 };
 // Stuck-item limits (2026-10-05 v2) — CALENDAR days (user decision), unlike the
 // business-day launch windows above.
@@ -204,49 +204,83 @@ function buildDigests(agents, { milestones = [], now = new Date() } = {}) {
 }
 
 // ── rendering ────────────────────────────────────────────────────────
-const APP_URL = 'https://wolfy-ai-library.web.app';
-const esc = (s) => String(s == null ? '' : s)
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const { APP_URL, esc, frameHtml, htmlToText, NAME_TOKEN } = require('./messageFrame');
 const fmtDay = (d) => (d ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(d) : '');
 
+// Teams shows at most this many rows; the email always lists everything.
+const TEAMS_MAX_ITEMS = 15;
+
 function itemNote(it) {
-  if (it.category === 'delayed') return `Launch ${fmtDay(it.launchDay)} · เลยมา ${it.bdays} วันทำการ`;
-  if (it.category === 'due5' || it.category === 'risk10') return `Launch ${fmtDay(it.launchDay)} · อีก ${it.bdays} วันทำการ`;
+  if (it.category === 'delayed') return `เลยมา ${it.bdays} วันทำการ (Launch ${fmtDay(it.launchDay)})`;
+  if (it.category === 'due5' || it.category === 'risk10') return `อีก ${it.bdays} วันทำการ (Launch ${fmtDay(it.launchDay)})`;
   const launch = it.launchDay ? `Launch ${fmtDay(it.launchDay)}` : 'ยังไม่มี Launch Date';
   if (it.category === 'todo30') return `สร้างมาแล้ว ${it.days} วัน · ${launch}`;
-  if (it.category === 'ipStale30') return `ไม่มีการอัปเดตมา ${it.days} วัน · ${launch}`;
+  if (it.category === 'ipStale30') return `ไม่อัปเดตมา ${it.days} วัน · ${launch}`;
   return `${PHASE_LABEL[it.phase]} มา ${it.days} วัน · ${launch}`;
 }
 
-/** { subject, title, text, html, link, to } for one digest. `forEmail` labels dry-run copies. */
-function renderDigest(digest, { forEmail = '' } = {}) {
-  const n = digest.items.length;
-  const subject = `[AI Library] มี ${n} รายการที่ควรอัปเดต Progress`;
-  const title = `มี ${n} รายการที่ควรอัปเดต Progress`;
-  let body = `<h2 style="font-size:17px;margin:0 0 12px">${esc(title)}</h2>`;
+const itemUrl = (it) => `${APP_URL}/?agent=${encodeURIComponent(it.id)}`;
+
+/**
+ * { subject, title, text, html, link, to, cardLines, ctaLabel, names } for one digest.
+ * Several items: every row links to its own item and there is NO button at the
+ * end (a single button could only point at the library home). One item: one
+ * button that names that item. `forEmail` labels dry-run copies.
+ */
+function renderDigest(digest, { forEmail = '', displayName = '' } = {}) {
+  const items = digest.items;
+  const n = items.length;
+  const one = n === 1 ? items[0] : null;
+  const subject = one
+    ? `[AI Library] ขอให้อัปเดตความคืบหน้า: ${one.name}`
+    : `[AI Library] ขอให้อัปเดตความคืบหน้า ${n} รายการ`;
+  const title = one ? `ขอให้อัปเดตความคืบหน้า: ${one.name}` : `ขอให้อัปเดตความคืบหน้า ${n} รายการ`;
+
+  let body = '';
   if (forEmail) body += `<p style="margin:0 0 12px;color:#b45309">[Dry run] ฉบับนี้จะส่งถึง: ${esc(forEmail)}</p>`;
-  body += '<p style="margin:0 0 14px">รายการด้านล่างใกล้ถึงหรือเลย Launch Date แล้ว หรือสถานะค้างนาน โปรดอัปเดต Progress หรือ Launch Date ให้เป็นปัจจุบัน</p>';
-  let text = `${title}\n`;
-  if (forEmail) text += `[Dry run] ฉบับนี้จะส่งถึง: ${forEmail}\n`;
-  for (const cat of Object.keys(RANK)) {
-    const rows = digest.items.filter((i) => i.category === cat);
-    if (!rows.length) continue;
-    body += `<p style="margin:16px 0 6px;font-weight:700">${esc(CATEGORY_LABEL[cat])} (${rows.length})</p>`;
-    text += `\n${CATEGORY_LABEL[cat]} (${rows.length})\n`;
-    for (const it of rows) {
-      const url = `${APP_URL}/?agent=${encodeURIComponent(it.id)}`;
-      body += `<p style="margin:3px 0"><a href="${url}" style="color:#2552b0;font-weight:600">${esc(it.name)}</a> <span style="color:#6b7280">· ${it.progress}% · ${esc(itemNote(it))}</span></p>`;
-      text += `- ${it.name} · ${it.progress}% · ${itemNote(it)}\n  ${url}\n`;
+  const cardLines = [];
+  let textBody = '';
+
+  if (one) {
+    body += `<p style="margin:0 0 10px"><strong>${esc(one.name)}</strong> (Progress ${one.progress}%)<br/>${esc(CATEGORY_LABEL[one.category])} · ${esc(itemNote(one))}</p>
+<p style="margin:0">กรุณาอัปเดต Progress หรือ Launch Date ให้เป็นปัจจุบัน</p>`;
+    cardLines.push(`${one.name} (Progress ${one.progress}%)`, `${CATEGORY_LABEL[one.category]} · ${itemNote(one)}`, 'กรุณาอัปเดต Progress หรือ Launch Date ให้เป็นปัจจุบัน');
+    textBody = `${one.name} (Progress ${one.progress}%)\n${CATEGORY_LABEL[one.category]} · ${itemNote(one)}\nกรุณาอัปเดต Progress หรือ Launch Date ให้เป็นปัจจุบัน`;
+  } else {
+    body += `<p style="margin:0 0 6px">ระบบพบ Agent/Skill ของท่านที่ควรอัปเดตความคืบหน้า <strong>${n} รายการ</strong></p>
+<p style="margin:0 0 6px;color:#374151">กด “อัปเดต” ท้ายแต่ละรายการเพื่อเปิดรายการนั้นและปรับ Progress หรือ Launch Date ได้ทันที</p>`;
+    cardLines.push('กด “อัปเดต” ท้ายแต่ละรายการเพื่อเปิดรายการนั้นและปรับ Progress หรือ Launch Date ได้ทันที');
+    textBody = `ระบบพบ Agent/Skill ของท่านที่ควรอัปเดตความคืบหน้า ${n} รายการ\nกดลิงก์ท้ายแต่ละรายการเพื่ออัปเดตได้ทันที\n`;
+    let shown = 0;
+    for (const cat of Object.keys(RANK)) {
+      const rows = items.filter((i) => i.category === cat);
+      if (!rows.length) continue;
+      body += `<p style="margin:16px 0 6px;font-weight:700">${esc(CATEGORY_LABEL[cat])} (${rows.length})</p>`;
+      textBody += `\n${CATEGORY_LABEL[cat]} (${rows.length})\n`;
+      let headed = false;
+      for (const it of rows) {
+        const url = itemUrl(it);
+        body += `<p style="margin:3px 0"><a href="${url}" style="color:#2552b0;font-weight:600">${esc(it.name)}</a> <span style="color:#6b7280">· ${it.progress}% · ${esc(itemNote(it))}</span> &nbsp;<a href="${url}" style="color:#2552b0;white-space:nowrap">อัปเดต ›</a></p>`;
+        textBody += `- ${it.name} · ${it.progress}% · ${itemNote(it)}\n  อัปเดต: ${url}\n`;
+        if (shown < TEAMS_MAX_ITEMS) {
+          if (!headed) { cardLines.push(`**${CATEGORY_LABEL[cat]} (${rows.length})**`); headed = true; }
+          cardLines.push(`• ${it.name} · ${it.progress}% · ${itemNote(it)} — [อัปเดต](${url})`);
+        }
+        shown += 1;
+      }
     }
+    if (n > TEAMS_MAX_ITEMS) cardLines.push(`และอีก ${n - TEAMS_MAX_ITEMS} รายการ — ดูรายการทั้งหมดในอีเมลฉบับเดียวกัน`);
   }
-  const link = n === 1 ? `${APP_URL}/?agent=${encodeURIComponent(digest.items[0].id)}` : `${APP_URL}/`;
-  const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.65;color:#1f2937;max-width:560px">
-${body}
-<p style="margin:22px 0 0"><a href="${link}" style="display:inline-block;background:#2f6bff;color:#fff;text-decoration:none;padding:9px 16px;border-radius:6px;font-weight:600">Update Progress</a></p>
-<hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 0 10px" />
-<p style="font-size:11.5px;color:#9ca3af;margin:0">แจ้งเตือนอัตโนมัติทุกวันจันทร์ 09:30 และวันพฤหัสบดี 13:00 · Launch Date นับเฉพาะวันจันทร์–ศุกร์ · สถานะค้างนับเป็นวันปฏิทิน</p>
-</div>`;
-  return { subject, title, text: `${text}\n${APP_URL}`, html, link, to: [forEmail || digest.email] };
+
+  const link = one ? itemUrl(one) : `${APP_URL}/`;
+  const ctaLabel = one ? `อัปเดต ${one.name}` : '';
+  const html = frameHtml(body, {
+    cta: one ? { label: ctaLabel, link } : null,
+    footerNote: 'ส่งทุกวันจันทร์ เวลา 13:00 · นับวันทำการเฉพาะจันทร์–ศุกร์',
+  });
+  const text = `เรียน ${NAME_TOKEN}\n\n${htmlToText(forEmail ? `[Dry run] ฉบับนี้จะส่งถึง: ${forEmail}\n` : '')}${forEmail ? '\n' : ''}${textBody}\n${one ? `${ctaLabel}: ${link}\n\n` : ''}ขอแสดงความนับถือ\nทีม AI Agent Library`;
+  const target = forEmail || digest.email;
+  return { subject, title, text, html, link, ctaLabel, cardLines, to: [target], names: displayName ? { [String(digest.email).toLowerCase()]: displayName, [String(target).toLowerCase()]: displayName } : {} };
 }
 
 module.exports = {

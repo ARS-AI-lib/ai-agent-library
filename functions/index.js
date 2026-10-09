@@ -2205,7 +2205,12 @@ exports.sendDelayDigest = onTaskDispatched(
       email: it.email,
       items: it.items.map((x) => ({ ...x, launchDay: x.launchDay ? new Date(`${x.launchDay}T00:00:00Z`) : null })),
     };
-    const note = delayRules.renderDigest(digest);
+    let displayName = '';
+    try {
+      const us = await db.collection('users').where('email', '==', it.email).limit(1).get();
+      displayName = us.empty ? '' : (us.docs[0].data().displayName || '');
+    } catch (e) { console.error('digest name lookup failed', e.message); }
+    const note = delayRules.renderDigest(digest, { displayName });
 
     if (!it.live) {
       await itemRef.update({ status: 'dry-run', at: FieldValue.serverTimestamp() });
