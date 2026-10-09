@@ -44,6 +44,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
   useEscapeKey(onClose);
   const [dirError, setDirError] = useState('');
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
 
   useEffect(() => {
     getDirectoryMeta().then(setDirMeta).catch(() => {});
@@ -124,9 +125,10 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
 
   const sorted = [...users].sort((a, b) => (a.email || '').localeCompare(b.email || ''));
   const q = search.trim().toLowerCase();
-  const visible = q
-    ? sorted.filter((u) => `${u.displayName || ''} ${u.email || ''}`.toLowerCase().includes(q))
-    : sorted;
+  const roleCounts = sorted.reduce((o, u) => { const r = u.role || 'user'; o[r] = (o[r] || 0) + 1; return o; }, {});
+  const visible = sorted.filter((u) =>
+    (roleFilter === 'all' || (u.role || 'user') === roleFilter)
+    && (!q || `${u.displayName || ''} ${u.email || ''}`.toLowerCase().includes(q)));
 
   // V7 board 6 · User Management (2026-10-02). Presentation only: the same
   // drafts / setDraft / save(u) / protected-admin rules as before.
@@ -150,6 +152,15 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
               aria-label="Search users"
             />
           </label>
+          <select
+            className="v7-um-role"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            aria-label="Filter by role"
+          >
+            <option value="all">All roles ({users.length})</option>
+            {ROLES.map((r) => <option key={r} value={r}>{r} ({roleCounts[r] || 0})</option>)}
+          </select>
           <button className="btn btn-secondary" disabled={dirSyncing} onClick={handleSyncDirectory}>
             {dirSyncing ? 'Syncing…' : 'Sync directory now'}
           </button>
@@ -161,7 +172,7 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
         </div>
         {dirError && <div className="msg error">{dirError}</div>}
 
-        {q && visible.length === 0 && <div className="v7-inbox-empty">ไม่พบผู้ใช้ที่ตรงกับ “{search}”</div>}
+        {(q || roleFilter !== 'all') && visible.length === 0 && <div className="v7-inbox-empty">ไม่พบผู้ใช้ที่ตรงกับเงื่อนไขที่เลือก</div>}
 
         <div className="v7-um-list">
           {visible.map((u) => {
