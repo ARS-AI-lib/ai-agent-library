@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut as fbSignOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { auth, googleProvider, db, isAllowedEmail, ALLOWED_DOMAINS_LABEL, USING_EMULATOR } from '../lib/firebase';
+import { auth, googleProvider, db, isAllowedUser, ALLOWED_DOMAINS_LABEL, USING_EMULATOR } from '../lib/firebase';
 import { setDirectoryToken, warmDirectory } from '../lib/directory';
 
 /**
@@ -41,7 +41,7 @@ export function useAuth() {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
-      if (u && !isAllowedEmail(u.email)) {
+      if (u && !isAllowedUser(u)) {
         setDomainError(true);
       } else {
         setDomainError(false);
@@ -149,7 +149,7 @@ export function useAuth() {
           sub: `emu-${testEmail}`, email: testEmail, email_verified: true, name: testEmail.split('@')[0],
         })))
       : await signInWithPopup(auth, googleProvider);
-    if (!isAllowedEmail(result.user.email)) {
+    if (!isAllowedUser(result.user)) {
       await fbSignOut(auth);
       setDomainError(true);
       throw new Error(`อีเมลนี้ไม่อยู่ใน domain ที่อนุญาต (${ALLOWED_DOMAINS_LABEL})`);

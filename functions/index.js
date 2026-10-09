@@ -20,6 +20,20 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
 const { createHash } = require('crypto');
 
+// 2026-10-09: a Firebase Auth token alone is not enough — any Google account
+// can sign in via the SDK with the public apiKey. Every callable requires a
+// verified company email. Keep in sync with firestore.rules isSignedIn() and
+// src/lib/firebase.js ALLOWED_EMAIL_DOMAINS.
+const ALLOWED_EMAIL_DOMAINS = ['arise.tech', 'infinitaskt.com'];
+function requireCompanyUser(request) {
+  const token = request.auth?.token;
+  if (!token) throw new HttpsError('unauthenticated', 'Sign-in required.');
+  const domain = String(token.email || '').toLowerCase().split('@')[1];
+  if (token.email_verified !== true || !ALLOWED_EMAIL_DOMAINS.includes(domain)) {
+    throw new HttpsError('permission-denied', 'Company account required.');
+  }
+}
+
 setGlobalOptions({ region: 'asia-southeast1', maxInstances: 5 });
 
 const adminApp = initializeApp();
@@ -170,6 +184,7 @@ exports.analyzeDuplicate = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Sign-in required.');
     }
+    requireCompanyUser(request);
     const { draft, candidates, connectionCandidates } = request.data || {};
     if (!draft || !Array.isArray(candidates) || candidates.length === 0) {
       // No candidates → nothing to analyze; return empty result without burning quota.
@@ -366,6 +381,7 @@ exports.chatLibrary = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Sign-in required.');
     }
+    requireCompanyUser(request);
     const { history, message, toolResults } = request.data || {};
     if (!message && !(toolResults || []).length) {
       throw new HttpsError('invalid-argument', 'Either message or toolResults must be provided.');
@@ -486,6 +502,7 @@ exports.reindexAgentVectors = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Sign-in required.');
     }
+    requireCompanyUser(request);
     const { agentId, full } = request.data || {};
 
     // A full sweep re-embeds the entire library, so it is both the expensive
@@ -673,6 +690,7 @@ exports.embedQuery = onCall(
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Sign-in required.');
     }
+    requireCompanyUser(request);
     await enforceRateLimit(request.auth.uid, 'embedQuery');
     const text = String(request.data?.text || '').trim().slice(0, 4000);
     if (!text) {
@@ -748,6 +766,7 @@ exports.recordAgentEvent = onCall(
   { cors: true, timeoutSeconds: 15 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     const uid = request.auth.uid;
     await enforceRateLimit(uid, 'recordAgentEvent');
 
@@ -812,6 +831,7 @@ exports.submitRating = onCall(
   { cors: true, timeoutSeconds: 20 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     const uid = request.auth.uid;
     const email = String(request.auth.token?.email || '').toLowerCase();
     await enforceRateLimit(uid, 'submitRating');
@@ -1035,6 +1055,7 @@ exports.attachEndpointFile = onCall(
       throw new HttpsError('failed-precondition', 'File upload is disabled in the local emulator.');
     }
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     assertOrgEmail(request);
     const uid = request.auth.uid;
     await enforceRateLimit(uid, 'attachEndpointFile');
@@ -1195,6 +1216,7 @@ exports.getEndpointFile = onCall(
   { cors: true, timeoutSeconds: 60, memory: '512MiB' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     assertOrgEmail(request);
     await enforceRateLimit(request.auth.uid, 'getEndpointFile');
 
@@ -1261,6 +1283,7 @@ exports.listEndpointVersions = onCall(
   { cors: true, timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     assertOrgEmail(request);
     await enforceRateLimit(request.auth.uid, 'listEndpointVersions');
 
@@ -1366,6 +1389,7 @@ exports.usageReport = onCall(
   { cors: true, timeoutSeconds: 60, memory: '512MiB' },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     assertOrgEmail(request);
     await enforceRateLimit(request.auth.uid, 'usageReport');
 
@@ -1529,6 +1553,7 @@ exports.markAgentReady = onCall(
   { cors: true, timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     if (!isOrgEmail(request.auth.token?.email)) {
       throw new HttpsError('permission-denied', 'Organisation account required.');
     }
@@ -1601,6 +1626,7 @@ exports.decideRenameRequest = onCall(
   { cors: true, timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     if (!isOrgEmail(request.auth.token?.email)) {
       throw new HttpsError('permission-denied', 'Organisation account required.');
     }
@@ -1705,6 +1731,7 @@ exports.notifyEvent = onCall(
   { cors: true, timeoutSeconds: 60, secrets: [TEAMS_FLOW_URL] },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     if (!isOrgEmail(request.auth.token?.email)) {
       throw new HttpsError('permission-denied', 'Organisation account required.');
     }
@@ -1839,6 +1866,7 @@ exports.claimPendingRoleGrant = onCall(
   { cors: true, timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     const email = request.auth.token?.email;
     if (!isOrgEmail(email)) {
       throw new HttpsError('permission-denied', 'Organisation account required.');
@@ -1927,6 +1955,7 @@ exports.decideLinkSuggestion = onCall(
   { cors: true, timeoutSeconds: 30 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign-in required.');
+    requireCompanyUser(request);
     assertOrgEmail(request);
     const { skillId, verdict } = request.data || {};
     if (!skillId || !['accepted', 'rejected'].includes(verdict)) {
@@ -2008,6 +2037,7 @@ async function classifyAndStore(targets, all, groups) {
 exports.classifyRoleGroup = onCall(
   { cors: true, timeoutSeconds: 300 },
   async (request) => {
+    requireCompanyUser(request);
     const role = await roleGroupCaller(request, ROLE_GROUP_CALLER_ROLES);
     await enforceRateLimit(request.auth.uid, 'classifyRoleGroup');
 
@@ -2035,6 +2065,7 @@ exports.classifyRoleGroup = onCall(
 exports.manageRoleGroups = onCall(
   { cors: true, timeoutSeconds: 300 },
   async (request) => {
+    requireCompanyUser(request);
     await roleGroupCaller(request, ROLE_GROUP_MANAGER_ROLES);
     await enforceRateLimit(request.auth.uid, 'manageRoleGroups');
     const action = request.data || {};

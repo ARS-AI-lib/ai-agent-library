@@ -51,6 +51,12 @@ export function isAllowedEmail(email) {
   return ALLOWED_EMAIL_DOMAINS.includes(domain);
 }
 
+// Full sign-in gate: allowed domain AND a verified email — same standard as
+// firestore.rules isSignedIn() and functions requireCompanyUser().
+export function isAllowedUser(user) {
+  return !!user && user.emailVerified === true && isAllowedEmail(user.email);
+}
+
 // Human-readable "@a / @b" list — single source of truth for all UI copy so
 // the allowed-domain wording can never drift from the actual check again.
 export const ALLOWED_DOMAINS_LABEL = ALLOWED_EMAIL_DOMAINS.map((d) => `@${d}`).join(' / ');

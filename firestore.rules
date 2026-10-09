@@ -31,8 +31,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // 2026-10-09: "signed in" means a verified company account, not just any
+    // Firebase Auth user. Every role helper below goes through this, so an
+    // outside Google account (e.g. personal Gmail) gets nothing even if it
+    // already has a /users doc. Keep the domain list in sync with
+    // src/lib/firebase.js ALLOWED_EMAIL_DOMAINS and functions/index.js.
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string
+        && request.auth.token.email.lower().matches('^[^@]+@(arise[.]tech|infinitaskt[.]com)$');
     }
     function userRole() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
@@ -100,7 +108,9 @@ service cloud.firestore {
         && request.resource.data.approvalStatus == 'pending'
         && request.resource.data.createdBy == request.auth.uid;
 
-      allow update: if
+      // isSignedIn() gate up front: several branches below only compare
+      // createdBy/creatorEmails and never call a role helper.
+      allow update: if isSignedIn() && (
         // Admin: any field, any doc.
         isAdmin()
         // Approver: approve/reject action only (area scoping is UI-side).
@@ -252,7 +262,7 @@ service cloud.firestore {
         // approval, via /renameRequests + the decideRenameRequest callable.
         || (resource.data.get('deploymentStatus', 'none') == 'approved'
             && affectedKeys().hasOnly(['description', 'updatedAt'])
-            && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid));
+            && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid)));
 
       allow delete: if isAdmin();
     }
