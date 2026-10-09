@@ -153,7 +153,7 @@ async function sendViaGmailOAuth({ from, replyTo, to, subject, text, html }) {
 function buildTeamsCard({ subject, title, cardLines = [], link, endpoint, ctaLabel }) {
   const actions = [];
   if (ctaLabel) actions.push({ type: 'Action.OpenUrl', title: ctaLabel, url: link || `${APP_URL}/` });
-  if (endpoint) actions.push({ type: 'Action.OpenUrl', title: 'เปิด Endpoint', url: endpoint });
+  if (endpoint) actions.push({ type: 'Action.OpenUrl', title: 'Open endpoint', url: endpoint });
   const card = {
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
     type: 'AdaptiveCard',

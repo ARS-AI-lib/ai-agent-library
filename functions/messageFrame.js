@@ -27,7 +27,7 @@ const greetingHtml = () => `<p style="margin:0 0 14px">เรียน ${NAME_TO
 
 const buttonHtml = (label, link) => `<p style="margin:22px 0 0"><a href="${esc(link)}" style="display:inline-block;background:#2f6bff;color:#fff;text-decoration:none;padding:9px 16px;border-radius:6px;font-weight:600">${esc(label)}</a></p>`;
 
-const closingHtml = (footerNote = 'หากไม่ต้องการรับการแจ้งเตือน โปรดแจ้ง Admin') => `<p style="margin:22px 0 0">ขอแสดงความนับถือ<br/>ทีม AI Agent Library</p>
+const closingHtml = (footerNote = 'หากไม่ต้องการรับการแจ้งเตือน โปรดแจ้ง Admin') => `<p style="margin:22px 0 0">ขอแสดงความนับถือ<br/>AI Agent Library Team</p>
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 0 10px" />
 <p style="font-size:11.5px;color:#9ca3af;margin:0">ส่งอัตโนมัติจากระบบ AI Agent Library · ${esc(footerNote)}</p>`;
 

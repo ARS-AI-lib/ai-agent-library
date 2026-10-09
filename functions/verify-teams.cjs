@@ -17,7 +17,7 @@ ok(card.actions[0].url === 'https://wolfy-ai-library.web.app/?agent=AG1', 'decis
 const pend = M.buildTeamsCard(N.buildNotification({ type: 'agent.pending', doc: { ...base, approvalStatus: 'pending' }, agent: base, users }));
 ok(pend.actions[0].url.endsWith('/?view=pending'), 'approver events open the pending queue');
 const ready = M.buildTeamsCard(N.buildNotification({ type: 'agent.ready', doc: { ...base, devProgress: 100, endpoint: 'https://x.example/bot' }, agent: base, users }));
-ok(ready.actions[1]?.title === 'เปิด Endpoint' && ready.actions[1].url === 'https://x.example/bot', 'Ready to Use gets an Open Endpoint button');
+ok(ready.actions[1]?.title === 'Open endpoint' && ready.actions[1].url === 'https://x.example/bot', 'Ready to Use gets an Open Endpoint button');
 const readyNoUrl = M.buildTeamsCard(N.buildNotification({ type: 'agent.ready', doc: { ...base, devProgress: 100, endpoint: 'ติดต่อทีม' }, agent: base, users }));
 ok(readyNoUrl.actions.length === 1, 'non-URL endpoint gets no button');
 
@@ -56,11 +56,11 @@ const mk = (n) => ({ email: 'a@arise.tech', items: Array.from({ length: n }, (_,
 const multi = D.renderDigest(mk(3));
 const mcard = M.buildTeamsCard(multi);
 ok(!mcard.actions && !multi.html.includes('display:inline-block'), 'multi-item digest: no button at the end (card or email)');
-ok([0, 1, 2].every((i) => multi.html.includes(`?agent=AG${i}`) && mcard.body.some((b) => b.text.includes(`[อัปเดต](https://wolfy-ai-library.web.app/?agent=AG${i})`))), 'multi-item digest: every row links to its own item (email + Teams)');
+ok([0, 1, 2].every((i) => multi.html.includes(`?agent=AG${i}`) && mcard.body.some((b) => b.text.includes(`[Update](https://wolfy-ai-library.web.app/?agent=AG${i})`))), 'multi-item digest: every row links to its own item (email + Teams)');
 const one = D.renderDigest(mk(1));
 ok(M.buildTeamsCard(one).actions.length === 1 && one.html.includes('?agent=AG0') && one.html.includes('display:inline-block'), 'one-item digest: one button that targets that item');
 const big = D.renderDigest(mk(20));
-ok(M.buildTeamsCard(big).body.filter((b) => b.text.startsWith('• ')).length === 15 && big.cardLines.slice(-1)[0].includes('อีก 5 รายการ') && (big.html.match(/อัปเดต ›/g) || []).length === 20, 'Teams shows 15 rows + remainder note; email lists all 20');
+ok(M.buildTeamsCard(big).body.filter((b) => b.text.startsWith('• ')).length === 15 && big.cardLines.slice(-1)[0].includes('อีก 5 รายการ') && (big.html.match(/Update ›/g) || []).length === 20, 'Teams shows 15 rows + remainder note; email lists all 20');
 ok(!multi.html.includes('09:30') && !multi.html.includes('พฤหัส') && multi.html.includes('13:00'), 'digest footer states the weekly Monday 13:00 schedule');
 
 console.log(fail ? `\n${fail} failed` : '\nall passed');

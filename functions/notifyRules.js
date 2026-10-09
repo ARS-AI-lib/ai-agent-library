@@ -237,27 +237,27 @@ function buildNotification({
   const name = a.agentName || doc.currentName || '(ไม่ทราบชื่อ)';
   let subject = '';
   let body = '';
-  let ctaLabel = 'ดูรายการ';
+  let ctaLabel = 'View item';
 
   switch (type) {
     case 'agent.pending':
       subject = `มีรายการใหม่รออนุมัติ: ${name}`;
-      ctaLabel = 'ตรวจและอนุมัติ';
+      ctaLabel = 'Review & approve';
       body = `${lead(`มีรายการใหม่รอการอนุมัติ: <strong>${esc(name)}</strong>`)}
-${row('ผู้ส่ง', a.creator || '—')}${row('ทีม', a.owner || '—')}${row('Approve Area', (a.approveArea || []).join(', ') || 'ไม่ระบุ')}
+${row('ผู้ส่ง', a.creator || '—')}${row('Team', a.owner || '—')}${row('Approve Area', (a.approveArea || []).join(', ') || 'ไม่ระบุ')}
 ${subSkillCount > 0 ? note(`มี Skill ประกอบ ${subSkillCount} รายการ อนุมัติครั้งเดียวมีผลทั้งชุด`, '#b06000') : ''}`;
       break;
 
     case 'agent.approved':
       subject = `อนุมัติแล้ว: ${name}`;
-      ctaLabel = 'เปิดรายการ';
+      ctaLabel = 'Open item';
       body = `${lead(`<strong>${esc(name)}</strong> ได้รับการอนุมัติแล้ว${a.approvedBy ? ` โดย ${esc(nameOf(a.approvedBy, users))}` : ''}`)}
-<p style="margin:12px 0 0"><strong>ขั้นตอนถัดไป</strong><br/>อัปเดต Progress ตามความคืบหน้า และกดขอ Deployment เมื่อถึง 95% และพร้อมใช้งานจริง</p>`;
+<p style="margin:12px 0 0"><strong>ขั้นตอนถัดไป</strong><br/>Update Progress ตามความคืบหน้า และกดขอ Deployment เมื่อถึง 95% และพร้อมใช้งานจริง</p>`;
       break;
 
     case 'agent.rejected':
       subject = `ไม่ผ่านการอนุมัติ: ${name}`;
-      ctaLabel = 'แก้ไขและส่งใหม่';
+      ctaLabel = 'Edit & resubmit';
       body = `${lead(`<strong>${esc(name)}</strong> ไม่ผ่านการอนุมัติ`)}
 ${a.rejectionReason ? `<p style="margin:12px 0 4px"><strong>เหตุผลจากผู้ตรวจ</strong></p>${quote(a.rejectionReason)}` : ''}
 ${a.rejectedBy ? row('ตรวจโดย', nameOf(a.rejectedBy, users)) : ''}${a.rejectedAt ? row('เมื่อ', fmtDate(a.rejectedAt)) : ''}
@@ -266,7 +266,7 @@ ${note('รายการยังอยู่ในระบบ ไม่ไ�
 
     case 'deploy.requested':
       subject = `ขออนุมัติ Deployment: ${name}`;
-      ctaLabel = 'ตรวจและอนุมัติ';
+      ctaLabel = 'Review & approve';
       body = `${lead(`<strong>${esc(name)}</strong> ขออนุมัติ Deployment`)}
 ${row('ผู้ขอ', nameOf(a.deployRequestedBy, users))}${row('Progress', `${progressOf(a.devProgress)}%`)}
 ${subSkillCount > 0 ? note(`มี Skill ผูกอยู่ <strong>${subSkillCount} รายการ</strong> อนุมัติครั้งเดียวมีผลกับทั้งชุด`, '#b06000') : ''}`;
@@ -274,10 +274,10 @@ ${subSkillCount > 0 ? note(`มี Skill ผูกอยู่ <strong>${subSkil
 
     case 'deploy.approved':
       subject = `อนุมัติ Deployment แล้ว: ${name}`;
-      ctaLabel = 'ปรับ Progress';
+      ctaLabel = 'Update progress';
       body = `${lead(`Deployment ของ <strong>${esc(name)}</strong> ได้รับอนุมัติแล้ว${a.deployDecidedBy ? ` โดย ${esc(nameOf(a.deployDecidedBy, users))}` : ''}`)}
 ${row('เมื่อ', fmtDate(a.deployDecidedAt))}
-<p style="margin:12px 0 0"><strong>ขั้นตอนถัดไป</strong><br/>ปรับ Progress เป็น 100% ได้เมื่อระบุ <strong>Endpoint URL หรือแนบไฟล์</strong>แล้ว</p>`;
+<p style="margin:12px 0 0"><strong>ขั้นตอนถัดไป</strong><br/>ปรับ Progress เป็น 100% ได้เมื่อระบุ <strong>Endpoint URL หรือแนบ file</strong>แล้ว</p>`;
       break;
 
     case 'deploy.rejected':
@@ -299,26 +299,26 @@ ${note('หากไม่เห็นด้วย โปรดติดต่�
     case 'agent.ready':
       subject = `พร้อมใช้งานแล้ว: ${name}`;
       body = `${lead(`<strong>${esc(name)}</strong> พร้อมใช้งานแล้ว (Ready to Use)`)}
-${row('ช่องทางใช้งาน', a.endpointFile?.name ? `ไฟล์แนบในระบบ · ${a.endpointFile.name} (ต้อง login ก่อนดาวน์โหลด)` : (a.endpoint || '—'))}
+${row('ช่องทางใช้งาน', a.endpointFile?.name ? `File แนบในระบบ · ${a.endpointFile.name} (ต้อง login ก่อน download)` : (a.endpoint || '—'))}
 ${a.launchDate ? row('Launch date', fmtDate(a.launchDate)) : ''}${row('ดำเนินการโดย', nameOf(a.readyMarkedBy, users))}`;
       break;
 
     case 'file.updated': {
       const v = a.endpointFileVersion ? `v${a.endpointFileVersion}` : '';
-      subject = `อัปเดตไฟล์${v ? ` ${v}` : ''}: ${name}`;
-      body = `${lead(`ไฟล์ของ <strong>${esc(name)}</strong> ถูกอัปเดต${v ? ` เป็น ${esc(v)}` : ''}`)}
-${row('ไฟล์', a.endpointFile?.name || '—')}${row('อัปโหลดโดย', nameOf(a.endpointFile?.uploadedBy, users))}${row('เมื่อ', fmtDate(a.endpointFile?.uploadedAt))}
-${note('ดูเวอร์ชันก่อนหน้าได้ใน File History ของรายการนี้ (ต้อง login ก่อนดาวน์โหลด)')}`;
+      subject = `File updated${v ? ` ${v}` : ''}: ${name}`;
+      body = `${lead(`File ของ <strong>${esc(name)}</strong> ถูก update${v ? ` เป็น ${esc(v)}` : ''}`)}
+${row('File', a.endpointFile?.name || '—')}${row('Uploaded by', nameOf(a.endpointFile?.uploadedBy, users))}${row('เมื่อ', fmtDate(a.endpointFile?.uploadedAt))}
+${note('ดู version ก่อนหน้าได้ใน File History ของรายการนี้ (ต้อง login ก่อน download)')}`;
       break;
     }
 
     case 'rename.requested':
       subject = `ขอเปลี่ยนชื่อ: ${doc.currentName} → ${doc.requestedName}`;
-      ctaLabel = 'ตรวจและอนุมัติ';
+      ctaLabel = 'Review & approve';
       body = `${lead('มีคำขอเปลี่ยนชื่อ Agent/Skill')}
 ${row('ชื่อเดิม', doc.currentName)}${row('ชื่อใหม่ที่ขอ', doc.requestedName)}${row('ผู้ขอ', doc.createdByEmail || '—')}
 ${row('Approve Area', ((agent || {}).approveArea || []).join(', ') || 'ไม่ระบุ')}
-${subSkillCount > 0 ? note(`มี Skill ผูกกับชื่อเดิม <strong>${subSkillCount} รายการ</strong> ระบบจะอัปเดตให้อัตโนมัติเมื่ออนุมัติ`, '#b06000') : ''}`;
+${subSkillCount > 0 ? note(`มี Skill ผูกกับชื่อเดิม <strong>${subSkillCount} รายการ</strong> ระบบจะ update ให้อัตโนมัติเมื่ออนุมัติ`, '#b06000') : ''}`;
       break;
 
     case 'rename.decided':
@@ -326,7 +326,7 @@ ${subSkillCount > 0 ? note(`มี Skill ผูกกับชื่อเดิ
         subject = `อนุมัติเปลี่ยนชื่อแล้ว: ${doc.requestedName}`;
         body = `${lead('คำขอเปลี่ยนชื่อได้รับการอนุมัติแล้ว')}
 ${row('ชื่อเดิม', doc.currentName)}${row('ชื่อใหม่', doc.appliedName || doc.requestedName)}
-${doc.childrenUpdated ? note(`อัปเดตการผูกของ Skill ให้แล้ว <strong>${doc.childrenUpdated} รายการ</strong>`, '#1f2937') : ''}`;
+${doc.childrenUpdated ? note(`update การผูกของ Skill ให้แล้ว <strong>${doc.childrenUpdated} รายการ</strong>`, '#1f2937') : ''}`;
       } else {
         subject = `คำขอเปลี่ยนชื่อไม่ผ่าน: ${doc.currentName}`;
         body = `${lead('คำขอเปลี่ยนชื่อไม่ผ่านการอนุมัติ')}
@@ -338,9 +338,9 @@ ${note('ชื่อเดิมยังคงใช้ต่อไปตาม
     case 'link.requested': {
       const t = agent || {};
       subject = `ขอผูก Skill เข้ากับ Agent: ${doc.agentName} → ${t.agentName || doc.linkSuggestion?.agentName || ''}`;
-      ctaLabel = 'ตรวจคำขอ';
+      ctaLabel = 'Review request';
       body = `${lead('มีคำขอผูก Skill เข้ากับ Agent')}
-${row('Skill', doc.agentName)}${row('ทีมของ Skill', doc.owner || '—')}${row('Agent', t.agentName || '—')}${row('ทีมของ Agent', t.owner || '—')}
+${row('Skill', doc.agentName)}${row('Skill Team', doc.owner || '—')}${row('Agent', t.agentName || '—')}${row('Agent Team', t.owner || '—')}
 ${note('AI แนะนำการผูกนี้ตอนลงทะเบียน สามารถยืนยันหรือปฏิเสธได้ที่หน้ารออนุมัติ (Link Requests)', '#1f2937')}`;
       break;
     }
@@ -357,10 +357,10 @@ ${ok ? note('Progress และ Deployment ของ Skill นี้จะเป
 
     case 'user.roleChanged':
       subject = 'สิทธิ์ของคุณใน AI Agent Library ถูกปรับ';
-      ctaLabel = 'เปิด AI Agent Library';
+      ctaLabel = 'Open AI Agent Library';
       body = `${lead('สิทธิ์การใช้งานของท่านถูกปรับ')}
 ${row('บทบาท', doc.role || 'user')}${row('Approve Area', (doc.approveAreas || []).join(', ') || '(ไม่มี)')}
-${note('รายการที่รออนุมัติใน Area ข้างต้นจะเข้ามาที่คิวของท่าน', '#1f2937')}`;
+${note('รายการที่รออนุมัติใน Area ข้างต้นจะเข้ามาที่ queue ของท่าน', '#1f2937')}`;
       break;
 
     default:
@@ -380,7 +380,7 @@ ${note('รายการที่รออนุมัติใน Area ข้
 
   const html = frameHtml(body, { cta: { label: ctaLabel, link } });
   const bodyText = htmlToText(body);
-  const text = `เรียน ${NAME_TOKEN}\n\n${bodyText}\n\n${ctaLabel}: ${link}\n\nขอแสดงความนับถือ\nทีม AI Agent Library`;
+  const text = `เรียน ${NAME_TOKEN}\n\n${bodyText}\n\n${ctaLabel}: ${link}\n\nขอแสดงความนับถือ\nAI Agent Library Team`;
   const cardLines = bodyText.split('\n').filter((l) => l.trim());
   const names = {};
   users.forEach((u) => { if (u.email && u.displayName) names[String(u.email).toLowerCase()] = u.displayName; });
