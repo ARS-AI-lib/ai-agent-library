@@ -202,6 +202,8 @@ export default function UserManagementModal({ onClose, schema, currentUid }) {
                 <div className="v7-um-ctl">
                   <MultiSelect
                     pill="Areas"
+                    emptyLabel="None"
+                    selectAll
                     label="Approve areas"
                     options={areaOptions}
                     selected={d.approveAreas}

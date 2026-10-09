@@ -17,7 +17,7 @@ function msLabel(set, placeholder) {
 // the field name inside it ("ROLE  2 selected") plus an inline ✕ that clears
 // it, and the panel gains a search box, per-option counts (`counts`) and a
 // Clear footer. Form usages pass no `pill` and render exactly as before.
-export default function MultiSelect({ label, options, selected, onChange, pill, counts }) {
+export default function MultiSelect({ label, options, selected, onChange, pill, counts, emptyLabel = 'All', selectAll = false }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const wrapRef = useRef(null);
@@ -52,7 +52,7 @@ export default function MultiSelect({ label, options, selected, onChange, pill, 
           onClick={() => setOpen((o) => !o)}
         >
           <span className="v7-pl">{pill}</span>
-          {selected.size === 0 ? 'All' : selected.size === 1 ? [...selected][0] : <>{[...selected][0]}<span className="v7-plus">+{selected.size - 1}</span></>}
+          {selected.size === 0 ? emptyLabel : selected.size === 1 ? [...selected][0] : <>{[...selected][0]}<span className="v7-plus">+{selected.size - 1}</span></>}
           {selected.size === 0 && <span className="v7-caret" aria-hidden="true" />}
         </button>
         {/* Sibling, not nested: a control inside a <button> is invalid. CSS
@@ -86,6 +86,9 @@ export default function MultiSelect({ label, options, selected, onChange, pill, 
             </div>
             <div className="v7-ms-foot">
               <button type="button" disabled={selected.size === 0} onClick={() => onChange(new Set())}>Clear</button>
+              {selectAll && (
+                <button type="button" disabled={selected.size === options.length} onClick={() => onChange(new Set(options))}>Select all</button>
+              )}
               <span>Applied instantly</span>
             </div>
           </div>
