@@ -22,7 +22,7 @@
 **Stack หลัก:**
 - React + Vite
 - Firestore Native Mode — **Named Database: `ai-agent-lib`** (ไม่ใช่ `(default)`)
-- Firebase Auth (Google SSO) — จำกัด domain: `@arise.tech`, `@infinitaskt.com` (สะกดถูกต้อง ยืนยันจาก `src/lib/firebase.js` — ไม่ใช่ `infitas.com` หรือ `infitaskt.com`), `@krungthai.com`
+- Firebase Auth (Google SSO) — จำกัด domain: `@arise.tech`, `@infinitaskt.com` (สะกดถูกต้อง ยืนยันจาก `src/lib/firebase.js` — ไม่ใช่ `infitas.com` หรือ `infitaskt.com`) — **มีแค่ 2 domain นี้** (`@krungthai.com` ไม่อยู่ใน allowlist จริง แก้ 2026-10-09) · บังคับ 3 ชั้น: client + rules + functions ดูหัวข้อ "Company-account gate"
 - Cloud Functions (สำหรับ pre-registration → เรียก Vertex AI)
 - Firebase Hosting — GCP project: `wolfy-481609`
 - Vertex AI — ใช้วิเคราะห์ตอน pre-registration
@@ -285,6 +285,7 @@ Tier:
   `--only functions:analyzeDuplicate` · เพิ่ม function ใหม่ก็ scope เฉพาะตัวใหม่
   ⚠️ เอกสารเดิมเขียนว่า "6 ตัว / local 2 ตัว" ซึ่ง**ผิดทั้งคู่** — แก้แล้ว 2026-08-18
   ทุกครั้งที่จะแตะ functions **ให้รัน `functions:list` เช็คก่อน** อย่าเชื่อตัวเลขในเอกสาร
+  (2026-10-09: `functions/index.js` มี onCall **17 ตัว** + trigger/schedule/task 4 ตัว — ตารางข้างบนเก่าแล้ว)
 - Hosting ปลอดภัยโดยธรรมชาติ (target-isolated ต่อ repo `.firebaserc` — ไม่แตะ site `wolfy-portfolio`)
 - **Firestore rules ยัง publish ผ่าน Console** (named DB dropdown `ai-agent-lib`) เหมือนเดิม — `firebase.json` ไม่มี firestore block (ตั้งใจ)
 - Deploy เป็น production เสมอ → ขอ confirm ก่อนทุกครั้ง; Firebase เก็บ release เดิมให้ rollback ได้ (Console → Hosting → release history)
@@ -1433,3 +1434,18 @@ banking chatbot ติด AI Engineer → Software Engineer)
 - **Client whitelist bug fixed the same day:** `TYPES` in `src/lib/notify.js` lacked `link.requested`/`link.decided`, so those calls were dropped before reaching the server (0 rows in `/mailLog`). ⛔ Keep `TYPES` equal to `EVENT_TYPES` in `functions/notifyRules.js`.
 - Tests: `verify-notify.cjs` (21/21, 7 new `file.updated` cases). `verify-endpoint-files.cjs` now asserts approver reach over **all** their areas (it assumed one area and drifted 26 vs 44).
 
+## Company-account gate (security fix 2026-10-09)
+
+**ปัญหาเดิม:** `isSignedIn()` ใน rules เป็นแค่ `request.auth != null` → domain check มีแค่ใน React. ใครก็ได้ที่มี Google account (เช่น Gmail ส่วนตัว) sign in ผ่าน SDK ด้วย apiKey สาธารณะ → self-create `/users/{uid}` role `user` (หรือเรียก `claimPendingRoleGrant` ซึ่งใช้ admin SDK) → ผ่าน `isKnownUser()` อ่านข้อมูล agent ได้
+
+**มาตรฐานใหม่ (เหมือน VoteCup):** request นับว่า signed-in ก็ต่อเมื่อ `email_verified == true` **และ** domain อยู่ใน allowlist (`arise.tech`, `infinitaskt.com`) — บังคับ 3 ชั้น:
+| ชั้น | ที่ไหน |
+|---|---|
+| Rules | `isSignedIn()` ใน `firestore.rules` (role helper ทุกตัวผ่านตัวนี้) + `agents` update ครอบด้วย `isSignedIn() && (...)` เพราะบาง branch เช็คแค่ `createdBy` |
+| Functions | `requireCompanyUser(request)` ใน `functions/index.js` — **ทุก onCall ต้องเรียก** (callable ใหม่ต้องใส่ด้วย) |
+| Client | `isAllowedUser(user)` ใน `src/lib/firebase.js` (domain + `emailVerified`) ใช้ใน `useAuth.js` |
+
+- **เพิ่ม/ลบ domain ต้องแก้ 3 ที่พร้อมกัน:** `ALLOWED_EMAIL_DOMAINS` (client), `ALLOWED_EMAIL_DOMAINS` (functions), regex ใน `isSignedIn()` (rules)
+- ทดสอบใน Firestore emulator แล้ว: verified @arise.tech / @INFINITASKT.com ผ่าน; unverified, @gmail.com (แม้มี `/users` doc), @krungthai.com, `@arise.tech.evil.com` → 403
+- Deploy แล้ว: rules publish ผ่าน Console (`ai-agent-lib`), functions scoped 17 callable, hosting — commit `c394357`
+- **ยังค้าง:** (1) ตรวจ `/users` หา doc ของบัญชีนอก domain ที่สร้างไว้ก่อน fix (ตอนนี้เข้าอะไรไม่ได้แล้ว แต่ doc ยังอยู่) (2) `/config/timeline` — viewer ใน `viewers[]` ยังเขียนทับได้ทั้ง doc รวมถึงรายชื่อ `viewers` เอง
