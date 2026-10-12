@@ -241,7 +241,7 @@ function buildNotification({
 
   switch (type) {
     case 'agent.pending':
-      subject = `มีรายการใหม่รออนุมัติ: ${name}`;
+      subject = `Approval Required: ${name}`;
       ctaLabel = 'Review & approve';
       body = `${lead(`มีรายการใหม่รอการอนุมัติ: <strong>${esc(name)}</strong>`)}
 ${row('ผู้ส่ง', a.creator || '—')}${row('Team', a.owner || '—')}${row('Approve Area', (a.approveArea || []).join(', ') || 'ไม่ระบุ')}
@@ -249,14 +249,14 @@ ${subSkillCount > 0 ? note(`มี Skill ประกอบ ${subSkillCount} ร
       break;
 
     case 'agent.approved':
-      subject = `อนุมัติแล้ว: ${name}`;
+      subject = `Approved: ${name}`;
       ctaLabel = 'Open item';
       body = `${lead(`<strong>${esc(name)}</strong> ได้รับการอนุมัติแล้ว${a.approvedBy ? ` โดย ${esc(nameOf(a.approvedBy, users))}` : ''}`)}
 <p style="margin:12px 0 0"><strong>ขั้นตอนถัดไป</strong><br/>Update Progress ตามความคืบหน้า และกดขอ Deployment เมื่อถึง 95% และพร้อมใช้งานจริง</p>`;
       break;
 
     case 'agent.rejected':
-      subject = `ไม่ผ่านการอนุมัติ: ${name}`;
+      subject = `Not Approved: ${name}`;
       ctaLabel = 'Edit & resubmit';
       body = `${lead(`<strong>${esc(name)}</strong> ไม่ผ่านการอนุมัติ`)}
 ${a.rejectionReason ? `<p style="margin:12px 0 4px"><strong>เหตุผลจากผู้ตรวจ</strong></p>${quote(a.rejectionReason)}` : ''}
@@ -265,7 +265,7 @@ ${note('รายการยังอยู่ในระบบ ไม่ไ�
       break;
 
     case 'deploy.requested':
-      subject = `ขออนุมัติ Deployment: ${name}`;
+      subject = `Deployment Approval Required: ${name}`;
       ctaLabel = 'Review & approve';
       body = `${lead(`<strong>${esc(name)}</strong> ขออนุมัติ Deployment`)}
 ${row('ผู้ขอ', nameOf(a.deployRequestedBy, users))}${row('Progress', `${progressOf(a.devProgress)}%`)}
@@ -273,7 +273,7 @@ ${subSkillCount > 0 ? note(`มี Skill ผูกอยู่ <strong>${subSkil
       break;
 
     case 'deploy.approved':
-      subject = `อนุมัติ Deployment แล้ว: ${name}`;
+      subject = `Deployment Approved: ${name}`;
       ctaLabel = 'Update progress';
       body = `${lead(`Deployment ของ <strong>${esc(name)}</strong> ได้รับอนุมัติแล้ว${a.deployDecidedBy ? ` โดย ${esc(nameOf(a.deployDecidedBy, users))}` : ''}`)}
 ${row('เมื่อ', fmtDate(a.deployDecidedAt))}
@@ -281,14 +281,14 @@ ${row('เมื่อ', fmtDate(a.deployDecidedAt))}
       break;
 
     case 'deploy.rejected':
-      subject = `Deployment ไม่ผ่าน: ${name}`;
+      subject = `Deployment Not Approved: ${name}`;
       body = `${lead(`Deployment ของ <strong>${esc(name)}</strong> ไม่ผ่านการอนุมัติ`)}
 ${row('ตรวจโดย', nameOf(a.deployDecidedBy, users))}${row('เมื่อ', fmtDate(a.deployDecidedAt))}
 ${note('ปรับแก้แล้วสามารถกดขอ Deployment ใหม่ได้')}`;
       break;
 
     case 'agent.archived':
-      subject = `ถูก Archive ออกจาก Library: ${name}`;
+      subject = `Archived: ${name}`;
       body = `${lead(`<strong>${esc(name)}</strong> ถูก Archive ออกจาก Library`)}
 ${row('ดำเนินการโดย', nameOf(a.archivedBy, users))}${row('เมื่อ', fmtDate(a.archivedAt))}
 ${a.archiveReason ? `<p style="margin:12px 0 4px"><strong>เหตุผล</strong></p>${quote(a.archiveReason)}` : ''}
@@ -297,7 +297,7 @@ ${note('หากไม่เห็นด้วย โปรดติดต่�
       break;
 
     case 'agent.ready':
-      subject = `พร้อมใช้งานแล้ว: ${name}`;
+      subject = `Ready to Use: ${name}`;
       body = `${lead(`<strong>${esc(name)}</strong> พร้อมใช้งานแล้ว (Ready to Use)`)}
 ${row('ช่องทางใช้งาน', a.endpointFile?.name ? `File แนบในระบบ · ${a.endpointFile.name} (ต้อง login ก่อน download)` : (a.endpoint || '—'))}
 ${a.launchDate ? row('Launch date', fmtDate(a.launchDate)) : ''}${row('ดำเนินการโดย', nameOf(a.readyMarkedBy, users))}`;
@@ -313,7 +313,7 @@ ${note('ดู version ก่อนหน้าได้ใน File History ข�
     }
 
     case 'rename.requested':
-      subject = `ขอเปลี่ยนชื่อ: ${doc.currentName} → ${doc.requestedName}`;
+      subject = `Rename Request: ${doc.currentName} → ${doc.requestedName}`;
       ctaLabel = 'Review & approve';
       body = `${lead('มีคำขอเปลี่ยนชื่อ Agent/Skill')}
 ${row('ชื่อเดิม', doc.currentName)}${row('ชื่อใหม่ที่ขอ', doc.requestedName)}${row('ผู้ขอ', doc.createdByEmail || '—')}
@@ -323,12 +323,12 @@ ${subSkillCount > 0 ? note(`มี Skill ผูกกับชื่อเดิ
 
     case 'rename.decided':
       if (doc.status === 'approved') {
-        subject = `อนุมัติเปลี่ยนชื่อแล้ว: ${doc.requestedName}`;
+        subject = `Rename Approved: ${doc.currentName} → ${doc.requestedName}`;
         body = `${lead('คำขอเปลี่ยนชื่อได้รับการอนุมัติแล้ว')}
 ${row('ชื่อเดิม', doc.currentName)}${row('ชื่อใหม่', doc.appliedName || doc.requestedName)}
 ${doc.childrenUpdated ? note(`update การผูกของ Skill ให้แล้ว <strong>${doc.childrenUpdated} รายการ</strong>`, '#1f2937') : ''}`;
       } else {
-        subject = `คำขอเปลี่ยนชื่อไม่ผ่าน: ${doc.currentName}`;
+        subject = `Rename Not Approved: ${doc.currentName}`;
         body = `${lead('คำขอเปลี่ยนชื่อไม่ผ่านการอนุมัติ')}
 ${row('ชื่อที่ใช้อยู่', doc.currentName)}${row('ชื่อที่ขอ', doc.requestedName)}
 ${note('ชื่อเดิมยังคงใช้ต่อไปตามปกติ')}`;
@@ -337,7 +337,7 @@ ${note('ชื่อเดิมยังคงใช้ต่อไปตาม
 
     case 'link.requested': {
       const t = agent || {};
-      subject = `ขอผูก Skill เข้ากับ Agent: ${doc.agentName} → ${t.agentName || doc.linkSuggestion?.agentName || ''}`;
+      subject = `Skill Link Request: ${doc.agentName} → ${t.agentName || doc.linkSuggestion?.agentName || ''}`;
       ctaLabel = 'Review request';
       body = `${lead('มีคำขอผูก Skill เข้ากับ Agent')}
 ${row('Skill', doc.agentName)}${row('Skill Team', doc.owner || '—')}${row('Agent', t.agentName || '—')}${row('Agent Team', t.owner || '—')}
@@ -348,7 +348,7 @@ ${note('AI แนะนำการผูกนี้ตอนลงทะเบ
     case 'link.decided': {
       const ok = doc.linkSuggestion?.status === 'accepted';
       const tn = (agent || {}).agentName || doc.linkSuggestion?.agentName || '';
-      subject = ok ? `ผูก Skill กับ Agent แล้ว: ${doc.agentName} → ${tn}` : `ไม่ผูก Skill กับ Agent: ${doc.agentName}`;
+      subject = ok ? `Skill Linked: ${doc.agentName} → ${tn}` : `Skill Link Declined: ${doc.agentName}`;
       body = `${lead(ok ? 'Skill ถูกผูกกับ Agent แล้ว' : 'คำขอผูก Skill กับ Agent ไม่ผ่าน')}
 ${row('Skill', doc.agentName)}${row('Agent', tn || '—')}${row('ตัดสินโดย', nameOf(doc.linkSuggestion?.decidedBy, users))}
 ${ok ? note('Progress และ Deployment ของ Skill นี้จะเปลี่ยนตาม Agent หลักต่อจากนี้', '#1f2937') : note('Skill ยังเป็นรายการอิสระเหมือนเดิม')}`;
@@ -356,7 +356,7 @@ ${ok ? note('Progress และ Deployment ของ Skill นี้จะเป
     }
 
     case 'user.roleChanged':
-      subject = 'สิทธิ์ของคุณใน AI Agent Library ถูกปรับ';
+      subject = 'Your Access Has Changed';
       ctaLabel = 'Open AI Agent Library';
       body = `${lead('สิทธิ์การใช้งานของท่านถูกปรับ')}
 ${row('บทบาท', doc.role || 'user')}${row('Approve Area', (doc.approveAreas || []).join(', ') || '(ไม่มี)')}

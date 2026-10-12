@@ -10,7 +10,7 @@ const base = { id: 'AG1', agentName: 'X', creatorEmails: ['c@arise.tech'], appro
 const note = N.buildNotification({ type: 'agent.approved', doc: { ...base, approvalStatus: 'approved' }, agent: base, users });
 const card = M.buildTeamsCard(note);
 ok(card.type === 'AdaptiveCard' && card.version === '1.4', 'Adaptive Card 1.4');
-ok(card.body[1].text === 'อนุมัติแล้ว: X', 'title has no [AI Library] prefix');
+ok(card.body[1].text === 'Approved: X', 'title has no [AI Library] prefix');
 ok(card.body.filter((b) => b.text === card.body[1].text).length === 1, 'title appears once (no repeated heading)');
 ok(!JSON.stringify(card.body).includes('web.app'), 'app URL line replaced by the button');
 ok(card.actions[0].url === 'https://wolfy-ai-library.web.app/?agent=AG1', 'decision event deep-links to the agent');

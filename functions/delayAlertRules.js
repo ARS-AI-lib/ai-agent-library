@@ -20,7 +20,7 @@ const CATEGORY_LABEL = {
   due5: 'ใกล้ถึง Launch Date (ภายใน 5 วันทำการ)',
   risk10: 'เสี่ยงล่าช้า (ภายใน 10 วันทำการ)',
   todo30: 'ยังเป็น To Do เกิน 30 วัน',
-  ipStale30: 'ไม่มีการ update Progress เกิน 30 วัน',
+  ipStale30: 'Progress ไม่เปลี่ยนแปลงเกิน 30 วัน',
   ipNoLaunch60: 'In Progress เกิน 60 วัน ยังไม่ระบุ Launch Date',
   pilotNoLaunch30: 'Pilot เกิน 30 วัน ยังไม่ระบุ Launch Date',
   pilotLaunch60: 'Pilot เกิน 60 วัน ยังไม่ถึง 100%',
@@ -215,7 +215,7 @@ function itemNote(it) {
   if (it.category === 'due5' || it.category === 'risk10') return `อีก ${it.bdays} วันทำการ (Launch ${fmtDay(it.launchDay)})`;
   const launch = it.launchDay ? `Launch ${fmtDay(it.launchDay)}` : 'ยังไม่มี Launch Date';
   if (it.category === 'todo30') return `สร้างมาแล้ว ${it.days} วัน · ${launch}`;
-  if (it.category === 'ipStale30') return `ไม่ได้ update มา ${it.days} วัน · ${launch}`;
+  if (it.category === 'ipStale30') return `ไม่มีการเปลี่ยนแปลง ${it.days} วัน · ${launch}`;
   return `${PHASE_LABEL[it.phase]} มา ${it.days} วัน · ${launch}`;
 }
 
@@ -232,9 +232,9 @@ function renderDigest(digest, { forEmail = '', displayName = '' } = {}) {
   const n = items.length;
   const one = n === 1 ? items[0] : null;
   const subject = one
-    ? `[AI Library] ขอให้ update ความคืบหน้า: ${one.name}`
-    : `[AI Library] ขอให้ update ความคืบหน้า ${n} รายการ`;
-  const title = one ? `ขอให้ update ความคืบหน้า: ${one.name}` : `ขอให้ update ความคืบหน้า ${n} รายการ`;
+    ? `[AI Library] Progress Update Required: ${one.name}`
+    : `[AI Library] Progress Update Required: ${n} items`;
+  const title = one ? `Progress Update Required: ${one.name}` : `Progress Update Required: ${n} items`;
 
   let body = '';
   if (forEmail) body += `<p style="margin:0 0 12px;color:#b45309">[Dry run] ฉบับนี้จะส่งถึง: ${esc(forEmail)}</p>`;
@@ -243,14 +243,14 @@ function renderDigest(digest, { forEmail = '', displayName = '' } = {}) {
 
   if (one) {
     body += `<p style="margin:0 0 10px"><strong>${esc(one.name)}</strong> (Progress ${one.progress}%)<br/>${esc(CATEGORY_LABEL[one.category])} · ${esc(itemNote(one))}</p>
-<p style="margin:0">กรุณา update Progress หรือ Launch Date ให้เป็นปัจจุบัน</p>`;
-    cardLines.push(`${one.name} (Progress ${one.progress}%)`, `${CATEGORY_LABEL[one.category]} · ${itemNote(one)}`, 'กรุณา update Progress หรือ Launch Date ให้เป็นปัจจุบัน');
-    textBody = `${one.name} (Progress ${one.progress}%)\n${CATEGORY_LABEL[one.category]} · ${itemNote(one)}\nกรุณา update Progress หรือ Launch Date ให้เป็นปัจจุบัน`;
+<p style="margin:0">โปรดตรวจสอบและปรับ Progress หรือ Launch Date ให้ตรงกับสถานะจริง</p>`;
+    cardLines.push(`${one.name} (Progress ${one.progress}%)`, `${CATEGORY_LABEL[one.category]} · ${itemNote(one)}`, 'โปรดตรวจสอบและปรับ Progress หรือ Launch Date ให้ตรงกับสถานะจริง');
+    textBody = `${one.name} (Progress ${one.progress}%)\n${CATEGORY_LABEL[one.category]} · ${itemNote(one)}\nโปรดตรวจสอบและปรับ Progress หรือ Launch Date ให้ตรงกับสถานะจริง`;
   } else {
-    body += `<p style="margin:0 0 6px">ระบบพบ Agent/Skill ของท่านที่ควร update ความคืบหน้า <strong>${n} รายการ</strong></p>
-<p style="margin:0 0 6px;color:#374151">กด “Update” ท้ายแต่ละรายการเพื่อเปิดรายการนั้นและปรับ Progress หรือ Launch Date ได้ทันที</p>`;
-    cardLines.push('กด “Update” ท้ายแต่ละรายการเพื่อเปิดรายการนั้นและปรับ Progress หรือ Launch Date ได้ทันที');
-    textBody = `ระบบพบ Agent/Skill ของท่านที่ควร update ความคืบหน้า ${n} รายการ\nกด link ท้ายแต่ละรายการเพื่อ update ได้ทันที\n`;
+    body += `<p style="margin:0 0 6px">รายการ Agent/Skill ของท่านที่ควรตรวจสอบความคืบหน้า <strong>${n} รายการ</strong></p>
+<p style="margin:0 0 6px;color:#374151">กด “Update” ท้ายรายการเพื่อเปิดและแก้ไขได้ทันที</p>`;
+    cardLines.push('กด “Update” ท้ายรายการเพื่อเปิดและแก้ไขได้ทันที');
+    textBody = `รายการ Agent/Skill ของท่านที่ควรตรวจสอบความคืบหน้า ${n} รายการ\nกด link ท้ายรายการเพื่อเปิดและแก้ไขได้ทันที\n`;
     let shown = 0;
     for (const cat of Object.keys(RANK)) {
       const rows = items.filter((i) => i.category === cat);
@@ -273,7 +273,7 @@ function renderDigest(digest, { forEmail = '', displayName = '' } = {}) {
   }
 
   const link = one ? itemUrl(one) : `${APP_URL}/`;
-  const ctaLabel = one ? `Update ${one.name}` : '';
+  const ctaLabel = one ? 'Update Progress' : '';
   const html = frameHtml(body, {
     cta: one ? { label: ctaLabel, link } : null,
     footerNote: 'ส่งทุกวันจันทร์ เวลา 13:00 · นับวันทำการเฉพาะจันทร์–ศุกร์',
