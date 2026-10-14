@@ -67,6 +67,26 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
           <span className="status-dot" style={{ background: sd.dot || sd.color }} />
           {sd.lb}
         </span>
+        {isReady && endpointHref && (
+          <a
+            className="v7-open"
+            href={endpointHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={endpointHref}
+            aria-label={`Open ${agent.agentName}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              recordAgentEvent(agent.id, 'endpoint');
+              // Our own files download through the authed callable; external
+              // links (GitLab, Cloud Run) fall through to the plain anchor.
+              handleEndpointClick(e, agent.endpoint);
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" /></svg>
+          </a>
+        )}
       </div>
 
       <div className="v7-ac-head">
@@ -90,27 +110,6 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
           {agent.owner || '—'}
         </span>
         <AgentCardStats stats={stats} />
-        {isReady && endpointHref && (
-          <a
-            className="v7-open"
-            href={endpointHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={endpointHref}
-            aria-label={`Open ${agent.agentName}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              recordAgentEvent(agent.id, 'endpoint');
-              // Our own files download through the authed callable; external
-              // links (GitLab, Cloud Run) fall through to the plain anchor.
-              handleEndpointClick(e, agent.endpoint);
-            }}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            Open
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" /></svg>
-          </a>
-        )}
       </div>
     </div>
   );

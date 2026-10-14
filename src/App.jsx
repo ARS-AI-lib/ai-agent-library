@@ -12,6 +12,7 @@ import { canAttachFileTo } from './lib/endpointFiles';
 import { useAgentStats } from './hooks/useAgentStats';
 import { ALLOWED_DOMAINS_LABEL } from './lib/firebase';
 import { agentStatus } from './lib/status';
+import useIsMobile from './hooks/useIsMobile';
 
 import LoginScreen from './components/LoginScreen';
 import Nav from './components/Nav';
@@ -175,6 +176,7 @@ export default function App() {
   const [category, setCategory] = useState(new Set());
   const [stage, setStage] = useState(new Set());
   const [platformTools, setPlatformTools] = useState(false);
+  const isMobile = useIsMobile();
   function handleSetCategory(next) {
     setCategory(next);
     if (next.size > 0) { setStage(new Set()); setPlatformTools(false); setView('by-owner'); }
@@ -471,6 +473,20 @@ export default function App() {
     );
   }
 
+  const sidebarEl = (
+    <Sidebar
+      agents={agents}
+      categoryOptions={schema.category || []}
+      category={category} setCategory={handleSetCategory}
+      stageOptions={schema.sdlcStage || []}
+      stage={stage} setStage={handleSetStage}
+      platformTools={platformTools} setPlatformTools={handleSetPlatformTools}
+      isAdmin={isAdmin}
+      pendingProposalCount={pendingProposalCount}
+      onOpenProposals={() => setShowCategoryProposals(true)}
+    />
+  );
+
   return (
     <div>
       <Nav
@@ -516,20 +532,13 @@ export default function App() {
             counts={filterCounts}
             actions={legendActions}
             resultCount={filtered.length}
+            categoryPanel={isMobile ? sidebarEl : null}
+            categoryCount={category.size + stage.size + (platformTools ? 1 : 0)}
+            onClearCategory={() => { setCategory(new Set()); setStage(new Set()); setPlatformTools(false); }}
           />
 
           <div className="main-row">
-            <Sidebar
-              agents={agents}
-              categoryOptions={schema.category || []}
-              category={category} setCategory={handleSetCategory}
-              stageOptions={schema.sdlcStage || []}
-              stage={stage} setStage={handleSetStage}
-              platformTools={platformTools} setPlatformTools={handleSetPlatformTools}
-              isAdmin={isAdmin}
-              pendingProposalCount={pendingProposalCount}
-              onOpenProposals={() => setShowCategoryProposals(true)}
-            />
+            {!isMobile && sidebarEl}
             <div className="main">
               <LibraryTitle
                 agents={filtered}

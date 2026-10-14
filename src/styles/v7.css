@@ -360,8 +360,8 @@ body.v7 .v7-ac-head .ac-title { margin: 0; font-size: 15px; font-weight: 600; li
 .v7-ac-foot { margin-top: auto; display: flex; align-items: center; gap: 12px; padding-top: 11px; border-top: 1px solid var(--sf2); font-size: 11.5px; color: var(--mu); min-height: 28px; }
 .v7-ac-owner { display: inline-flex; align-items: center; gap: 5px; color: var(--tx2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v7-ac-stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.v7-open { margin-left: auto; height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 5px; border-radius: 99px; background: var(--tint); border: 1px solid var(--tint-bd); color: var(--tint-fg); font-size: 12px; font-weight: 600; text-decoration: none; flex-shrink: 0; }
-.v7-open:hover { background: #2f6bff; color: #fff; border-color: #2f6bff; }
+.v7-open { margin-left: -4px; width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: none; border: none; color: var(--mu); text-decoration: none; flex-shrink: 0; }
+.v7-open:hover { background: var(--sf2); color: var(--tint-fg); }
 .v7-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ════════════════ Board 3 · Detail ════════════════ */
@@ -710,25 +710,23 @@ body.v7 .v7-btn-compact { height: 32px; padding: 0 12px; font-size: 12.5px; whit
   body.v7 .v7-inbox-btn .v7-btn-label { display: none; }
   body.v7 .v7-inbox-btn .v7-badge { position: absolute; top: -4px; right: -4px; }
 
-  /* Sidebar → horizontal chip strip */
+  /* Sidebar lives in the Category sheet on phones (ControlBar), not inline */
   body.v7 .main-row { flex-direction: column; }
-  body.v7 .sidebar { width: auto; flex-direction: row; gap: 14px; overflow-x: auto; padding: 10px 16px; border-right: none; border-bottom: 1px solid var(--bd-soft); }
-  body.v7 .sidebar-group { flex-direction: row; align-items: center; flex-shrink: 0; gap: 6px; }
-  body.v7 .sidebar-h { padding: 0 4px 0 0; white-space: nowrap; }
-  body.v7 .sidebar-item { width: auto; flex-shrink: 0; white-space: nowrap; border: 1px solid var(--bd-soft); border-radius: 99px; height: 40px; padding: 0 14px; }
-  body.v7 .sidebar-item.active::before, body.v7 .v7-sb-sep { display: none; }
-  body.v7 .sb-label { overflow: visible; }
+  body.v7 .v7-sheet .sidebar { width: auto; padding: 0; border: none; background: none; gap: 14px; }
 
   /* Content */
   body.v7 .main { padding: 16px; min-width: 0; }
   .v7-title { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .v7-title-right { margin-left: 0; width: 100%; }
-  .v7-legend { flex-wrap: nowrap; overflow-x: auto; width: 100%; padding-bottom: 2px; }
-  .v7-lg { height: 36px; flex-shrink: 0; }
+  .v7-title-right { margin-left: 0; width: 100%; flex-wrap: wrap; gap: 6px; }
+  .v7-legend { display: contents; }
+  .v7-lg { height: 30px; padding: 0 9px; font-size: 11px; gap: 5px; flex-shrink: 0; }
+  .v7-title-right .v7-layout { margin-left: auto; }
+  .v7-layout button { padding: 0 9px; height: 26px; }
+  .v7-layout-lb { display: none; }
   body.v7 .agrid { grid-template-columns: 1fr; }
   body.v7 .v7-sh { top: 0; min-height: 44px; }
   .v7-ac-foot { flex-wrap: wrap; row-gap: 6px; }
-  .v7-open { height: 36px; padding: 0 16px; }
+  .v7-open { width: 32px; height: 32px; }
 
   /* List view → stacked rows */
   .v7-list { overflow: hidden; }
@@ -830,8 +828,7 @@ body.v7 .v7-btn-compact { height: 32px; padding: 0 12px; font-size: 12.5px; whit
   body.v7 .main { padding: 12px; }
   .v7-title h1 { font-size: 18px; }
   .v7-title p { font-size: 12.5px; }
-  .v7-legend { flex-wrap: wrap; overflow: visible; gap: 5px; }
-  .v7-lg { height: 30px; padding: 0 8px; font-size: 11px; gap: 4px; }
+  .v7-lg { padding: 0 8px; gap: 4px; }
   body.v7 .ac { padding: 14px 14px 12px; }
   body.v7 .v7-ac-head .ac-title { font-size: 14px; }
   .v7-ac-desc { font-size: 12px; }

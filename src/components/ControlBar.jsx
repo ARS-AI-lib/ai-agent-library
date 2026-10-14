@@ -39,9 +39,13 @@ export default function ControlBar({
   counts = {},
   actions,
   resultCount,
+  categoryPanel,
+  categoryCount = 0,
+  onClearCategory,
 }) {
   const mobile = useIsMobile();
   const [sheet, setSheet] = useState(false);
+  const [catSheet, setCatSheet] = useState(false);
   const activeCount = owner.size + role.size + tier.size + reusable.size
     + (type !== 'all' ? 1 : 0) + (view !== 'by-category' ? 1 : 0) + (sort !== 'created' ? 1 : 0) + (hasEndpoint ? 1 : 0);
 
@@ -85,10 +89,21 @@ export default function ControlBar({
     return (
       <div className="cbar v7-actrow v7-actrow-m">
         <FiltersButton count={activeCount} onClick={() => setSheet(true)} />
+        {categoryPanel && (
+          <button type="button" className={`v7-filters-btn ${categoryCount > 0 ? 'on' : ''}`} onClick={() => setCatSheet(true)} aria-haspopup="dialog">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v5H4zM13 14h7v5h-7z" /></svg>
+            Category{categoryCount > 0 && <span className="v7-badge v7-badge-blue">{categoryCount}</span>}
+          </button>
+        )}
         {actions && <div className="v7-row-actions">{actions}</div>}
         <FilterSheet open={sheet} onClose={() => setSheet(false)} onClear={onClear} count={activeCount} resultCount={resultCount}>
           {controls}
         </FilterSheet>
+        {categoryPanel && (
+          <FilterSheet title="Category" open={catSheet} onClose={() => setCatSheet(false)} onClear={onClearCategory} count={categoryCount} resultCount={resultCount}>
+            {categoryPanel}
+          </FilterSheet>
+        )}
       </div>
     );
   }

@@ -3,14 +3,14 @@ import useEscapeKey from '../hooks/useEscapeKey';
 // V7 mobile filter sheet (2026-10-02). Holds the SAME filter controls the
 // desktop action row renders — passed in as children — so there is one set of
 // controls and one set of state, just a different container on phones.
-export default function FilterSheet({ open, onClose, onClear, count, resultCount, children }) {
+export default function FilterSheet({ open, onClose, onClear, count, resultCount, children, title = 'Filters' }) {
   useEscapeKey(open ? onClose : () => {});
   if (!open) return null;
   return (
     <div className="mov open v7-sheet-ovl" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
-      <div className="mbox v7-sheet" role="dialog" aria-modal="true" aria-label="Filters">
+      <div className="mbox v7-sheet" role="dialog" aria-modal="true" aria-label={title}>
         <div className="v7-sheet-head">
-          <h2 className="mtitle">Filters{count > 0 ? ` (${count})` : ''}</h2>
+          <h2 className="mtitle">{title}{count > 0 ? ` (${count})` : ''}</h2>
           <button type="button" className="mclose" onClick={onClose} aria-label="Close">✕</button>
         </div>
         <div className="v7-sheet-body">{children}</div>
