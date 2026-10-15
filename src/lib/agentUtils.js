@@ -513,12 +513,15 @@ export function relationshipLabel(agent, allAgents) {
  * Builds the predicate used by both the card grid and the counters —
  * mirrors `tOk()` from the original dashboard.
  */
-export function buildAgentFilter({ type, owner, role, tier, reusable, hasEndpoint, category, stage, platformTools, search }) {
+export function buildAgentFilter({ type, owner, role, tier, reusable, hasEndpoint, category, stage, platformTools, externalSkills, search }) {
   return (agent) => {
     if (type !== 'all' && getType(agent) !== type) return false;
     // Platform Tools shortcut (2026-08 sidebar) reuses the existing
     // internalTool flag (flag-internal.cjs) rather than a new field.
     if (platformTools && agent.internalTool !== true) return false;
+    // External Skills: derived from the externalSource flag, never from category
+    // (category routes approvers; this flag is user-set).
+    if (externalSkills && agent.externalSource !== true) return false;
     // Category shortcut (2026-08 sidebar): OR within the selected categories,
     // same as role below — this whole predicate ANDs across groups.
     if (category && category.size > 0) {

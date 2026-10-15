@@ -98,6 +98,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     reusable: agent.reusable || '',
     reuseCondition: agent.reuseCondition || '',
     hml: !!agent.hml,
+    externalSource: agent.externalSource === true,
     humanJob: agent.humanJob || '',
     launchDate: toDateInputValue(agent.launchDate),
     compatibleAgents: Array.isArray(agent.compatibleAgents) ? agent.compatibleAgents : [],
@@ -316,6 +317,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           reuseCondition: form.reusable === 'Reusable with Conditions' ? form.reuseCondition.trim() : '',
           hml: form.hml,
           humanJob: form.hml ? form.humanJob.trim() : '',
+          ...(isSkill(agent) ? { externalSource: !!form.externalSource } : {}),
           // Sanitised on write, same as pre-registration — never store a
           // scheme we would refuse to render.
           // Sensitive: creator list — writes `creator` display alongside
@@ -443,6 +445,7 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
               reuseCondition: s.reusable === 'Reusable with Conditions' ? s.reuseCondition.trim() : '',
               hml: s.hml,
               humanJob: s.hml ? s.humanJob.trim() : '',
+              externalSource: !!s.externalSource,
               tool: agent.tool || '',
               llm: agent.llm || '',
               dataPrivacy: agent.dataPrivacy || '',
@@ -657,6 +660,16 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           </div>
 
           {isSkill(agent) && (
+            <div className="fg">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <input type="checkbox" checked={form.externalSource} onChange={(e) => setField('externalSource', e.target.checked)} />
+                External Source
+              </label>
+              <div style={{ fontSize: 11.5, color: 'var(--mu)', marginTop: 2 }}>Skill ที่นำมาจากภายนอกองค์กร (ไม่ได้พัฒนาเอง)</div>
+            </div>
+          )}
+
+          {isSkill(agent) && !form.externalSource && (
             <div className="fg">
               <label>Compatible Agents <span style={{ fontWeight: 400, color: 'var(--mu)' }}>(optional)</span></label>
               <AgentMultiSelect

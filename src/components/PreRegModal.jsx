@@ -77,6 +77,7 @@ const EMPTY_FORM = {
   reusable: '',           // '' | 'Reusable' | 'Reusable with Conditions' | 'Non-reusable'
   reuseCondition: '',
   hml: false,
+  externalSource: false,
   humanJob: '',
   tool: '',
   llm: '',
@@ -513,6 +514,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         reuseCondition: form.reusable === 'Reusable with Conditions' ? form.reuseCondition.trim() : '',
         hml: form.hml,
         humanJob: form.hml ? form.humanJob.trim() : '',
+        externalSource: form.type === 'Skill' && form.externalSource,
         tool: inheritedFromAgent.tool,
         llm: inheritedFromAgent.llm,
         dataPrivacy: inheritedFromAgent.dataPrivacy,
@@ -676,6 +678,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             reuseCondition: s.reusable === 'Reusable with Conditions' ? s.reuseCondition.trim() : '',
             hml: s.hml,
             humanJob: s.hml ? s.humanJob.trim() : '',
+            externalSource: !!s.externalSource,
             tool: inheritedFromAgent.tool,
             llm: inheritedFromAgent.llm,
             dataPrivacy: inheritedFromAgent.dataPrivacy,
@@ -894,6 +897,16 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             </div>
 
             {form.type === 'Skill' && (
+              <div className="fg">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <input type="checkbox" checked={form.externalSource} onChange={(e) => setField('externalSource', e.target.checked)} />
+                  External Source
+                </label>
+                <div style={{ fontSize: 11.5, color: 'var(--mu)', marginTop: 2 }}>Skill ที่นำมาจากภายนอกองค์กร (ไม่ได้พัฒนาเอง)</div>
+              </div>
+            )}
+
+            {form.type === 'Skill' && !form.externalSource && (
               <div className="fg">
                 <label>Compatible Agents <span style={{ fontWeight: 400, color: 'var(--mu)' }}>(optional)</span></label>
                 <AgentMultiSelect

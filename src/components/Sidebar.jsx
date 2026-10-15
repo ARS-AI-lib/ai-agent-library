@@ -35,6 +35,7 @@ export default function Sidebar({
   stageOptions,
   stage, setStage,
   platformTools, setPlatformTools,
+  externalSkills, setExternalSkills,
   myAI, onToggleMyAI,
   isAdmin, pendingProposalCount, onOpenProposals,
 }) {
@@ -101,7 +102,7 @@ export default function Sidebar({
       </div>
 
       <div className="sidebar-group">
-        <div className="sidebar-h">Platform Tools</div>
+        <div className="sidebar-h">Other</div>
         <button
           type="button"
           className={`sidebar-item ${platformTools ? 'active' : ''}`}
@@ -110,6 +111,16 @@ export default function Sidebar({
           <span className="sb-dot" style={{ background: 'var(--mu2)' }} />
           <span className="sb-label">Platform Tools</span>
           <span className="sidebar-count">{countFor(agents, (a) => a.internalTool === true)}</span>
+        </button>
+        <button
+          type="button"
+          aria-pressed={!!externalSkills}
+          className={`sidebar-item ${externalSkills ? 'active' : ''}`}
+          onClick={() => setExternalSkills(!externalSkills)}
+        >
+          <span className="sb-dot" style={{ background: 'var(--mu2)' }} />
+          <span className="sb-label">External Skills</span>
+          <span className="sidebar-count">{countFor(agents, (a) => a.externalSource === true)}</span>
         </button>
       </div>
 

@@ -176,18 +176,23 @@ export default function App() {
   const [category, setCategory] = useState(new Set());
   const [stage, setStage] = useState(new Set());
   const [platformTools, setPlatformTools] = useState(false);
+  const [externalSkills, setExternalSkills] = useState(false);
   const isMobile = useIsMobile();
   function handleSetCategory(next) {
     setCategory(next);
-    if (next.size > 0) { setStage(new Set()); setPlatformTools(false); setView('by-owner'); }
+    if (next.size > 0) { setStage(new Set()); setPlatformTools(false); setExternalSkills(false); setView('by-owner'); }
   }
   function handleSetStage(next) {
     setStage(next);
-    if (next.size > 0) { setCategory(new Set()); setPlatformTools(false); }
+    if (next.size > 0) { setCategory(new Set()); setPlatformTools(false); setExternalSkills(false); }
   }
   function handleSetPlatformTools(next) {
     setPlatformTools(next);
-    if (next) { setCategory(new Set()); setStage(new Set()); }
+    if (next) { setCategory(new Set()); setStage(new Set()); setExternalSkills(false); }
+  }
+  function handleSetExternalSkills(next) {
+    setExternalSkills(next);
+    if (next) { setCategory(new Set()); setStage(new Set()); setPlatformTools(false); }
   }
   const [showCategoryProposals, setShowCategoryProposals] = useState(false);
 
@@ -295,13 +300,13 @@ export default function App() {
   );
 
   const filtered = useMemo(() => {
-    let pred = buildAgentFilter({ type, owner, role: role_, tier, reusable, hasEndpoint, category, stage, platformTools, search });
+    let pred = buildAgentFilter({ type, owner, role: role_, tier, reusable, hasEndpoint, category, stage, platformTools, externalSkills, search });
     let result = agents.filter(pred);
     if (selectedStatus.size > 0) {
       result = result.filter((a) => selectedStatus.has(agentStatus(a)));
     }
     return result;
-  }, [agents, type, owner, role_, tier, reusable, hasEndpoint, category, stage, platformTools, search, selectedStatus]);
+  }, [agents, type, owner, role_, tier, reusable, hasEndpoint, category, stage, platformTools, externalSkills, search, selectedStatus]);
 
   // Count "the catalogue surfaced this for a search someone actually made"
   // (2026-08-18). Three guards, because a naive version of this is worse than
@@ -352,6 +357,7 @@ export default function App() {
   const libTitle = category.size === 1 ? [...category][0]
     : stage.size === 1 ? [...stage][0]
     : platformTools ? 'Platform Tools'
+    : externalSkills ? 'External Skills'
     : selectedStatus.size === 1 && selectedStatus.has('ru') ? 'Ready to Use'
     : 'All tools';
   const without = (set, v) => { const n = new Set(set); n.delete(v); return n; };
@@ -416,6 +422,7 @@ export default function App() {
     setCategory(new Set());
     setStage(new Set());
     setPlatformTools(false);
+    setExternalSkills(false);
     setSearch('');
   }
 
@@ -481,6 +488,7 @@ export default function App() {
       stageOptions={schema.sdlcStage || []}
       stage={stage} setStage={handleSetStage}
       platformTools={platformTools} setPlatformTools={handleSetPlatformTools}
+      externalSkills={externalSkills} setExternalSkills={handleSetExternalSkills}
       isAdmin={isAdmin}
       pendingProposalCount={pendingProposalCount}
       onOpenProposals={() => setShowCategoryProposals(true)}
@@ -533,8 +541,8 @@ export default function App() {
             actions={legendActions}
             resultCount={filtered.length}
             categoryPanel={isMobile ? sidebarEl : null}
-            categoryCount={category.size + stage.size + (platformTools ? 1 : 0)}
-            onClearCategory={() => { setCategory(new Set()); setStage(new Set()); setPlatformTools(false); }}
+            categoryCount={category.size + stage.size + (platformTools ? 1 : 0) + (externalSkills ? 1 : 0)}
+            onClearCategory={() => { setCategory(new Set()); setStage(new Set()); setPlatformTools(false); setExternalSkills(false); }}
           />
 
           <div className="main-row">

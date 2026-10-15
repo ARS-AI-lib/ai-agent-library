@@ -129,6 +129,13 @@ export default function SkillRow({
           </div>
           <div className="fg">
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <input type="checkbox" checked={!!skill.externalSource} onChange={(e) => onField('externalSource', e.target.checked)} />
+              External Source
+            </label>
+            <div style={{ fontSize: 11.5, color: 'var(--mu)', marginTop: 2 }}>Skill ที่นำมาจากภายนอกองค์กร (ไม่ได้พัฒนาเอง)</div>
+          </div>
+          <div className="fg">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
               <input type="checkbox" checked={skill.hml} onChange={(e) => onField('hml', e.target.checked)} />
               HML (Human-in-the-Loop)
             </label>
@@ -163,7 +170,7 @@ export function emptySkillRow(id) {
     description: '', scope: 'Internal',
     ability: new Set(), relatedRole: new Set(),
     input: '', output: '', reusable: '', reuseCondition: '',
-    hml: false, humanJob: '',
+    hml: false, humanJob: '', externalSource: false,
   };
 }
 

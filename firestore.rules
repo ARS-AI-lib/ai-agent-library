@@ -173,7 +173,7 @@ service cloud.firestore {
             && affectedKeys().hasOnly([
                  'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing',
                  'internalUse', 'coreAbility', 'relatedRole', 'reusable', 'reuseCondition', 'hml',
-                 'humanJob', 'updatedAt',
+                 'humanJob', 'externalSource', 'updatedAt',
                ])
             && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved']))
         // Detail edit — Tier B (2026-07-03, widened): the agent's owner
@@ -186,7 +186,7 @@ service cloud.firestore {
         || (affectedKeys().hasOnly([
               'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing', 'internalUse',
               'coreAbility', 'relatedRole', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
-              'humanJob', 'launchDate', 'devProgress', 'developmentPhase', 'phaseSince', 'progressUpdatedAt', 'updatedAt',
+              'humanJob', 'externalSource', 'launchDate', 'devProgress', 'developmentPhase', 'phaseSince', 'progressUpdatedAt', 'updatedAt',
             ])
             && isOwnerCreatorOrApprover(resource.data)
             && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved'])
