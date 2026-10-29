@@ -615,3 +615,37 @@ export const MIN_TEAM_NAME = 2;
 export function isValidTeamName(name) {
   return String(name ?? '').trim().length >= MIN_TEAM_NAME;
 }
+
+/** Case/space/zero-width-insensitive name key. Mirrors the Portfolio adoption
+ *  rule (functions/portfolioAdoptionRules.js foldName) so both features fold
+ *  names the same way. */
+export function foldName(name) {
+  return String(name || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Folded names of approved Library items that appear EXACTLY ONCE in the
+ *  given list. A name shared by 2+ docs is ambiguous and is left out, so no
+ *  sticker is ever starred for the wrong item. */
+export function libraryStarNames(agents) {
+  const count = new Map();
+  for (const a of agents || []) {
+    const key = foldName(a && a.agentName);
+    if (!key) continue;
+    count.set(key, (count.get(key) || 0) + 1);
+  }
+  const out = new Set();
+  for (const [key, n] of count) if (n === 1) out.add(key);
+  return out;
+}
+
+/** A Workshop sticker is starred only when it is Done AND its skill name
+ *  matches exactly one Library item (Workshop library star, 2026-10-29). */
+export function isLibraryStar(idea, starNames) {
+  if (!idea || idea.status !== 'done') return false;
+  const key = foldName(idea.skillName);
+  return !!key && !!starNames && starNames.has(key);
+}
