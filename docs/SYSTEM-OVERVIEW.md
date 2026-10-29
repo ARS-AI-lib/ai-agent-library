@@ -404,17 +404,22 @@ GitHub **ไม่รองรับ password แล้ว** — `git clone/push
 
 - token ถูกเก็บอัตโนมัติใน macOS keychain (`credential.helper = osxkeychain` มาจาก Xcode
   Command Line Tools → มีทุกเครื่อง Mac) **ใส่ครั้งเดียวพอ ไม่ต้องพิมพ์ซ้ำทุกครั้ง**
-- **⏰ token ปัจจุบันหมดอายุราว 2026-11-03** (สร้าง 2026-08-05 อายุ 90 วัน)
+- **⏰ token ปัจจุบันชื่อ `ai-lib`** — สร้าง **2026-08-05** · **หมดอายุ Tue 5 Jan 2027**
+  ⚠️ เอกสารเดิมเขียน "หมดอายุราว 2026-11-03 อายุ 90 วัน" — **ผิดทั้งคู่** แก้จากหน้า GitHub จริงเมื่อ 2026-10-29
   พอหมดอายุ `git push` จะ fail ด้วย auth error — สร้างใหม่ที่
   https://github.com/settings/tokens?type=beta
-  · scope ที่ต้องมี: **Repository access = `ARS-AI-lib/ai-agent-library`** + **Contents: Read and write**
+  · **Repository access — token ตัวนี้ให้สิทธิ์ 5 repo ของ `ARS-AI-lib` ไม่ใช่ repo เดียว:**
+  `AI_Agent_lib` · `AI_Portfolio` · `ai-agent-library` · `ai-governance` · `vote`
+  · permission = **Read and write access to code** + Read access to metadata · ไม่มี user permission (ถูกต้อง)
+  · กด **Regenerate token** บนหน้าเดิมได้ แต่ **ค่าจะเปลี่ยน → ต้องอัปเดต keychain ใหม่** ไม่งั้น push ยังใช้ค่าเก่าแล้ว fail
   · ถ้า keychain ยังจำ token เก่าอยู่ ให้ลบด้วย
   `git credential-osxkeychain erase` (พิมพ์ `host=github.com` แล้ว `protocol=https` แล้ว Enter 2 ครั้ง)
 
 ### สิ่งที่ **ไม่ต้อง**ย้ายมา (ตรวจแล้ว)
-`~/.claude/settings.json` ว่างเปล่า (`{}`) · ไม่มี custom command/agent/output-style ·
-โลโก้และ skill package อยู่ใน `public/` ใน git แล้ว · permission allowlist อยู่ที่
-`.claude/settings.json` ใน repo แล้ว (จงใจ**ไม่ใส่ deploy** — ดูข้อ 8)
+⚠️ **แก้ 2026-10-29:** `~/.claude/settings.json` **ไม่ว่างแล้ว** — มี `env` (proxy/โมเดลภายในองค์กร), `model`, `effortLevel`, `theme`, `enableWorkflows` และ **`sandbox.network.allowedDomains`** ที่เพิ่มเข้าไปเพื่อให้ autonomous deploy ทำงานได้ (ดู `docs/SETUP-AUTONOMY.md`) → **ย้ายเครื่องต้องตั้งไฟล์นี้ใหม่** ไม่ใช่ปล่อยว่าง
+ไม่มี custom command/agent/output-style · โลโก้และ skill package อยู่ใน `public/` ใน git แล้ว ·
+permission allowlist อยู่ที่ `.claude/settings.json` ใน repo (จงใจ**ไม่ใส่ deploy** — ดูข้อ 8) +
+`.claude/settings.local.json` (เครื่องนี้เท่านั้น, gitignore แล้ว)
 
 **ก่อนแก้อะไรที่เกี่ยวกับ search/prompt** → อ่าน `CLAUDE.md` §18 + memory
 `project_chat_retrieval_rearchitecture.md` ให้จบก่อน มีเหตุผลที่วัดมาแล้วของทุกการตัดสินใจ

@@ -21,3 +21,6 @@ dist
 
 # emulator seed copy of production data (local only, never commit)
 .emulator-seed/
+
+# machine-local Claude Code settings (personal permissions, never commit)
+.claude/settings.local.json
