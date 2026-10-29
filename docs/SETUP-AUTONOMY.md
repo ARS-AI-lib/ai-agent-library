@@ -4,10 +4,10 @@
 > จุดประสงค์: ให้ Claude Code ในเครื่องนี้ commit / push / build / deploy ได้เองโดยไม่ต้องกดอนุมัติทุกคำสั่ง
 > **แต่ยังคง 2 กฎเหล็กของโปรเจกต์ไว้:** ห้าม unscoped functions deploy · Firestore rules publish ผ่าน Console เท่านั้น
 >
-> **สถานะ (2026-10-29):** ขั้น 1 + 2 ทำแล้ว · **ขั้น 3 ไม่ต้องทำ** (token `ai-lib` ถึง 5 Jan 2027) · **ขั้น 4 ทำแล้ว** (รันใน session ใหม่)
-> **ผลทดสอบ §8:** `git rev-list` ✅ · `git status` ✅ · `npm run build` ✅ · **channel deploy ❌ ยังโดน sandbox deny**
-> → ⛔ **ยืนยันแล้ว: sandbox allowlist มาจาก managed policy ระดับสูงกว่า `~/.claude/settings.json`** (ใส่ `*.googleapis.com` ไว้แล้วก็ยังถูกเมิน) = เคส §2.3
-> → 🔧 **ต้องใช้ binary `firebase` (global `~/.local/bin/firebase`) แทน `npx firebase-tools` ทุกที่** — รายละเอียด §8
+> **สถานะสุดท้าย (2026-10-29):** **แก้ไฟล์ + commit ทำงานเองได้ ✅** · **push + deploy ยังต้องรันจาก Terminal ของผู้ใช้** (sandbox เป็น managed policy, build นี้ไม่มีที่ตั้งค่า — **ผู้ใช้ยอมรับแล้ว**)
+> ขั้น 3 ไม่ต้องทำ (token `ai-lib` ถึง 5 Jan 2027) · ขั้น 4 ทำแล้ว
+> 🔒 **กฎถาวร (ผู้ใช้ล็อก 2026-10-29):** Claude ต้อง **หยุดถามก่อน deploy production ทุกครั้ง** — ดู §6 ข้อ 5
+> 🔧 **ต้องใช้ binary `firebase` (global `~/.local/bin/firebase`) แทน `npx firebase-tools` ในแชท** — รายละเอียด §8
 
 ---
 
@@ -125,10 +125,17 @@
 
 ### 2.3 ถ้าแก้แล้วยังถูกบล็อก = allowlist เป็น managed policy ✅ **เคสนี้คือสิ่งที่เกิดขึ้นจริง (ยืนยัน 2026-10-29)**
 
-กรณีนี้ผู้ใช้ widen ไม่ได้เอง มี 3 ทาง:
-1. **ปิด sandbox สำหรับ session** — ถ้าตัวแอปมีสวิตช์ sandbox ให้ปิด (หรือ `"sandbox": { "enabled": false }` ใน user settings ถ้าไม่มี policy ทับ) → คำสั่งรันนอก sandbox ยิงเน็ตได้ตามปกติ **แลกมาด้วยการลดเกราะป้องกัน** เป็นการตัดสินใจของผู้ใช้
-2. **รัน deploy/push จาก Terminal ของตัวเอง** (ทางที่ใช้ได้เสมอ — พิสูจน์แล้ว 2026-10-28 ว่า `git push` สำเร็จ) แล้วให้ Claude เตรียมคำสั่งไว้ให้
-3. **ให้ K.Ko เปิด domain ใน managed policy** ถ้าเป็นนโยบายองค์กร
+กรณีนี้ผู้ใช้ widen ไม่ได้เอง — และ **build นี้ไม่มี section Sandbox / Allowed domains ใน Settings เลย** (ตรวจ 2026-10-29)
+→ ยืนยันว่า sandbox ไม่ใช่ค่าที่ผู้ใช้ตั้งเองได้จากหน้านั้น
+
+เหลือ 3 ทาง:
+
+0. **⭐ Bypass permissions ตอนเปิด session** — sandbox ถูกปลดเมื่อ session เริ่มด้วย `--dangerously-skip-permissions`
+   ⚠️ **สลับกลาง session ไม่ได้** — ระบบปฏิเสธ: *"Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions"*
+   → ต้องเปิด toggle ใน **Settings → Claude Code ก่อน** แล้ว **เปิด session ใหม่** จึงมีผล
+   ⚠️ ในโหมดนี้ `ask[]` ใน settings **อาจถูกข้าม** — กฎ "production deploy ต้อง confirm" จะเหลือเป็นวินัยของ Claude ไม่ใช่กลไกบังคับ → ต้องย้ำเตือนตัวเองทุกครั้ง (CLAUDE.md §11)
+1. **รัน deploy/push จาก Terminal ของตัวเอง** (ทางที่ใช้ได้เสมอ — พิสูจน์แล้ว 2026-10-28 ว่า `git push` สำเร็จ) แล้วให้ Claude เตรียมคำสั่งไว้ให้
+2. **ให้ K.Ko เปิด domain ใน managed policy** ถ้าเป็นนโยบายองค์กร
 
 ### 2.4 Filesystem
 
@@ -244,14 +251,18 @@ npx firebase-tools deploy --only functions:<ชื่อที่แก้จร
 
 ---
 
-## 6. ⛔ 4 อย่างที่ห้ามให้ Claude ทำเอง (คงไว้เสมอ ไม่ว่า permission mode ไหน)
+## 6. ⛔ 5 อย่างที่ห้ามให้ Claude ทำเอง (คงไว้เสมอ ไม่ว่า permission mode ไหน)
 
 1. **`firebase deploy` เปล่า ๆ หรือ `--only functions` เปล่า ๆ** — GCP project `wolfy-481609` แชร์กับแอป Portfolio → unscoped deploy จะเสนอ **ลบ** functions ของ Portfolio (`files`, `logProjectActivity`, `logTaskActivity`) และตัว legacy อื่น ๆ
 2. **Publish Firestore rules ผ่าน CLI** — ต้องผ่าน Console + named DB `ai-agent-lib` เท่านั้น
 3. **แตะ secrets** — `TEAMS_FLOW_URL` (Secret Manager), `.env.local`, `GMAIL_*` — ห้ามลง git/แชท
 4. **`firebase deploy` ตอนยังไม่ build** — ต้อง `npm run build` ก่อนเสมอ ไม่งั้น deploy ของเก่า
+5. 🔒 **Production deploy ต้องหยุดถามก่อนทุกครั้ง — กฎถาวร ผู้ใช้ล็อก 2026-10-29**
+   เหตุผลที่ต้องเป็นกฎเหล็ก: ในโหมด `bypassPermissions` **ไม่มีกล่องอนุมัติเลย** และ `ask[]` ใน settings **อาจถูกข้าม**
+   → กฎนี้จึงเป็น **วินัยของ Claude ไม่ใช่กลไกบังคับ** · ห้าม deploy production จบในลูปเดียวโดยไม่รายงาน
+   · ห้าม push/deploy ไป repo หรือ hosting site ของ **Portfolio** แม้ token `ai-lib` จะให้สิทธิ์ก็ตาม
 
-👉 ทั้ง 4 ข้อนี้เขียนไว้ใน `.claude/settings.json` (comment บรรทัด DEPLOY IS DELIBERATELY ABSENT) แล้ว — **ถ้าไม่ได้ตั้งใจจะยกเลิกกฎนี้ อย่าใส่ deploy ลง allow-list**
+👉 ข้อ 1-4 เขียนไว้ใน `.claude/settings.json` (comment บรรทัด DEPLOY IS DELIBERATELY ABSENT) + `ask[]` ใน `settings.local.json` แล้ว — **ถ้าไม่ได้ตั้งใจจะยกเลิกกฎนี้ อย่าใส่ deploy ลง allow-list**
 
 ---
 
@@ -261,10 +272,13 @@ npx firebase-tools deploy --only functions:<ชื่อที่แก้จร
 - [x] ~~เพิ่ม `sandbox.network.allowedDomains` ใน `~/.claude/settings.json`~~ — **ทำแล้ว 2026-10-29** (15 domain)
 - [x] ~~ตัดสินใจเรื่อง GitHub credential~~ — **ไม่ต้องทำแล้ว:** token `ai-lib` ใช้ได้ถึง **5 Jan 2027** และครอบ 5 repo (ข้อ 3.1 ทาง 1)
   · กลับมาดูอีกครั้งราว **ธ.ค. 2026**
-- [ ] `npx firebase-tools login:list` เห็น `tinnapat.p@arise.tech`
+- [x] ~~`firebase login:list` เห็น `tinnapat.p@arise.tech`~~ — **ผ่านแล้ว 2026-10-29**
 - [ ] (ถ้าจะรัน verify scripts) `gcloud auth application-default login`
-- [ ] **ปิดหน้าต่างแชทแล้วเปิด session ใหม่** — settings โหลดตอนเริ่ม session เท่านั้น แก้ระหว่าง session ไม่มีผล
-- [ ] ทดสอบ 3 อย่างใน session ใหม่: `git push` · preview channel deploy · `npm run build`
+- [x] ~~ปิดหน้าต่างแชทแล้วเปิด session ใหม่~~ — **ทำแล้ว 2026-10-29** (allowlist มีผลทันที ไม่ต้องรอ restart ด้วยซ้ำ)
+- [x] ~~ทดสอบ 3 อย่าง~~ — **ผลจริง: 1 ✅ · 2 ✅ · 3 (build) ✅ · 4 (channel deploy) ❌** → sandbox เป็น managed policy
+- [ ] **งานที่เหลือ = push/deploy จาก Terminal ของผู้ใช้** (ผู้ใช้ยอมรับแล้ว ไม่ต้องแก้อะไรเพิ่ม)
+  · `git push origin main` · `firebase hosting:channel:deploy <name>` · `firebase deploy --only hosting` (ดู §5)
+- [ ] กลับมาดู **token `ai-lib` หมดอายุ 5 Jan 2027** → ราว ธ.ค. 2026
 
 ---
 

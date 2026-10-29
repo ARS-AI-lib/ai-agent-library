@@ -289,6 +289,9 @@ Tier:
 - Hosting ปลอดภัยโดยธรรมชาติ (target-isolated ต่อ repo `.firebaserc` — ไม่แตะ site `wolfy-portfolio`)
 - **Firestore rules ยัง publish ผ่าน Console** (named DB dropdown `ai-agent-lib`) เหมือนเดิม — `firebase.json` ไม่มี firestore block (ตั้งใจ)
 - Deploy เป็น production เสมอ → ขอ confirm ก่อนทุกครั้ง; Firebase เก็บ release เดิมให้ rollback ได้ (Console → Hosting → release history)
+  - 🔒 **กฎถาวร (ผู้ใช้ล็อก 2026-10-29):** Claude ต้อง **หยุดถามก่อน deploy production ทุกครั้ง** แม้รันอยู่ในโหมด `bypassPermissions` (โหมดนั้นไม่มีกล่องอนุมัติ และ `ask[]` อาจถูกข้าม → เป็นวินัยของ Claude ไม่ใช่กลไกบังคับ) · ดู `docs/SETUP-AUTONOMY.md` §6 ข้อ 5
+  - 🔧 **ใน session ของ Claude ให้ใช้ binary `firebase` (global `~/.local/bin/firebase`) แทน `npx firebase-tools`** — `npx` ต้องยิง `registry.npmjs.org` ก่อนแล้วโดน sandbox deny (วัด 2026-10-29)
+  - 🔧 push/deploy ยังต้องรันจาก Terminal ของผู้ใช้ (sandbox เป็น managed policy) — Claude เตรียมคำสั่งให้ได้ แต่รันเองไม่ได้
 
 ---
 
