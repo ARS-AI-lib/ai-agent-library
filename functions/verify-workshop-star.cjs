@@ -53,6 +53,8 @@ ok(!isLibraryStar({ status: 'qa', skillName: 'RCA Fix Assistant' }, star), 'non-
 ok(!isLibraryStar({ status: 'done' }, star), 'done + missing skillName → no star (no throw)');
 ok(!isLibraryStar({ status: 'done', skillName: '   ' }, star), 'done + blank skillName → no star');
 ok(!isLibraryStar(null, star), 'null idea → no star (no throw)');
+ok(!isLibraryStar(undefined, star), 'undefined idea → no star (no throw)');
+ok(libraryStarNames() instanceof Set && libraryStarNames().size === 0, 'no-arg libraryStarNames → empty Set (no throw)');
 
 console.log(fail ? `\n${fail} failed` : '\nall passed');
 process.exit(fail ? 1 : 0);
