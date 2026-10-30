@@ -618,7 +618,8 @@ export function isValidTeamName(name) {
 
 /** Case/space/zero-width-insensitive name key. Mirrors the Portfolio adoption
  *  rule (functions/portfolioAdoptionRules.js foldName) so both features fold
- *  names the same way. */
+ *  names the same way. Parity is enforced by functions/verify-fold-parity.cjs
+ *  — run it after touching either copy. */
 export function foldName(name) {
   return String(name || '')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')

@@ -11,7 +11,9 @@
 // the backfill can never double count. Pure helpers only — no Firestore here,
 // so verify-portfolio-adoption.cjs can check them offline.
 
-/** Case/space/zero-width-insensitive name key. */
+/** Case/space/zero-width-insensitive name key. Mirrors the Workshop library
+ *  star's client copy (src/lib/agentUtils.js foldName). Parity is enforced by
+ *  functions/verify-fold-parity.cjs — run it after touching either copy. */
 function foldName(s) {
   return String(s || '')
     .replace(/[​-‍﻿]/g, '')
