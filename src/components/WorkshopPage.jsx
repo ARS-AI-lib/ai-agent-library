@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useApprovedAgents } from '../hooks/useAgents';
 import { useConfigSchema } from '../hooks/useConfigSchema';
 import { getType } from '../lib/tier';
-import { agentProcessIds, agentUseCaseNames, buildAgentFilter, relationshipLabel } from '../lib/agentUtils';
+import { agentProcessIds, agentUseCaseNames, buildAgentFilter, relationshipLabel, isLibraryStar, libraryStarNames } from '../lib/agentUtils';
 import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { downloadCsv } from '../lib/csv';
 import ComboInput from './ComboInput';
@@ -109,18 +109,21 @@ function nextStatus(status) {
 
 // Rich Workshop-tab sticker: filled circle showing the team's 2-digit
 // number, colored by the idea's current status. Click opens the detail popup.
-function WorkshopStickers({ ideas, teams, canAdd, onAdd, onOpen }) {
+function WorkshopStickers({ ideas, teams, starNames, canAdd, onAdd, onOpen }) {
   return (
     <div className="ws-stickers-row" onClick={(e) => e.stopPropagation()}>
       {ideas.map((idea) => {
         const team = teams.find((t) => t.id === idea.teamId);
+        const starred = isLibraryStar(idea, starNames);
         return (
           <button
             key={idea.id}
             type="button"
-            className="ws-sticker"
-            style={{ background: STATUS_COLOR[idea.status] || STATUS_COLOR.idea }}
-            title={`${idea.team} — ${idea.skillName || idea.ideaName}`}
+            className={`ws-sticker${starred ? ' ws-sticker-star' : ''}`}
+            style={starred ? undefined : { background: STATUS_COLOR[idea.status] || STATUS_COLOR.idea }}
+            title={starred
+              ? `${idea.team} — ${idea.skillName || idea.ideaName} (on Library)`
+              : `${idea.team} — ${idea.skillName || idea.ideaName}`}
             onClick={() => onOpen(idea)}
           >
             {team?.number || '??'}
@@ -617,6 +620,9 @@ export default function WorkshopPage() {
   }, []);
 
   const { agents } = useApprovedAgents(canView);
+  // Folded names of approved, non-archived Library items that appear exactly
+  // once → the Done stickers that render as a star (2026-10-29 design).
+  const starNames = useMemo(() => libraryStarNames(agents), [agents]);
   const { schema, addRelatedRoles, addTeams } = useConfigSchema(canView);
   const [processes, setProcesses] = useState([]);
   const [useCases, setUseCases] = useState([]);
@@ -934,6 +940,7 @@ export default function WorkshopPage() {
           <WorkshopStickers
             ideas={ideasForProcess(proc.id)}
             teams={teams}
+            starNames={starNames}
             canAdd={canParticipate}
             onAdd={() => setAddModalProc(proc)}
             onOpen={(idea) => setDetailIdea(idea)}
@@ -970,7 +977,7 @@ export default function WorkshopPage() {
         {proc?.owner && <div className="uc-powner">Process Owner: {proc.owner}</div>}
         <div className="uc-name">{uc.name}</div>
         {ucIdeas.length > 0 && (
-          <WorkshopStickers ideas={ucIdeas} teams={teams} canAdd={false} onAdd={() => {}} onOpen={(idea) => setDetailIdea(idea)} />
+          <WorkshopStickers ideas={ucIdeas} teams={teams} starNames={starNames} canAdd={false} onAdd={() => {}} onOpen={(idea) => setDetailIdea(idea)} />
         )}
         <div className="uc-alist">
           {ags.length > 0 ? ags.map((a) => {
