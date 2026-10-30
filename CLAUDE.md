@@ -693,14 +693,22 @@ product 1 · เพิ่มช่องแก้ใน Edit form
 ### ⚠️ ห้ามรัน `backfill-categories.cjs` ซ้ำ
 มันเขียน `category: [ตัวเดียว]` = **replace** → product tag หายหมด (ใส่คำเตือนไว้ในไฟล์แล้ว)
 
-### ค้างอยู่
-- ⚠️ **"VB" = CLICX** (CLICX คือชื่อของ Virtual Bank — ยืนยันจากผู้ใช้ 2026-08-17
-  · **เปลี่ยนชื่อจาก `CLIX` → `CLICX` เมื่อ 2026-08-20** ตอนนั้นยังไม่มี agent ตัวไหนติดแท็กนี้
-  จึงเป็นแค่การ retire ชื่อเก่าใน `/config/schema` ไม่ต้อง migrate agent สักตัว)
-  **ไม่ใช่ vertical ใหม่** — `UX Writer AI Agent` ที่ระบุว่ารองรับ VB ควรแท็ก `CLICX` ไม่ใช่เพิ่ม
-  category ใหม่ **แต่ตั้งใจปล่อยว่างไว้ก่อน** ผู้ใช้จะเพิ่ม skill/แท็กเองทีหลัง — ห้าม backfill เอง
-- `CLICX` / `Core bank` ยังเป็น 0 — **ถูกต้อง ณ ตอนนี้** ไม่มี agent ตัวไหนทำให้ 2 ตัวนี้โดยเฉพาะ
-  (ทั้งไลบรารี 239 ตัว มีแค่ 5 ตัวที่ผูกกับ product จริงๆ ที่เหลือเป็นเครื่องมือข้าม product)
+### product tag จริงในระบบ (นับ 2026-10-30)
+- **`CLICX` = 8 ตัว** (ติดครบแล้ว 2026-10-30) — `CLICX` คือชื่อของ Virtual Bank ·
+  **"VB" = CLICX** ยืนยันจากผู้ใช้ 2026-08-17 · เปลี่ยนชื่อจาก `CLIX` → `CLICX` 2026-08-20
+  ตอนนั้นยังไม่มี agent ติดแท็กนี้ จึงเป็นแค่การ retire ชื่อเก่าใน `/config/schema` · **ไม่ใช่
+  vertical ใหม่** (ข้อ "ห้าม backfill เอง" เดิม — ผู้ใช้สั่งให้ทำแล้วรอบนี้)
+  → ทั้ง 8 ตัวคือ agent ทีม **PromptFin** ชุด conversational banking (top-up · transfer ·
+  bill payment · settings · account · escalation · q&a · orchestrator)
+  · ติดด้วย `functions/tag-clicx.cjs` — **append ไม่ replace** · เขียน 7 doc (อีก 1 ติดอยู่แล้ว)
+  · assert `agentApproveAreas()` ไม่ขยับก่อนเขียน (0 shift — ทั้ง 8 มี stored area ครบ)
+- **`Core bank` = 4 ตัว** — top-up / transfer / bill payment / settings (ทีม PromptFin ชุดเดียวกัน)
+  → 4 ตัวนี้จึงถือ **2 product** (`Core bank` + `CLICX`) **โดยเจตนา** ผู้ใช้เลือกเก็บ `Core bank`
+  ไว้ ไม่ลบของเดิม (หลักเดียวกับ "ห้าม strip product tag เดิม")
+- ❌ **ข้อความเดิม "`CLICX` / `Core bank` ยังเป็น 0 — ถูกต้อง ณ ตอนนี้" ถูกลบ** — ผิดมาตั้งแต่
+  ก่อน 2026-10-30 แล้ว (`Core bank` มี 4 ตัวมาตลอด · ยืนยันจาก dry run ก่อนเขียน) ·
+  การที่ไลบรารีมี product tag น้อย **ไม่ได้แปลว่าไม่มีเลย** ที่เหลือเป็นเครื่องมือข้าม product
+  ซึ่งเป็นเรื่องปกติ ไม่ใช่ความผิดพลาดของข้อมูล
 
 ---
 
