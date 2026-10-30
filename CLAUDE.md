@@ -693,7 +693,36 @@ product 1 · เพิ่มช่องแก้ใน Edit form
 ### ⚠️ ห้ามรัน `backfill-categories.cjs` ซ้ำ
 มันเขียน `category: [ตัวเดียว]` = **replace** → product tag หายหมด (ใส่คำเตือนไว้ในไฟล์แล้ว)
 
-### product tag จริงในระบบ (นับ 2026-10-30)
+### product tag จริงในระบบ (นับจากข้อมูลจริง 2026-10-30 · `functions/count-categories.cjs`)
+| | live (approved + ไม่ archive) | ทั้ง collection |
+|---|---|---|
+| doc ทั้งหมด | **342** | 358 |
+| doc ที่มี product ≥1 ตัว | **56** | 58 |
+| product tag ทั้งหมด | **61** | 63 |
+
+| product | live | all |
+|---|---|---|
+| `Investment` | 21 | 21 |
+| `Lending & Credit` | 22 | 24 |
+| `NEXT` | 2 | 2 |
+| `เป๋าตัง, เป๋าตุง, ถุงเงิน` | 4 | 4 |
+| **`CLICX`** | **8** | 8 |
+| **`Core bank`** | **4** | 4 |
+
+- ❌ **แก้ข้อความเดิม "ทั้งไลบรารี 239 ตัว มีแค่ 5 ตัวที่ผูกกับ product จริงๆ" — ผิด** (ตัวเลข
+  239 เองก็เก่า · ที่ถูกคือ **56 จาก 342 = 16%** และผิดมาก่อน 2026-10-30 ด้วย) ·
+  การที่มี product tag น้อย **ไม่ได้แปลว่าไม่มีเลย** — ส่วนใหญ่เป็นเครื่องมือข้าม product
+  ซึ่งเป็นเรื่องปกติ ไม่ใช่ความผิดพลาดของข้อมูล
+- `/config/schema.category` มี **26 ค่า** — มีแค่ `Procurement` ที่ยัง 0 doc · **ไม่มี** doc ที่
+  category ว่างเปล่า และ **ไม่มี** legacy string เหลือแล้ว
+- **5 doc ถือ 2 product** — 4 ตัวคือ `CLICX` + `Core bank` (ทีม PromptFin · โดยเจตนา ดูข้างล่าง)
+  และ **1 ตัวที่มีมาก่อนรอบนี้**: `agent_0005` UX Writer AI Agent `[NEXT + เป๋าตัง, เป๋าตุง, ถุงเงิน]`
+- **drift ที่เจอ (แก้แล้ว/กำลังแก้):** `DevOps & Performance` = ชื่อ category ที่ retire ไปแล้ว
+  (เหลือชื่อใหม่ `DevOps & Platform` · ดูข้อ 27) แต่ยังมี doc ค้างอยู่ **1 ตัว** —
+  `ZSG95BVdaIIKmWCX4BoL` `FeatureXray` (`approvalStatus: 'rejected'`, stored `approveArea:
+  ['Development']` → resolver ไม่ขยับ) ซ่อมด้วย `functions/fix-devops-category.cjs`
+  (rename อย่างเดียว ไม่แตะ product tag · assert routing ก่อนเขียน — ⛔ ห้ามใช้
+  `realign-categories.cjs` ซ่อม ดูข้อ 27)
 - **`CLICX` = 8 ตัว** (ติดครบแล้ว 2026-10-30) — `CLICX` คือชื่อของ Virtual Bank ·
   **"VB" = CLICX** ยืนยันจากผู้ใช้ 2026-08-17 · เปลี่ยนชื่อจาก `CLIX` → `CLICX` 2026-08-20
   ตอนนั้นยังไม่มี agent ติดแท็กนี้ จึงเป็นแค่การ retire ชื่อเก่าใน `/config/schema` · **ไม่ใช่
