@@ -717,12 +717,12 @@ product 1 · เพิ่มช่องแก้ใน Edit form
   category ว่างเปล่า และ **ไม่มี** legacy string เหลือแล้ว
 - **5 doc ถือ 2 product** — 4 ตัวคือ `CLICX` + `Core bank` (ทีม PromptFin · โดยเจตนา ดูข้างล่าง)
   และ **1 ตัวที่มีมาก่อนรอบนี้**: `agent_0005` UX Writer AI Agent `[NEXT + เป๋าตัง, เป๋าตุง, ถุงเงิน]`
-- **drift ที่เจอ (แก้แล้ว/กำลังแก้):** `DevOps & Performance` = ชื่อ category ที่ retire ไปแล้ว
-  (เหลือชื่อใหม่ `DevOps & Platform` · ดูข้อ 27) แต่ยังมี doc ค้างอยู่ **1 ตัว** —
+- **drift ที่เจอ + ซ่อมแล้ว (2026-10-30):** `DevOps & Performance` = ชื่อ category ที่ retire
+  ไปแล้ว (เหลือชื่อใหม่ `DevOps & Platform` · ดูข้อ 27) เคยมี doc ค้างอยู่ **1 ตัว** —
   `ZSG95BVdaIIKmWCX4BoL` `FeatureXray` (`approvalStatus: 'rejected'`, stored `approveArea:
   ['Development']` → resolver ไม่ขยับ) ซ่อมด้วย `functions/fix-devops-category.cjs`
-  (rename อย่างเดียว ไม่แตะ product tag · assert routing ก่อนเขียน — ⛔ ห้ามใช้
-  `realign-categories.cjs` ซ่อม ดูข้อ 27)
+  → **เขียน 1 doc · approve-area shifts = 0** (rename อย่างเดียว ไม่แตะ product tag ·
+  assert routing ก่อนเขียน — ⛔ ห้ามใช้ `realign-categories.cjs` ซ่อม ดูข้อ 27)
 - **`CLICX` = 8 ตัว** (ติดครบแล้ว 2026-10-30) — `CLICX` คือชื่อของ Virtual Bank ·
   **"VB" = CLICX** ยืนยันจากผู้ใช้ 2026-08-17 · เปลี่ยนชื่อจาก `CLIX` → `CLICX` 2026-08-20
   ตอนนั้นยังไม่มี agent ติดแท็กนี้ จึงเป็นแค่การ retire ชื่อเก่าใน `/config/schema` · **ไม่ใช่
