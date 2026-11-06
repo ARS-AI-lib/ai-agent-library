@@ -1489,3 +1489,51 @@ banking chatbot ติด AI Engineer → Software Engineer)
 - ทดสอบใน Firestore emulator แล้ว: verified @arise.tech / @INFINITASKT.com ผ่าน; unverified, @gmail.com (แม้มี `/users` doc), @krungthai.com, `@arise.tech.evil.com` → 403
 - Deploy แล้ว: rules publish ผ่าน Console (`ai-agent-lib`), functions scoped 17 callable, hosting — commit `c394357`
 - **ยังค้าง:** (1) ตรวจ `/users` หา doc ของบัญชีนอก domain ที่สร้างไว้ก่อน fix (ตอนนี้เข้าอะไรไม่ได้แล้ว แต่ doc ยังอยู่) (2) `/config/timeline` — viewer ใน `viewers[]` ยังเขียนทับได้ทั้ง doc รวมถึงรายชื่อ `viewers` เอง
+
+## 34. Category grouping — named collapsible groups (2026-11-06)
+
+Sidebar จัดกลุ่ม 26 category (จาก `/config/schema.category`) เป็น **7 กลุ่มมีชื่อ** กดหัวกลุ่มเพื่อยุบ/ขยายได้
+(session-only, ไม่ persist — ทุกกลุ่มกางเป็นค่าเริ่มต้น เหมือน VIEW/SORT dropdown)
+
+| ลำดับ | กลุ่ม | หมายเหตุ |
+|---|---|---|
+| 1 | Business & Product | **derive จาก `VERTICAL_CATEGORIES`** (spread) — เพิ่ม product vertical ใหม่แล้วติดกลุ่มนี้อัตโนมัติ |
+| 2 | Support Functions | Requirements & Product · Project & Delivery · Compliance & Governance · Resource Planning · People Development · Financial · Procurement |
+| 3 | Design & Content | UX Research · Design & UI · Writing & Content |
+| 4 | Engineering | Architecture · Software Development · Data & Analytics |
+| 5 | Quality | SIT · QA · Security |
+| 6 | Operations | DevOps & Platform · SRE & Reliability · Incident Management |
+| 7 | Assistants | Virtual Assistant |
+
+### Single source of truth — `src/lib/approveAreas.js`
+- `CATEGORY_GROUPS` (array, เรียงตามลำดับที่แสดง) → derive `CATEGORY_ORDER` (ชื่อกลุ่มเรียง), `CATEGORY_GROUP` (reverse map), `CATEGORY_FALLBACK_GROUP = 'Unassigned'`, `categoryGroupName()`
+- **`groupCategories(categories) -> [{ group, items }]`** — bucket ตาม `CATEGORY_GROUP`; กลุ่มว่างถูกตัดออก; **รักษา input order ภายใน bucket**; ชื่อที่ไม่รู้จักไปกองท้าย `Unassigned` (schema เป็น grow-only → ของใหม่ไม่หาย); `[]` → `[]` (empty-state เดิมไม่พัง)
+- ⛔ **ห้าม inline logic นี้ที่ call site** — กฎเดียวกับ `normalizeProgress`/`getType`/`agentApproveAreas`
+
+### ลำดับภายในกลุ่ม = input order ไม่ใช่ `.items` order (Ruling 2026-11-06)
+`items` ใน `CATEGORY_GROUPS` ตัดสิน **สมาชิก** ของกลุ่มเท่านั้น ลำดับที่ render จริงคือลำดับของ `categoryOptions`
+(= `Object.keys(CATEGORY_AREA)` ที่ `seed-approve-area-schema.cjs` เขียนลง schema) — **ไม่ใช่** ลำดับใน `items`
+(เช่น Compliance & Governance ไปอยู่ท้าย Support Functions ไม่ใช่ที่ 3) · ตรงกับ contract ของ `groupCategories`
++ test case 6 + โน้ต key-order เหนือ `CATEGORY_AREA` · ถ้าจะยึดลำดับตารางต้องแก้ทั้งฟังก์ชันและเทสต์ (ยังไม่ทำ)
+
+### UI
+- `src/components/Sidebar.jsx` — `collapsed` เป็น `Set` (session-only) + `v7-sb-group` header `<button aria-expanded>` มี chevron หมุน; ซ่อน items ด้วย `!isCollapsed && items.map` **ไม่แตะ filter state** → badge count / "Show N results" / Clear-all ยังถูกต้องขณะซ่อน
+- **Mobile Category sheet ได้มาฟรี** — `App.jsx` ส่ง `categoryPanel={isMobile ? sidebarEl : null}`; sheet เรนเดอร์ `<Sidebar>` ตัวเดียวกับ desktop → มี implementation เดียว
+- CSS: `body.v7 .v7-sb-group` ใน `src/styles/v7.css` (ลบ `.v7-sb-sep` เดิมแล้ว)
+
+### Verification
+- `node functions/verify-category-groups.cjs` → **10/10** (โหลด `approveAreas.js` ตัวจริงผ่าน `loadEsm`): group order, Business derive จาก VERTICAL, ไม่มี orphan (ทุก key ของ `CATEGORY_AREA` มีกลุ่ม), unknown → `Unassigned`, `[]`→`[]`, คง input order, ไม่มีชื่อหลุด/ซ้ำ
+- `npm run build` ✓ · ตรวจตา desktop 1440×900 + mobile 375×812 (7 หัวกลุ่ม, collapse ได้, footer sheet ไม่พัง)
+
+### Scope
+- **จุด 1–2 เท่านั้น** (Sidebar groups + mobile category filter ที่ได้ฟรี) · **ไม่ทำ** จุด 3–5: CardGrid view-by-category headers / Dashboard category bars / Edit-form category picker grouping
+- **ไม่แตะ `firestore.rules` และไม่แตะ functions** → deploy เป็น **hosting-only**
+
+### ไฟล์/commit
+- Design: `docs/superpowers/specs/2026-11-06-category-grouping-design.md` · Plan: `docs/superpowers/plans/2026-11-06-category-grouping.md`
+- `debecff` (ตาราง + `groupCategories` + test) · `51860ef` (Sidebar + CSS) · `794ce7e` (แก้ docstring ให้ตรงพฤติกรรม)
+
+### Minors ที่ยังค้าง (ยังไม่แก้ — รอตัดสิน)
+1. `toggleGroup` ใน Sidebar เขียนซ้ำกับ helper `toggle()` ระดับโมดูล (DRY nit)
+2. หัวกลุ่มมี `aria-expanded` แต่ยังไม่มี `aria-controls`/`id` ชี้ไปยัง list
+3. `CATEGORY_GROUP` ไม่กันกรณี category เดียวอยู่ 2 กลุ่ม (ตอนนี้ตรวจแล้ว 26↔26 ไม่มีซ้ำ; test กันแค่ key หาย ยังไม่กันซ้ำข้ามกลุ่ม)
