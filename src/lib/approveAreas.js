@@ -266,11 +266,11 @@ export function isVerticalCategory(name) {
 
 export const CATEGORY_AREA = {
   // ── Discipline → area (one each, except Resource Planning → two) ──
-  // KEPT FIRST ON PURPOSE (2026-09-23): seed-approve-area-schema.cjs writes
-  // /config/schema.category from Object.keys() of this map, and Sidebar.jsx
-  // renders that array in raw order with no sort — so "first key here" is
-  // literally "pinned to the top of the Agent Library sidebar". Moving this
-  // line moves the sidebar entry.
+  // Key order still drives two things: seed-approve-area-schema.cjs writes
+  // /config/schema.category from Object.keys() of this map, and that array's
+  // order is the order of categories WITHIN a group in the sidebar. It no
+  // longer decides which categories sit at the top — the GROUPS do, see
+  // CATEGORY_GROUPS below (2026-11-06).
   //
   // Area: there is no conversational-AI area in AREA_ORDER, and adding another
   // area would re-route approvals system-wide. Platform, DevOps & Operations
@@ -278,7 +278,7 @@ export const CATEGORY_AREA = {
   // layer 5 anyway — every one of those 28 has a stored approveArea (layer 1),
   // so it only ever applies to future agents.
   'Virtual Assistant': 'Platform, DevOps & Operations',          // added 2026-09-23
-  // ── Management (2026-10-01 order = sidebar order, grouped by kind of work) ──
+  // ── Management (2026-10-01 order = within-group order, grouped by kind of work) ──
   'Requirements & Product': 'Business Analysis',
   'Project & Delivery': 'Delivery Management',
   'Resource Planning': ['Resource Management', 'Delivery Management'], // added 2026-10-01 — two areas
@@ -308,14 +308,71 @@ export const CATEGORY_AREA = {
 };
 
 /**
- * First category of each sidebar group (V7, 2026-10-01) — the sidebar draws a
- * divider before these. Kept next to CATEGORY_AREA because that table's key
- * order IS the sidebar order; the group comments above are the source.
+ * Category → sidebar group (2026-11-06). The ONE table that decides how the
+ * Agent Library sidebar (and the mobile Category filter, which renders the
+ * same component) groups the category list. Order of this array = the order
+ * the groups are shown; order of `items` = the order within a group.
+ *
+ * Business & Product is DERIVED from VERTICAL_CATEGORIES so a new product
+ * vertical can never be missed here — same rule as CATEGORY_AREA's spread.
+ *
+ * Anything a grow-only /config/schema.category adds later and this table has
+ * not caught up with is NOT dropped: it falls to CATEGORY_FALLBACK_GROUP.
+ * verify-category-groups.cjs fails if a KNOWN CATEGORY_AREA key is left out,
+ * so the fallback only ever catches genuinely new names.
  */
-export const CATEGORY_GROUP_STARTS = new Set([
-  'Requirements & Product', 'UX Research', 'Architecture', 'SIT', 'DevOps & Platform',
-  VERTICAL_CATEGORIES[0],
-]);
+export const CATEGORY_GROUPS = [
+  { group: 'Business & Product', items: [...VERTICAL_CATEGORIES] },
+  {
+    group: 'Support Functions',
+    items: [
+      'Requirements & Product', 'Project & Delivery', 'Compliance & Governance',
+      'Resource Planning', 'People Development', 'Financial', 'Procurement',
+    ],
+  },
+  { group: 'Design & Content', items: ['UX Research', 'Design & UI', 'Writing & Content'] },
+  { group: 'Engineering', items: ['Architecture', 'Software Development', 'Data & Analytics'] },
+  { group: 'Quality', items: ['SIT', 'QA', 'Security'] },
+  { group: 'Operations', items: ['DevOps & Platform', 'SRE & Reliability', 'Incident Management'] },
+  { group: 'Assistants', items: ['Virtual Assistant'] },
+];
+
+/** Group labels in display order. */
+export const CATEGORY_ORDER = CATEGORY_GROUPS.map((g) => g.group);
+
+/** category name → group label (reverse of CATEGORY_GROUPS; one source). */
+export const CATEGORY_GROUP = Object.fromEntries(
+  CATEGORY_GROUPS.flatMap(({ group, items }) => items.map((c) => [c, group])),
+);
+
+/** Bucket for categories the table has never seen. */
+export const CATEGORY_FALLBACK_GROUP = 'Unassigned';
+
+/** Group label for a category, or the fallback bucket. */
+export function categoryGroupName(category) {
+  return CATEGORY_GROUP[category] || CATEGORY_FALLBACK_GROUP;
+}
+
+/**
+ * Bucket a raw category-name list into ordered groups:
+ *   [{ group, items: [name…] }, …]
+ * Groups follow CATEGORY_GROUPS order and empty groups are omitted; input
+ * order is preserved inside each bucket; unrecognised names are collected
+ * into a trailing 'Unassigned' bucket only when non-empty. Nothing is dropped.
+ */
+export function groupCategories(categories) {
+  const buckets = CATEGORY_GROUPS.map(({ group }) => ({ group, items: [] }));
+  const byGroup = new Map(buckets.map((b) => [b.group, b]));
+  const stray = [];
+  for (const c of categories || []) {
+    const b = byGroup.get(CATEGORY_GROUP[c]);
+    if (b) b.items.push(c);
+    else stray.push(c);
+  }
+  const out = buckets.filter((b) => b.items.length > 0);
+  if (stray.length) out.push({ group: CATEGORY_FALLBACK_GROUP, items: stray });
+  return out;
+}
 
 /**
  * Areas a single category routes to, always as an array. A live admin
