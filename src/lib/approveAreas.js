@@ -311,7 +311,11 @@ export const CATEGORY_AREA = {
  * Category → sidebar group (2026-11-06). The ONE table that decides how the
  * Agent Library sidebar (and the mobile Category filter, which renders the
  * same component) groups the category list. Order of this array = the order
- * the groups are shown; order of `items` = the order within a group.
+ * the groups are shown. Within a group the membership of `items` decides the
+ * bucket, but the RENDERED order is the caller's order — the sidebar shows
+ * categories in /config/schema.category order (the CATEGORY_AREA key-order note
+ * above), NOT the order they are listed in `items`. verify-category-groups.cjs
+ * case 6 pins this (input order kept, not table order).
  *
  * Business & Product is DERIVED from VERTICAL_CATEGORIES so a new product
  * vertical can never be missed here — same rule as CATEGORY_AREA's spread.
