@@ -1537,3 +1537,30 @@ Sidebar จัดกลุ่ม 26 category (จาก `/config/schema.category
 1. `toggleGroup` ใน Sidebar เขียนซ้ำกับ helper `toggle()` ระดับโมดูล (DRY nit)
 2. หัวกลุ่มมี `aria-expanded` แต่ยังไม่มี `aria-controls`/`id` ชี้ไปยัง list
 3. `CATEGORY_GROUP` ไม่กันกรณี category เดียวอยู่ 2 กลุ่ม (ตอนนี้ตรวจแล้ว 26↔26 ไม่มีซ้ำ; test กันแค่ key หาย ยังไม่กันซ้ำข้ามกลุ่ม)
+
+---
+
+## 35. Usage page adjustments (2026-11-10, hosting-only)
+
+หน้า `/usage` ([`UsageReportPage.jsx`](src/components/UsageReportPage.jsx)) ปรับ 3 ข้อตามคำขอผู้ใช้:
+
+1. **ตัดคอลัมน์ Source ออก** — หายทั้งหน้าจอ **และ** CSV · ⚠️ ข้อมูล `source` **ยังอยู่ใน payload** ของ callable `usageReport` (เก็บเหมือนเดิม แค่ไม่ render) — ไม่ได้แตะ `functions/index.js`
+2. **Header "Agent Name" → "Agent/Skill Name"** — ทั้งหน้าจอและ CSV
+3. **"Project · Task" แยกเป็นคอลัมน์ของตัวเอง** ("Project / Task") — เดิมมันเป็น sub-line อยู่ใต้ค่า Source ใน cell เดียวกัน ถ้าตัด Source ทิ้งเฉยๆ ข้อมูล adoption จาก Portfolio จะหายไปด้วย → แยกออกมา (CSV เดิมมีคอลัมน์นี้แยกอยู่แล้ว หน้าจอจึงตรง CSV) · แถวที่ไม่มีข้อมูลขึ้น `—`
+4. **ปุ่ม "Group by Agent/Skill"** — toggle พี่น้องกับ "Group by Owner" (หัวชื่อ agent + badge จำนวน + รายชื่อคนครบทุกคอลัมน์) · **กดตัวหนึ่งอีกตัวปิด** (state เดียว `groupBy: null | 'owner' | 'agent'`)
+
+### 🔴 Group by Agent/Skill ต้อง group ด้วย `agentId` ไม่ใช่ชื่อ
+ชื่อ agent **ไม่ unique** ในไลบรารีนี้ (เหตุผลเดียวกับที่ portfolio-adoption ข้ามชื่อที่ซ้ำ ≥2 agent) → ถ้า group ด้วย `agentName` จะ merge agent คนละตัวที่ชื่อซ้ำใต้หัวเดียว badge รวมผิด · `groupUsageRows` จึง bucket ด้วย `agentId` แล้วใช้ `agentName` เป็น label · nameless agent แต่ละตัวก็แยก bucket ของตัวเอง (ไม่ยุบรวม)
+> Reviewer จับได้ตอน whole-branch review — plan สั่ง `groupUsageRows(rows,'agentName')` ซึ่งขัดกับ spec ("agent ตัวเดียวกัน") แก้เป็น `'agent'` → group by id
+
+### Single source
+`src/lib/usageReport.js` — `CSV_COLUMNS` / `CSV_HEADERS` (ไม่มี `source`) + `groupUsageRows(rows, by)` (คืน `{ key, label, rows }`, เรียงกลุ่มใหญ่→เล็ก, คง input order ในกลุ่ม, `[]`→`[]`) · **ห้าม inline column list/grouping logic ที่ component**
+
+### Key files / verification
+- `functions/verify-usage-page.cjs` — **รันก่อน deploy** — 13 เคส ผ่าน `loadEsm` (CSV columns, header, grouping by id, duplicate-name agents แยกกัน, nameless แยกกัน, owner fallback, empty input)
+- `npm run build` ✓ (component เป็น JSX → `node --check` ใช้ไม่ได้, build คือ gate จริง) · browser smoke: หน้าโหลด 0 console error (role-gate "Access restricted" เมื่อไม่มี SSO session)
+- **ไม่แตะ functions / firestore.rules** → deploy **hosting-only** (`a31f080`)
+
+### Minors ที่ยังค้าง
+1. React key `agentId__` ชนกันเมื่อ adopter 2 คนของ agent เดียวไม่มี email (Library row `adopterEmail === ''`) — **มีมาก่อนแล้ว** ไม่ได้เกิดจากงานนี้
+2. Review Focus บางข้อ (`project || '—'`, `colSpan={7}`, CSV ไม่ export แบบ grouped) คุมด้วย grep ใน plan ชั่วคราว ไม่ได้ commit เป็น executable gate — verify script ครอบเฉพาะ pure module
