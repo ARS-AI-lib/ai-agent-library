@@ -41,24 +41,40 @@ eq(CSV_COLUMNS.includes('source'), false, 'source column removed from CSV');
 eq(CSV_HEADERS, ['Agent/Skill Name', 'Owner', 'Area', 'Category', 'Adopter', 'Adopter Email', 'Project / Task', 'Adopted Date'],
   'CSV_HEADERS renamed + Project / Task kept');
 
-// 4-7. grouping by agentName
+// 4-7. grouping by agent — one bucket per AGENT ID, label = its name
 const rows = [
-  { agentName: 'TC Writer', owner: 'Team A', adopterEmail: 'x@arise.tech' },
-  { agentName: 'TC Writer', owner: 'Team A', adopterEmail: 'y@arise.tech' },
-  { agentName: 'Guardrail', owner: 'Team B', adopterEmail: 'z@arise.tech' },
-  { agentName: '', owner: 'Team A', adopterEmail: 'w@arise.tech' },
+  { agentId: 'A1', agentName: 'TC Writer', owner: 'Team A', adopterEmail: 'x@arise.tech' },
+  { agentId: 'A1', agentName: 'TC Writer', owner: 'Team A', adopterEmail: 'y@arise.tech' },
+  { agentId: 'B1', agentName: 'Guardrail', owner: 'Team B', adopterEmail: 'z@arise.tech' },
+  { agentId: 'C1', agentName: '', owner: 'Team A', adopterEmail: 'w@arise.tech' },
 ];
-const g = groupUsageRows(rows, 'agentName');
-eq(g.map((x) => x.key), ['TC Writer', 'Guardrail', '(no name)'],
-  'groups sorted by size desc, empty name in its own bucket');
+const g = groupUsageRows(rows, 'agent');
+eq(g.map((x) => x.label), ['TC Writer', 'Guardrail', '(no name)'],
+  'groups sorted by size desc, empty name labeled (no name)');
 eq(g[0].rows.map((r) => r.adopterEmail), ['x@arise.tech', 'y@arise.tech'],
   'input order kept inside a group');
 eq(g[0].rows.length, 2, 'group row count = badge number');
 
-// 8-10. owner grouping + fallback + empty input
-eq(groupUsageRows(rows, 'owner').map((x) => x.key), ['Team A', 'Team B'], 'owner grouping works');
-eq(groupUsageRows([{ owner: '' }], 'owner')[0].key, '(no owner)', 'owner fallback bucket');
-eq(groupUsageRows([], 'agentName'), [], 'empty input → []');
+// 8. 🔴 two DIFFERENT agents that share a name must NOT merge (spec: same agent)
+const dup = [
+  { agentId: 'P1', agentName: 'Copilot', owner: 'T', adopterEmail: 'a@arise.tech' },
+  { agentId: 'P2', agentName: 'Copilot', owner: 'T', adopterEmail: 'b@arise.tech' },
+];
+const gd = groupUsageRows(dup, 'agent');
+eq(gd.length, 2, 'distinct agents sharing a name stay in separate buckets');
+eq(gd.every((x) => x.label === 'Copilot'), true, 'both duplicate-name buckets are labeled Copilot');
+eq(gd.every((x) => x.rows.length === 1), true, 'each duplicate-name bucket holds only its own adopter');
+
+// 9. two nameless DIFFERENT agents also stay separate (keyed by id, not the label)
+eq(groupUsageRows([
+  { agentId: 'N1', agentName: '', adopterEmail: 'p@arise.tech' },
+  { agentId: 'N2', agentName: '', adopterEmail: 'q@arise.tech' },
+], 'agent').length, 2, 'different nameless agents do not collapse into one bucket');
+
+// 10-11. owner grouping + fallback + empty input
+eq(groupUsageRows(rows, 'owner').map((x) => x.label), ['Team A', 'Team B'], 'owner grouping works');
+eq(groupUsageRows([{ owner: '' }], 'owner')[0].label, '(no owner)', 'owner fallback bucket');
+eq(groupUsageRows([], 'agent'), [], 'empty input → []');
 
 if (fails) { console.error(`\n✗ ${fails} case(s) failed`); process.exit(1); }
 console.log('\n✓ all usage-page cases pass');

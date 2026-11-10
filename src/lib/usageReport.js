@@ -24,25 +24,35 @@ export const CSV_HEADERS = [
   'Adopter', 'Adopter Email', 'Project / Task', 'Adopted Date',
 ];
 
-const FALLBACK_LABEL = { agentName: '(no name)', owner: '(no owner)' };
-
 /**
- * Bucket rows under one of their own fields.
+ * Bucket rows for the two group toggles.
+ *
+ * - `'agent'` groups by **agentId**, NOT by name: agent names are not unique
+ *   in this library (Portfolio adoption skips names shared by 2+ agents for
+ *   exactly that reason), so grouping by name would merge two unrelated
+ *   agents under one header. Display label = the row's `agentName`.
+ * - `'owner'` groups by the owner string (owners are labels, not ids).
  *
  * @param {Array<object>} rows  report rows (already filtered by the caller)
- * @param {'agentName'|'owner'} by
- * @returns {Array<{ key: string, rows: Array<object> }>} biggest group first;
- *   within a group the input order is kept (stable sort never reorders it).
+ * @param {'agent'|'owner'} by
+ * @returns {Array<{ key: string, label: string, rows: Array<object> }>}
+ *   biggest group first; within a group the input order is kept (a stable
+ *   sort never reorders it).
  */
 export function groupUsageRows(rows, by) {
-  const fallback = FALLBACK_LABEL[by] || '(none)';
   const map = new Map();
   (rows || []).forEach((r) => {
-    const key = String(r?.[by] ?? '') || fallback;
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(r);
+    let key;
+    let label;
+    if (by === 'agent') {
+      key = String(r?.agentId ?? '') || String(r?.agentName ?? '');
+      label = String(r?.agentName ?? '') || '(no name)';
+    } else {
+      key = String(r?.owner ?? '');
+      label = key || '(no owner)';
+    }
+    if (!map.has(key)) map.set(key, { key, label, rows: [] });
+    map.get(key).rows.push(r);
   });
-  return [...map.entries()]
-    .map(([key, groupRows]) => ({ key, rows: groupRows }))
-    .sort((a, b) => b.rows.length - a.rows.length);
+  return [...map.values()].sort((a, b) => b.rows.length - a.rows.length);
 }

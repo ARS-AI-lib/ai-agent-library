@@ -78,7 +78,7 @@ export default function UsageReportPage() {
 
   const grouped = useMemo(() => {
     if (!groupBy) return null;
-    return groupUsageRows(filtered, groupBy === 'agent' ? 'agentName' : 'owner');
+    return groupUsageRows(filtered, groupBy);
   }, [filtered, groupBy]);
 
   function exportCsv() {
@@ -215,10 +215,10 @@ export default function UsageReportPage() {
                       <th>Category</th><th>Adopter</th><th>Project / Task</th><th>Adopted Date</th>
                     </tr>
                   </thead>
-                  {groupBy ? grouped.map(({ key: g, rows: list }) => (
+                  {groupBy ? grouped.map(({ key: g, label, rows: list }) => (
                     <tbody key={g}>
                       <tr className="usage-group">
-                        <td colSpan={7}>{g}<span className="usage-badge">{list.length}</span></td>
+                        <td colSpan={7}>{label}<span className="usage-badge">{list.length}</span></td>
                       </tr>
                       {list.map((r) => <Row key={r.rowKey || `${r.agentId}__${r.adopterEmail}`} r={r} />)}
                     </tbody>
