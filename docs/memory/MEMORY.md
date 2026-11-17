@@ -17,3 +17,4 @@
 - [Thai summaries](feedback_thai_summaries.md) — always report results to the user in Thai (order 2026-10-05)
 - [Functions deps upgrade (deferred)](project_functions_deps_upgrade.md) — 2026-10-07: patched deps not deployed to functions yet; bundle with firebase-admin 14 / firebase-functions 7 upgrade
 - [Delay/At-risk alerts](project_delay_alerts_delivery.md) — Mon 13:00 Bangkok weekly; /config/alerts switch; dryRun default
+- [Inbox + announcements](project_inbox_announcements.md) — LIVE 2026-11-17 (rules + hosting); New announcement is in the ☰ menu; allowedAudiences ⇔ audienceOk; git push credential gotcha

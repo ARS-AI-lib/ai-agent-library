@@ -1629,5 +1629,14 @@ Sidebar จัดกลุ่ม 26 category (จาก `/config/schema.category
 2. backup hosting channel (`prod-backup-inbox`, ทั้ง 2 site) → 3. `npm run build` + `deploy --only hosting` → 4. verify live bundle hash + เปิด Inbox → 5. `git push origin main`
 - ไม่แตะ functions → ไม่มีความเสี่ยงต่อ Portfolio
 
+### สถานะ production (อัปเดต 2026-11-17)
+- ✅ **LIVE แล้ว** ทั้ง 2 โดเมน (`wolfy-ai-library.web.app`, `wolfy-481609.web.app`) — rules publish โดยผู้ใช้ผ่าน Console แล้ว · ผู้ใช้ทดสอบโพสต์ประกาศบนเว็บจริงแล้วผ่าน
+- bundle ปัจจุบัน `index-CWWlaZK5.js` (หลังย้ายปุ่ม) · เวอร์ชันก่อนหน้า `index-3kaaIMcm.js` (ก่อนย้ายปุ่ม) · เวอร์ชันก่อน Inbox ทั้งหมด `index-dE03SDnF.js`
+- **Rollback (hosting) ~1 นาที:** `npx firebase-tools hosting:clone <site>:prod-backup-inbox2 <site>:live --project wolfy-481609` (กลับไปก่อนย้ายปุ่ม) หรือ `…:prod-backup-inbox …` (กลับไปก่อนมี Inbox) ทำทั้ง 2 site (`wolfy-ai-library`, `wolfy-481609`) · rules rollback = publish ไฟล์เดิมจาก Console · channel backup หมดอายุในประมาณ 7 วัน ใช้ Console → Hosting → Release history แทนถ้าเลยกำหนด
+- **ปุ่ม `New announcement` ย้ายไปอยู่ใน ☰ menu หมวด Admin** (`Nav.jsx`, admin/committee เท่านั้น — `canPostAnnouncement`) ตามที่ผู้ใช้ขอ 2026-11-17 · แท็บ Announcements ใน Inbox มีแค่ `Edit` ต่อแถว · `composer` ใน `App.jsx` เปิดได้โดยไม่ต้องเปิด Inbox
+- composer ปฏิเสธวันหมดอายุที่ผ่านไปแล้ว · rules ล็อก `createdBy`/`createdAt`/`createdByName` ตอน update (`25aafe9`)
+- ⚠️ ที่ยังไม่ได้ตามหา: console แสดง `ERR_CONNECTION_REFUSED`/400 ตอนทดสอบใน emulator (คาดว่า functions emulator ไม่ได้รัน) — ให้ดู console ตอนใช้งานเว็บจริง
+- ⚠️ **git push บนเครื่องนี้:** Keychain หยิบบัญชี `tinnapatptm-ship-it` (ไม่มีสิทธิ์) — ใช้ `git -c credential.helper= -c credential.helper="!gh auth git-credential" push origin main` กับ gh account `ARS-AI-lib` (`gh auth switch -u ARS-AI-lib`) หรือลบ credential เก่าของ github.com ใน Keychain Access
+
 ### Commits
-`9b486c0` (logic + verify) · `a7afe23` (rules + rules test) · `bdcec71` (Inbox modal + hooks + wiring + seed) · `d79b938` (composer)
+`9b486c0` (logic + verify) · `a7afe23` (rules + rules test) · `bdcec71` (Inbox modal + hooks + wiring + seed) · `d79b938` (composer) · `e01d264`/`c84df20` (docs) · `25aafe9` (fix wave: past expiry, ✕ guard, aria-label, createdByName freeze) · `5f95f64` (ย้าย New announcement ไป ☰ menu)
