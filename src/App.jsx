@@ -533,6 +533,8 @@ export default function App() {
         onOpenExport={() => setShowExport(true)}
         onOpenRoleGroups={() => setShowRoleGroups(true)}
         canManageRoleGroups={isAdmin || isCommittee}
+        canPostAnnouncement={canPostAnnouncements(role)}
+        onNewAnnouncement={() => setComposer({})}
         onOpenUpload={() => setShowUpload(true)}
         canUploadFiles={canUploadFiles}
         canSeeTimeline={canSeeTimeline}
@@ -683,12 +685,11 @@ export default function App() {
           onOpenQueue={() => { setShowInbox(false); setShowPending(true); }}
           onClose={() => setShowInbox(false)}
           canPost={canPostAnnouncements(role)}
-          onCompose={() => setComposer({})}
           onEditAnnouncement={(a) => setComposer({ announcement: a })}
         />
       )}
 
-      {composer && showInbox && canPostAnnouncements(role) && (
+      {composer && canPostAnnouncements(role) && (
         <AnnouncementComposer
           key={composer.announcement?.id || 'new'}
           user={user}

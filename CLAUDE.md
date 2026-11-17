@@ -1578,7 +1578,7 @@ Sidebar จัดกลุ่ม 26 category (จาก `/config/schema.category
 | `approvers` | Approvers and above | staff, approver, committee, admin |
 | `leads` | Admin & Committee | committee, admin |
 
-โพสต์/แก้/ลบได้เฉพาะ `committee` และ `admin` (`canPostAnnouncements`)
+โพสต์/แก้/ลบได้เฉพาะ `committee` และ `admin` (`canPostAnnouncements`) · **ปุ่ม `New announcement` อยู่ใน ☰ menu (`Nav.jsx` หมวด Admin) ไม่ใช่ใน Inbox** (ย้าย 2026-11-17 ตามที่ผู้ใช้ขอ) — Inbox มีแค่ `Edit` ต่อแถวประกาศ
 - 🔴 **`allowedAudiences(role)` ใน `src/lib/inbox.js` ⇔ `audienceOk(a)` ใน `firestore.rules` ต้องแก้พร้อมกันเสมอ** — rules เป็นตัวจริง ฝั่ง JS แค่ตัดสินว่า UI เสนอ/แสดงอะไร · เพิ่ม role/audience ใหม่ที่ฝั่งเดียว = UI กับ rules ไม่ตรงกัน
 
 ### Firestore rules + list-query form (Task 2)

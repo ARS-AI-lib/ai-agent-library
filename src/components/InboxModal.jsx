@@ -16,8 +16,9 @@ import useMyRejected from '../hooks/useMyRejected';
 //  - To approve     → only a count + a button to the existing approval queue.
 // Opening an announcement is the only write (read state, via onMarkRead).
 //
-// canPost shows `New announcement` and a per-row `Edit`; the composer itself
-// lives in AnnouncementComposer (opened by App via onCompose/onEditAnnouncement).
+// canPost shows a per-row `Edit`; the composer itself lives in
+// AnnouncementComposer (opened by App via onEditAnnouncement, or from the ☰
+// menu's `New announcement` — Nav.jsx — for a brand-new one).
 
 const DAY = 864e5;
 
@@ -113,7 +114,6 @@ export default function InboxModal({
   onOpenQueue,
   onClose,
   canPost = false,
-  onCompose,
   onEditAnnouncement,
 }) {
   useEscapeKey(onClose);
@@ -223,11 +223,6 @@ export default function InboxModal({
                 {canApprove && queueLine}
               </>
             )
-        )}
-        {canPost && current === 'ann' && (
-          <div className="v7-ann-compose">
-            <button type="button" className="v7-sub-btn pri" onClick={() => onCompose?.()}>New announcement</button>
-          </div>
         )}
         {current === 'ann' && annList(active, 'ยังไม่มีประกาศสำหรับคุณในขณะนี้')}
         {current === 'mine' && mineList('ไม่มีคำขอของคุณที่รอการพิจารณา — รายการที่ถูกปฏิเสธจะแสดงที่นี่ 14 วัน')}

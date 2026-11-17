@@ -146,7 +146,7 @@ same pattern as the `renameRequests` listener.
   ignores that fallback, so own items are not counted twice (they live in *My requests*).
 - *All*: announcements (unread first) + my requests + a one-line summary of the approval queue.
 
-**Composer** — admin/committee see "New announcement" in the Inbox (Announcements tab):
+**Composer** — admin/committee open "New announcement" from the ☰ menu (Admin section; moved there on 2026-11-17 at the user's request — originally in the Inbox Announcements tab); edit stays on each announcement row inside the Inbox:
 title, body, audience (radio: Everyone / Approvers and above / Admin & Committee), pin toggle,
 optional expiry date. Edit/delete from the announcement's own row (author or any
 admin/committee).
