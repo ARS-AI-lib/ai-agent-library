@@ -142,6 +142,7 @@ function valid(uid, over = {}) {
   // ── update / delete ──
   await allowed('update committee edits other author doc', fsdk.updateDoc(ref('committee', 'n2'), { title: 'Edited', updatedAt: ts() }));
   await denied('update changing createdBy denied', fsdk.updateDoc(ref('committee', 'n2'), { createdBy: u('committee') }));
+  await denied('update changing createdByName denied', fsdk.updateDoc(ref('committee', 'n2'), { createdByName: 'Forged', updatedAt: ts() }));
   await denied('update changing createdAt denied', fsdk.updateDoc(ref('committee', 'n2'), { createdAt: ts() }));
   await denied('update by approver denied', fsdk.updateDoc(ref('approver', 'n1'), { title: 'hax' }));
   await denied('delete by approver denied', fsdk.deleteDoc(ref('approver', 'n1')));

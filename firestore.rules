@@ -350,7 +350,8 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid;
       allow update: if isCommittee() && validAnnouncement()
         && request.resource.data.createdBy == resource.data.get('createdBy', null)
-        && request.resource.data.createdAt == resource.data.get('createdAt', null);
+        && request.resource.data.createdAt == resource.data.get('createdAt', null)
+        && request.resource.data.createdByName == resource.data.get('createdByName', null);
       allow delete: if isCommittee();
     }
 

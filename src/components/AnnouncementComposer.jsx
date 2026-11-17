@@ -47,6 +47,7 @@ export default function AnnouncementComposer({ user, announcement, onClose }) {
     const bad = validateAnnouncement(f);
     if (bad) { setError(bad); return; }
     if (f.expiresAt && Number.isNaN(f.expiresAt.getTime())) { setError('วันหมดอายุไม่ถูกต้อง'); return; }
+    if (f.expiresAt && f.expiresAt.getTime() <= Date.now()) { setError('วันหมดอายุต้องเป็นเวลาในอนาคต — ประกาศที่หมดอายุแล้วจะถูกซ่อนทันที'); return; }
     setError('');
     setSaving(true);
     try {
@@ -73,7 +74,7 @@ export default function AnnouncementComposer({ user, announcement, onClose }) {
   return (
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && !saving && onClose()}>
       <form className="mbox v7-ann-composer" onSubmit={submit} noValidate>
-        <button type="button" className="mclose" onClick={onClose} aria-label="Close">✕</button>
+        <button type="button" className="mclose" disabled={saving} onClick={onClose} aria-label="Close">✕</button>
         <h2 className="mtitle">{edit ? 'Edit announcement' : 'New announcement'}</h2>
 
         <div className="fg">

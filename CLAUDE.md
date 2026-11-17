@@ -1582,7 +1582,7 @@ Sidebar จัดกลุ่ม 26 category (จาก `/config/schema.category
 - 🔴 **`allowedAudiences(role)` ใน `src/lib/inbox.js` ⇔ `audienceOk(a)` ใน `firestore.rules` ต้องแก้พร้อมกันเสมอ** — rules เป็นตัวจริง ฝั่ง JS แค่ตัดสินว่า UI เสนอ/แสดงอะไร · เพิ่ม role/audience ใหม่ที่ฝั่งเดียว = UI กับ rules ไม่ตรงกัน
 
 ### Firestore rules + list-query form (Task 2)
-- `/announcements/{id}` — read ต่อ doc ตาม `audienceOk(resource.data.audience)`; write เฉพาะ committee/admin + `validAnnouncement()` (key whitelist, title 1–120, body 1–5000, `audience` ∈ 3 ค่า, `pinned` bool, `expiresAt` null|timestamp); update ห้ามเปลี่ยน `createdBy`/`createdAt`
+- `/announcements/{id}` — read ต่อ doc ตาม `audienceOk(resource.data.audience)`; write เฉพาะ committee/admin + `validAnnouncement()` (key whitelist, title 1–120, body 1–5000, `audience` ∈ 3 ค่า, `pinned` bool, `expiresAt` null|timestamp); update ห้ามเปลี่ยน `createdBy`/`createdAt`/`createdByName`; composer ปฏิเสธวันหมดอายุที่เป็นอดีต
 - `/users/{uid}/inbox/{docId}` — เจ้าของเท่านั้น, field `readIds` (list ≤ 300) + `updatedAt`
 - **Query form ที่ใช้ = query เดียว `where('audience','in', allowedAudiences(role))`** (`useAnnouncements.js`) · ❌ list แบบไม่ filter **ถูก deny** — Firestore ต้องพิสูจน์ได้ตอน query ว่าทุก doc ที่คืนมาอ่านได้ ถ้าไม่มี filter audience มันพิสูจน์ไม่ได้ → ทั้ง query ล้ม (ไม่ใช่แค่ซ่อน doc ที่ไม่มีสิทธิ์) · ห้ามเปลี่ยนเป็น fetch-all แล้ว filter ฝั่ง client
 - ⚠️ **ต้อง publish `firestore.rules` เองใน Console** (named DB `ai-agent-lib`) — `firebase.json` ไม่มี firestore block (ตามข้อ 11)

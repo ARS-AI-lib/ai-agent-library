@@ -402,7 +402,7 @@ export default function App() {
   const legendActions = (
     <>
       {canSubmitIdea && (
-        <button type="button" className="v7-inbox-btn" onClick={() => setShowInbox(true)} aria-label={inboxCount > 0 ? `Inbox, ${inboxCount} unread` : 'Inbox'}>
+        <button type="button" className="v7-inbox-btn" onClick={() => setShowInbox(true)} aria-label={inboxCount > 0 ? `Inbox, ${inboxCount} new` : 'Inbox'}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 13l2.5-7h11L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" /><path d="M4 13h5l1 2h4l1-2h5" />
           </svg>
