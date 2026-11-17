@@ -5,6 +5,8 @@
 //   node functions/seed-emulator.cjs import          # write that file into the EMULATOR only
 //   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
 //   node functions/seed-emulator.cjs promote <email> <role>   # set a role on an emulator user
+//   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+//   node functions/seed-emulator.cjs inbox           # Inbox fixtures (announcements + emu.user requests)
 //
 // Safety: `export` only ever calls get(); `import`/`promote` refuse to run unless
 // FIRESTORE_EMULATOR_HOST points at localhost, so they cannot touch production.
@@ -76,5 +78,50 @@ const dec = (v) => {
     console.log(`${email} -> ${role} (${q.size} doc)`);
     return;
   }
-  throw new Error('usage: export | import | promote <email> <role>');
+  if (mode === 'inbox') {
+    // Inbox browser-check fixtures (2026-11-17). Fixed doc ids → re-running
+    // overwrites instead of piling up duplicates. Owned by emu.user, who must
+    // have signed in once so their /users doc (and uid) exists.
+    const OWNER = 'emu.user@arise.tech';
+    const q = await db.collection('users').where('email', '==', OWNER).get();
+    if (q.empty) throw new Error(`no emulator user with email ${OWNER} — sign in once with that test button first, then re-run "inbox"`);
+    const uid = q.docs[0].id;
+    const DAY = 864e5;
+    const now = Date.now();
+    const ts = (ms) => Timestamp.fromMillis(ms);
+    const admin = (await db.collection('users').where('email', '==', 'tinnapat.p@arise.tech').get()).docs[0];
+    const author = admin ? admin.id : 'seed-admin';
+    const ann = (title, body, audience, extra = {}) => ({
+      title, body, audience, pinned: false, expiresAt: null,
+      createdBy: author, createdByName: 'Emulator Admin',
+      createdAt: ts(now - DAY), updatedAt: ts(now - DAY), ...extra,
+    });
+    const anns = {
+      'emu-ann-all': ann('Welcome to the Inbox',
+        'Plain text only.\n<b>x</b> https://example.com/page and javascript:alert(1)', 'all'),
+      'emu-ann-approvers': ann('Approver briefing', 'Only approver, staff, committee and admin should see this.', 'approvers', { pinned: true, createdAt: ts(now - 3 * DAY) }),
+      'emu-ann-leads': ann('Leads only', 'Only committee and admin should see this.', 'leads'),
+      'emu-ann-expired': ann('Expired notice', 'Nobody should see this (expired yesterday).', 'all', { expiresAt: ts(now - DAY) }),
+    };
+    const base = (name, extra) => ({
+      agentName: name, owner: 'Emulator Team', creator: 'Emu User',
+      creatorEmails: [OWNER], createdBy: uid, aiAgent: true, skillMd: false,
+      devProgress: 50, deploymentStatus: 'none', approveArea: ['Development'],
+      category: ['Software Development'], reusable: 'Reusable',
+      createdAt: ts(now - 2 * DAY), updatedAt: ts(now - 2 * DAY), ...extra,
+    });
+    const agents = {
+      'emu-inbox-pending': base('Inbox Pending Item', { approvalStatus: 'pending' }),
+      'emu-inbox-deploy': base('Inbox Deploy Requested Item', { approvalStatus: 'approved', devProgress: 95, deploymentStatus: 'requested', deployRequestedAt: ts(now - DAY) }),
+      'emu-inbox-rej-recent': base('Inbox Rejected Recent', { approvalStatus: 'rejected', rejectionReason: 'Duplicate of an existing agent', rejectedAt: ts(now - 3 * DAY), updatedAt: ts(now - 3 * DAY) }),
+      'emu-inbox-rej-old': base('Inbox Rejected Old', { approvalStatus: 'rejected', rejectionReason: 'Too old to show', rejectedAt: ts(now - 15 * DAY), updatedAt: ts(now - 15 * DAY) }),
+    };
+    const b = db.batch();
+    Object.entries(anns).forEach(([id, d]) => b.set(db.collection('announcements').doc(id), d));
+    Object.entries(agents).forEach(([id, d]) => b.set(db.collection('agents').doc(id), d));
+    await b.commit();
+    console.log(`announcements: ${Object.keys(anns).length} · agents for ${OWNER} (${uid}): ${Object.keys(agents).length}`);
+    return;
+  }
+  throw new Error('usage: export | import | promote <email> <role> | inbox');
 })().catch((e) => { console.error(e.message); process.exit(1); });

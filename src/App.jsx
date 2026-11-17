@@ -6,7 +6,10 @@ import { useApprovedAgents, usePendingAgents, useDeploymentRequests } from './ho
 import { useConfigSchema } from './hooks/useConfigSchema';
 import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from './lib/agentUtils';
 import { getType, getTier } from './lib/tier';
-import { queueViewer, pendingBadgeCount } from './lib/pendingQueue';
+import { queueViewer } from './lib/pendingQueue';
+import { activeAnnouncements, unreadAnnouncements, inboxQueueCount, inboxBadgeCount, canPostAnnouncements } from './lib/inbox';
+import useAnnouncements from './hooks/useAnnouncements';
+import useInboxState from './hooks/useInboxState';
 import { recordSearchHits } from './lib/agentEvents';
 import { canAttachFileTo } from './lib/endpointFiles';
 import { useAgentStats } from './hooks/useAgentStats';
@@ -28,6 +31,7 @@ import { nextStep } from './lib/mySubmissions';
 import GlossaryModal from './components/GlossaryModal';
 import Toast from './components/Toast';
 import PendingApprovalModal from './components/PendingApprovalModal';
+import InboxModal from './components/InboxModal';
 import ChatAssistant from './components/ChatAssistant';
 import UserManagementModal from './components/UserManagementModal';
 import ExportDataModal from './components/ExportDataModal';
@@ -201,6 +205,7 @@ export default function App() {
   const [showMySubs, setShowMySubs] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
   const [showPending, setShowPending] = useState(false);
+  const [showInbox, setShowInbox] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showRoleGroups, setShowRoleGroups] = useState(false);
@@ -294,10 +299,23 @@ export default function App() {
     );
     return unsub;
   }, [role]);
-  const pendingCount = useMemo(
-    () => pendingBadgeCount(pending, deployRequests, renameReqs, agents, queueViewerCtx),
-    [pending, deployRequests, renameReqs, agents, queueViewerCtx]
+  // Inbox (2026-11-17): announcements + read state. Called here, above every
+  // early return, so hook order never changes. Both stay detached until the
+  // role doc has resolved (and useAnnouncements also until the role has an
+  // audience), so a brand-new user never fires a denied listen.
+  const { announcements } = useAnnouncements(role, roleReady);
+  const { readIds, markRead, markAllRead } = useInboxState(user?.uid, roleReady);
+  const activeAnns = useMemo(() => activeAnnouncements(announcements), [announcements]);
+  const activeAnnIds = useMemo(() => activeAnns.map((a) => a.id), [activeAnns]);
+  const unreadCount = useMemo(() => unreadAnnouncements(activeAnns, readIds).length, [activeAnns, readIds]);
+  // Badge = unread announcements + the approval queue WITHOUT the base-user
+  // own-items fallback (own items are listed under My requests, never counted).
+  // The same queueCount is handed to InboxModal so badge and list cannot drift.
+  const queueCount = useMemo(
+    () => inboxQueueCount(pending, parentDeployRequests, renameReqs, agents, queueViewerCtx),
+    [pending, parentDeployRequests, renameReqs, agents, queueViewerCtx]
   );
+  const inboxCount = inboxBadgeCount({ unreadCount, queueCount });
 
   const filtered = useMemo(() => {
     let pred = buildAgentFilter({ type, owner, role: role_, tier, reusable, hasEndpoint, category, stage, platformTools, externalSkills, search });
@@ -382,12 +400,12 @@ export default function App() {
   const legendActions = (
     <>
       {canSubmitIdea && (
-        <button type="button" className="v7-inbox-btn" onClick={() => setShowPending(true)} aria-label={pendingCount > 0 ? `Inbox, ${pendingCount} waiting for you` : 'Inbox'}>
+        <button type="button" className="v7-inbox-btn" onClick={() => setShowInbox(true)} aria-label={inboxCount > 0 ? `Inbox, ${inboxCount} unread` : 'Inbox'}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 13l2.5-7h11L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" /><path d="M4 13h5l1 2h4l1-2h5" />
           </svg>
           <span className="v7-btn-label">Inbox</span>
-          {pendingCount > 0 && <span className="v7-badge">{pendingCount}</span>}
+          {inboxCount > 0 && <span className="v7-badge">{inboxCount}</span>}
         </button>
       )}
       {canManageUsers && (
@@ -640,6 +658,29 @@ export default function App() {
           onOpenAgent={(a) => { setShowMySubs(false); setSelectedAgent(a); }}
           onClose={() => setShowMySubs(false)}
           onNew={canSubmitIdea ? () => { setShowMySubs(false); setShowPreReg(true); } : undefined}
+        />
+      )}
+
+      {showInbox && canSubmitIdea && (
+        <InboxModal
+          user={user}
+          role={role}
+          isAdmin={isAdmin}
+          isCommittee={isCommittee}
+          announcements={announcements}
+          readIds={readIds}
+          onMarkRead={(id) => markRead(id, activeAnnIds)}
+          onMarkAllRead={() => markAllRead(activeAnnIds)}
+          allAgents={allAgents}
+          pending={pending}
+          deployRequests={parentDeployRequests}
+          renameReqs={renameReqs}
+          queueViewerCtx={queueViewerCtx}
+          queueCount={queueCount}
+          onOpenAgent={(a) => { setShowInbox(false); setSelectedAgent(a); }}
+          onOpenQueue={() => { setShowInbox(false); setShowPending(true); }}
+          onClose={() => setShowInbox(false)}
+          canPost={canPostAnnouncements(role)}
         />
       )}
 

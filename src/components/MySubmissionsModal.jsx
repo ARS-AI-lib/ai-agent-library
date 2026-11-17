@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { useMemo, useState } from 'react';
 import { isMyAgent, normalizeProgress, fmtDate, toJsDate } from '../lib/agentUtils';
 import { agentStatus, ST_DEF } from '../lib/status';
 import { getType, getTier, TIER_DEF } from '../lib/tier';
 import { nextStep } from '../lib/mySubmissions';
 import useEscapeKey from '../hooks/useEscapeKey';
+import useMyRejected from '../hooks/useMyRejected';
 
 // V7 board 11 · My submissions. Read-only: every button opens the normal
 // Agent Detail modal, where the real actions (and their permission checks)
@@ -52,16 +51,7 @@ function metaOf(a) {
 export default function MySubmissionsModal({ user, allAgents = [], pending = [], onOpenAgent, onClose, onNew }) {
   useEscapeKey(onClose);
   const [tab, setTab] = useState('all');
-  const [rejected, setRejected] = useState([]);
-  useEffect(() => {
-    if (!user?.uid) return undefined;
-    const q = query(collection(db, 'agents'), where('createdBy', '==', user.uid));
-    return onSnapshot(
-      q,
-      (snap) => setRejected(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((a) => a.approvalStatus === 'rejected')),
-      () => setRejected([]),
-    );
-  }, [user?.uid]);
+  const rejected = useMyRejected(user?.uid);
 
   const items = useMemo(() => {
     const byId = new Map();

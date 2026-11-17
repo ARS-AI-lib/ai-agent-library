@@ -443,6 +443,40 @@ body.v7 .v7-inline-reject { border-color: #fecaca; background: #fffafa; border-r
 .v7-rej-note { margin-right: auto; font-size: 11.5px; color: var(--mu); }
 body.v7 .btn-sm.v7-danger-sm { background: var(--sf); border-color: #fca5a5; color: #b91c1c; }
 
+/* ── Inbox modal: announcements + my requests (2026-11-17) ── */
+body.v7 .mbox.v7-inbox-box { max-width: 760px; }
+body.v7 .v7-inbox-markall { margin-left: auto; }
+body.v7 .v7-ann-list, body.v7 .v7-inbox-reqs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+body.v7 .v7-ann-row { border: 1px solid var(--bd-soft); border-radius: 12px; background: var(--sf); }
+body.v7 .v7-ann-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 11px 14px; border: 0; background: transparent; font-family: inherit; font-size: 13.5px; color: var(--tx2); text-align: left; cursor: pointer; border-radius: 12px; }
+body.v7 .v7-ann-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+body.v7 .v7-ann-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: transparent; }
+body.v7 .v7-ann-row.unread .v7-ann-dot { background: var(--accent); }
+body.v7 .v7-ann-row.unread .v7-ann-title { font-weight: 700; color: var(--tx); }
+body.v7 .v7-ann-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+body.v7 .v7-ann-pin { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: var(--tint); color: var(--tint-fg); flex-shrink: 0; }
+body.v7 .v7-ann-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+body.v7 .v7-ann-meta { display: flex; gap: 8px; font-size: 11.5px; color: var(--mu); flex-shrink: 0; }
+body.v7 .v7-ann-aud { font-weight: 600; color: var(--tx2); }
+body.v7 .v7-ann-body { padding: 0 14px 14px 30px; font-size: 13px; line-height: 1.6; color: var(--tx2); white-space: pre-wrap; overflow-wrap: anywhere; }
+body.v7 .v7-ann-body a { color: var(--accent); text-decoration: underline; }
+body.v7 .v7-inbox-sec { margin: 14px 0 8px; font-size: 12px; font-weight: 700; color: var(--mu); text-transform: uppercase; letter-spacing: .03em; }
+body.v7 .v7-inbox-req { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 10px 14px; border: 1px solid var(--bd-soft); border-radius: 12px; background: var(--sf); font-family: inherit; font-size: 13px; color: var(--tx2); text-align: left; width: 100%; }
+body.v7 .v7-inbox-req.clickable { cursor: pointer; }
+body.v7 .v7-inbox-req.clickable:hover { border-color: var(--tint-bd); }
+body.v7 .v7-inbox-req.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+body.v7 .v7-inbox-req-name { font-weight: 600; color: var(--tx); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+body.v7 .v7-inbox-req-age { font-size: 11.5px; color: var(--mu); }
+body.v7 .v7-inbox-req-hint { flex-basis: 100%; font-size: 12px; color: var(--mu); }
+body.v7 .v7-inbox-queue { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--sf2); font-size: 13px; color: var(--tx2); }
+body.v7 .v7-inbox-queue strong { color: var(--tx); }
+body.v7 .v7-inbox-queue .v7-sub-btn { margin-left: auto; }
+@media (max-width: 640px) {
+  body.v7 .v7-ann-head { flex-wrap: wrap; }
+  body.v7 .v7-ann-meta { flex-basis: 100%; padding-left: 16px; }
+  body.v7 .v7-inbox-queue { flex-wrap: wrap; }
+}
+
 /* ════════════════ Board 11 · My submissions ════════════════ */
 body.v7 .mbox.v7-subs-box { max-width: 1120px; background: var(--bg); }
 .v7-subs-bar { display: flex; align-items: center; gap: 8px; margin: 6px 0 16px; }
