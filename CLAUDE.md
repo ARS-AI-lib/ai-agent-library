@@ -1602,7 +1602,12 @@ Sidebar จัดกลุ่ม 26 category (จาก `/config/schema.category
 - `src/lib/inbox.js` — pure logic (audience, active/unread, validate, `splitLinks`, `myRequestItems`, `inboxQueueCount`, badge) · `src/lib/announcements.js` — create/update/delete (Firestore)
 - `src/components/InboxModal.jsx`, `src/components/AnnouncementComposer.jsx` (edit, pin, expiry, delete) · hooks `useAnnouncements` / `useInboxState` / `useMyRejected` · wiring ใน `App.jsx`
 - `firestore.rules` (บล็อก announcements + `audienceOk`) · `firebase.rules-test.json` (emulator config)
-- Seed สำหรับ emulator: `node functions/seed-emulator.cjs inbox` (ต้อง sign in ด้วย emu.user ก่อนหนึ่งครั้ง)
+- Seed สำหรับ emulator (เช็คใน browser): ต้องรัน emulators อยู่ก่อน แล้วสร้าง 3 account ด้วยปุ่ม **"Local emulator test sign-in"** ที่หน้า login (เฉพาะ dev/emulator) จากนั้น promote role แล้วค่อย seed — ทุกคำสั่งต้องมี `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` (ไม่งั้น guard ใน script ปฏิเสธ):
+  ```
+  FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/seed-emulator.cjs promote <email> <role>
+  FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node functions/seed-emulator.cjs inbox
+  ```
+  `inbox` ต้องการ `emu.user@arise.tech` ที่ sign in ผ่านปุ่มนั้นมาแล้วอย่างน้อยหนึ่งครั้ง (ไม่งั้น throw)
 
 ### Verification (รันก่อน release ทุกครั้ง)
 - `node functions/verify-inbox.cjs` — pure logic (ไม่ต้องใช้ emulator)
