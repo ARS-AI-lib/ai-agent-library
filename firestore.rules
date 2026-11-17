@@ -63,6 +63,27 @@ service cloud.firestore {
     function isStaffOrAbove() {
       return isSignedIn() && userRole() in ['staff', 'committee', 'admin'];
     }
+
+    // ── Inbox announcements (2026-11-17) ────────────────────────────
+    // audienceOk MIRRORS allowedAudiences() in src/lib/inbox.js — change both
+    // together. audience 'all' = every known role (user, workshop, staff,
+    // approver, committee, admin); 'approvers' = approver/staff/committee/admin;
+    // 'leads' = committee/admin.
+    function audienceOk(a) {
+      return (a == 'all' && isKnownUser())
+        || (a == 'approvers' && isSignedIn() && userRole() in ['approver', 'staff', 'committee', 'admin'])
+        || (a == 'leads' && isSignedIn() && userRole() in ['committee', 'admin']);
+    }
+    function validAnnouncement() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['title', 'body', 'audience', 'pinned', 'expiresAt', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['title', 'body', 'audience', 'pinned', 'expiresAt', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.get('title', null) is string && d.get('title', '').size() >= 1 && d.get('title', '').size() <= 120
+        && d.get('body', null) is string && d.get('body', '').size() >= 1 && d.get('body', '').size() <= 5000
+        && d.get('audience', null) in ['all', 'approvers', 'leads']
+        && d.get('pinned', null) is bool
+        && (d.get('expiresAt', null) == null || d.get('expiresAt', null) is timestamp);
+    }
     function affectedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -319,6 +340,29 @@ service cloud.firestore {
     }
 
     // ── /users ───────────────────────────────────────────────────
+    // ── /announcements ───────────────────────────────────────────
+    // Read is per-document by audience; list queries must filter on audience
+    // (where('audience','in', allowedAudiences(role))) so Firestore can prove
+    // every returned doc is readable. Only committee/admin write.
+    match /announcements/{id} {
+      allow read: if isSignedIn() && audienceOk(resource.data.get('audience', ''));
+      allow create: if isCommittee() && validAnnouncement()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isCommittee() && validAnnouncement()
+        && request.resource.data.createdBy == resource.data.get('createdBy', null)
+        && request.resource.data.createdAt == resource.data.get('createdAt', null);
+      allow delete: if isCommittee();
+    }
+
+    // ── /users/{uid}/inbox/{docId} — per-user read-state ──────────
+    match /users/{uid}/inbox/{docId} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['readIds', 'updatedAt'])
+        && request.resource.data.get('readIds', null) is list
+        && request.resource.data.get('readIds', []).size() <= 300;
+    }
+
     match /users/{uid} {
       // A user may read their own doc (role bootstrap); admin/committee may
       // read any doc (list is only actually used by the admin-only
