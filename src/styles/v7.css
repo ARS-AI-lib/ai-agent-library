@@ -460,6 +460,19 @@ body.v7 .v7-ann-meta { display: flex; gap: 8px; font-size: 11.5px; color: var(--
 body.v7 .v7-ann-aud { font-weight: 600; color: var(--tx2); }
 body.v7 .v7-ann-body { padding: 0 14px 14px 30px; font-size: 13px; line-height: 1.6; color: var(--tx2); white-space: pre-wrap; overflow-wrap: anywhere; }
 body.v7 .v7-ann-body a { color: var(--accent); text-decoration: underline; }
+body.v7 .v7-ann-compose { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+body.v7 .v7-ann-rowact { display: flex; justify-content: flex-end; padding: 0 14px 12px; }
+body.v7 .v7-ann-composer { max-width: 520px; width: 100%; }
+body.v7 .v7-ann-count { align-self: flex-end; margin-top: 3px; font-size: 11px; color: var(--mu); }
+body.v7 .v7-ann-radios { display: flex; flex-wrap: wrap; gap: 14px; }
+body.v7 .v7-ann-radio { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; cursor: pointer; margin-bottom: 0; }
+body.v7 .v7-ann-error { color: #dc2626; font-size: 12.5px; margin-bottom: 10px; }
+body.v7 .v7-ann-actions, body.v7 .v7-ann-confirm { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+body.v7 .v7-ann-confirm span { margin-right: auto; font-size: 12.5px; color: var(--tx2); }
+body.v7 .v7-ann-actions .v7-sub-btn, body.v7 .v7-ann-confirm .v7-sub-btn { margin-left: 0; }
+body.v7 .v7-ann-actions .v7-ann-danger { margin-right: auto; }
+body.v7 .v7-sub-btn.v7-ann-danger { color: #dc2626; border-color: #dc2626; }
+body.v7 .v7-sub-btn:disabled { opacity: .55; cursor: default; }
 body.v7 .v7-inbox-sec { margin: 14px 0 8px; font-size: 12px; font-weight: 700; color: var(--mu); text-transform: uppercase; letter-spacing: .03em; }
 body.v7 .v7-inbox-req { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 10px 14px; border: 1px solid var(--bd-soft); border-radius: 12px; background: var(--sf); font-family: inherit; font-size: 13px; color: var(--tx2); text-align: left; width: 100%; }
 body.v7 .v7-inbox-req.clickable { cursor: pointer; }

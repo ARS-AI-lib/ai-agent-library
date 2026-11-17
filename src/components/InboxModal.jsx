@@ -16,8 +16,8 @@ import useMyRejected from '../hooks/useMyRejected';
 //  - To approve     → only a count + a button to the existing approval queue.
 // Opening an announcement is the only write (read state, via onMarkRead).
 //
-// canPost / onCompose / onEditAnnouncement are wired by the composer task and
-// intentionally unused here.
+// canPost shows `New announcement` and a per-row `Edit`; the composer itself
+// lives in AnnouncementComposer (opened by App via onCompose/onEditAnnouncement).
 
 const DAY = 864e5;
 
@@ -47,7 +47,7 @@ function AnnouncementBody({ text }) {
   );
 }
 
-function AnnouncementRow({ a, unread, open, onToggle }) {
+function AnnouncementRow({ a, unread, open, onToggle, onEdit }) {
   return (
     <div className={`v7-ann-row ${unread ? 'unread' : ''} ${open ? 'open' : ''}`}>
       <button type="button" className="v7-ann-head" aria-expanded={open} onClick={onToggle}>
@@ -62,6 +62,11 @@ function AnnouncementRow({ a, unread, open, onToggle }) {
         </span>
       </button>
       {open && <AnnouncementBody text={a.body} />}
+      {open && onEdit && (
+        <div className="v7-ann-rowact">
+          <button type="button" className="v7-sub-btn" onClick={() => onEdit(a)}>Edit</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -107,6 +112,9 @@ export default function InboxModal({
   onOpenAgent,
   onOpenQueue,
   onClose,
+  canPost = false,
+  onCompose,
+  onEditAnnouncement,
 }) {
   useEscapeKey(onClose);
   const [tab, setTab] = useState('all');
@@ -152,7 +160,7 @@ export default function InboxModal({
     : (
       <div className="v7-ann-list">
         {list.map((a) => (
-          <AnnouncementRow key={a.id} a={a} unread={isUnread(a)} open={openId === a.id} onToggle={() => toggle(a)} />
+          <AnnouncementRow key={a.id} a={a} unread={isUnread(a)} open={openId === a.id} onToggle={() => toggle(a)} onEdit={canPost ? onEditAnnouncement : undefined} />
         ))}
       </div>
     ));
@@ -215,6 +223,11 @@ export default function InboxModal({
                 {canApprove && queueLine}
               </>
             )
+        )}
+        {canPost && current === 'ann' && (
+          <div className="v7-ann-compose">
+            <button type="button" className="v7-sub-btn pri" onClick={() => onCompose?.()}>New announcement</button>
+          </div>
         )}
         {current === 'ann' && annList(active, 'ยังไม่มีประกาศสำหรับคุณในขณะนี้')}
         {current === 'mine' && mineList('ไม่มีคำขอของคุณที่รอการพิจารณา — รายการที่ถูกปฏิเสธจะแสดงที่นี่ 14 วัน')}

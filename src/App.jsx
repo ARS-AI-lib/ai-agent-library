@@ -32,6 +32,7 @@ import GlossaryModal from './components/GlossaryModal';
 import Toast from './components/Toast';
 import PendingApprovalModal from './components/PendingApprovalModal';
 import InboxModal from './components/InboxModal';
+import AnnouncementComposer from './components/AnnouncementComposer';
 import ChatAssistant from './components/ChatAssistant';
 import UserManagementModal from './components/UserManagementModal';
 import ExportDataModal from './components/ExportDataModal';
@@ -206,6 +207,7 @@ export default function App() {
   const [showGlossary, setShowGlossary] = useState(false);
   const [showPending, setShowPending] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
+  const [composer, setComposer] = useState(null); // null | {} (new) | {announcement}
   const [showUsers, setShowUsers] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showRoleGroups, setShowRoleGroups] = useState(false);
@@ -681,6 +683,17 @@ export default function App() {
           onOpenQueue={() => { setShowInbox(false); setShowPending(true); }}
           onClose={() => setShowInbox(false)}
           canPost={canPostAnnouncements(role)}
+          onCompose={() => setComposer({})}
+          onEditAnnouncement={(a) => setComposer({ announcement: a })}
+        />
+      )}
+
+      {composer && showInbox && canPostAnnouncements(role) && (
+        <AnnouncementComposer
+          key={composer.announcement?.id || 'new'}
+          user={user}
+          announcement={composer.announcement}
+          onClose={() => setComposer(null)}
         />
       )}
 

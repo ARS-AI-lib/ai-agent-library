@@ -59,6 +59,13 @@ async function connect(key, a) {
 }
 
 const ts = () => fsdk.serverTimestamp();
+// Payload shapes sent by createAnnouncement/updateAnnouncement — keep equal to src/lib/announcements.js.
+const CREATE_KEYS = ['title', 'body', 'audience', 'pinned', 'expiresAt', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'];
+const createPayload = (uid, expiresAt) => ({
+  title: 'Posted', body: 'Body', audience: 'approvers', pinned: true, expiresAt,
+  createdBy: uid, createdByName: 'Co', createdAt: ts(), updatedAt: ts(),
+});
+const updatePayload = (expiresAt) => ({ title: 'T2', body: 'B2', audience: 'all', pinned: false, expiresAt, updatedAt: ts() });
 function valid(uid, over = {}) {
   return {
     title: 'Hello', body: 'World', audience: 'all', pinned: false, expiresAt: null,
@@ -122,6 +129,15 @@ function valid(uid, over = {}) {
   await denied('create audience everyone denied', fsdk.setDoc(ref('committee', 'x6'), valid(u('committee'), { audience: 'everyone' })));
   await denied('create extra field denied', fsdk.setDoc(ref('committee', 'x7'), valid(u('committee'), { extra: 1 })));
   await denied('create createdBy != own uid denied', fsdk.setDoc(ref('committee', 'x8'), valid(u('admin'))));
+
+  // ── composer payloads (src/lib/announcements.js) ──
+  await allowed('composer create expiresAt null', fsdk.setDoc(ref('committee', 'c1'), createPayload(u('committee'), null)));
+  await allowed('composer create expiresAt Timestamp', fsdk.setDoc(ref('admin', 'c2'), createPayload(u('admin'), fsdk.Timestamp.fromDate(new Date(Date.now() + 864e5)))));
+  const noExp = createPayload(u('committee'), null); delete noExp.expiresAt;
+  report('composer payload has all 9 keys', CREATE_KEYS.every((k) => k in createPayload('x', null)));
+  await denied('composer create omitting expiresAt denied', fsdk.setDoc(ref('committee', 'c3'), noExp));
+  await allowed('composer update five fields + updatedAt (null)', fsdk.updateDoc(ref('committee', 'c1'), updatePayload(null)));
+  await allowed('composer update five fields + updatedAt (Timestamp)', fsdk.updateDoc(ref('admin', 'c2'), updatePayload(fsdk.Timestamp.now())));
 
   // ── update / delete ──
   await allowed('update committee edits other author doc', fsdk.updateDoc(ref('committee', 'n2'), { title: 'Edited', updatedAt: ts() }));
