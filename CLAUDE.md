@@ -1564,3 +1564,65 @@ Sidebar จัดกลุ่ม 26 category (จาก `/config/schema.category
 ### Minors ที่ยังค้าง
 1. React key `agentId__` ชนกันเมื่อ adopter 2 คนของ agent เดียวไม่มี email (Library row `adopterEmail === ''`) — **มีมาก่อนแล้ว** ไม่ได้เกิดจากงานนี้
 2. Review Focus บางข้อ (`project || '—'`, `colSpan={7}`, CSV ไม่ export แบบ grouped) คุมด้วย grep ใน plan ชั่วคราว ไม่ได้ commit เป็น executable gate — verify script ครอบเฉพาะ pure module
+
+---
+
+## 36. Inbox + announcements (2026-11-17, rules + hosting)
+
+ปุ่ม Inbox ใน Nav เปิด modal (`InboxModal.jsx`) 3 ส่วน: **Announcements**, **My requests**, **To approve** · Design: `docs/superpowers/specs/2026-11-17-inbox-announcements-design.md`
+
+### Audience (ใครเห็นประกาศไหน / ใครโพสต์ได้)
+| `audience` | label | เห็นโดย role |
+|---|---|---|
+| `all` | Everyone | user, workshop, staff, approver, committee, admin |
+| `approvers` | Approvers and above | staff, approver, committee, admin |
+| `leads` | Admin & Committee | committee, admin |
+
+โพสต์/แก้/ลบได้เฉพาะ `committee` และ `admin` (`canPostAnnouncements`)
+- 🔴 **`allowedAudiences(role)` ใน `src/lib/inbox.js` ⇔ `audienceOk(a)` ใน `firestore.rules` ต้องแก้พร้อมกันเสมอ** — rules เป็นตัวจริง ฝั่ง JS แค่ตัดสินว่า UI เสนอ/แสดงอะไร · เพิ่ม role/audience ใหม่ที่ฝั่งเดียว = UI กับ rules ไม่ตรงกัน
+
+### Firestore rules + list-query form (Task 2)
+- `/announcements/{id}` — read ต่อ doc ตาม `audienceOk(resource.data.audience)`; write เฉพาะ committee/admin + `validAnnouncement()` (key whitelist, title 1–120, body 1–5000, `audience` ∈ 3 ค่า, `pinned` bool, `expiresAt` null|timestamp); update ห้ามเปลี่ยน `createdBy`/`createdAt`
+- `/users/{uid}/inbox/{docId}` — เจ้าของเท่านั้น, field `readIds` (list ≤ 300) + `updatedAt`
+- **Query form ที่ใช้ = query เดียว `where('audience','in', allowedAudiences(role))`** (`useAnnouncements.js`) · ❌ list แบบไม่ filter **ถูก deny** — Firestore ต้องพิสูจน์ได้ตอน query ว่าทุก doc ที่คืนมาอ่านได้ ถ้าไม่มี filter audience มันพิสูจน์ไม่ได้ → ทั้ง query ล้ม (ไม่ใช่แค่ซ่อน doc ที่ไม่มีสิทธิ์) · ห้ามเปลี่ยนเป็น fetch-all แล้ว filter ฝั่ง client
+- ⚠️ **ต้อง publish `firestore.rules` เองใน Console** (named DB `ai-agent-lib`) — `firebase.json` ไม่มี firestore block (ตามข้อ 11)
+
+### My requests
+`myRequestItems()` = งานของตัวเอง (`isMyAgent`) ที่ `nextStep().tone` เป็น **wait** (กำลังรอ) หรือ **bad** (rejected/withdrawn) โดย rejected/withdrawn แสดงเฉพาะ **≤ 14 วัน** (`REJECTED_WINDOW_DAYS`, ดู `rejectedAt` ไม่มีก็ `updatedAt`) · skip paired sub-skill
+- **ไม่รวมรายการ "action-needed" ตั้งใจ** (เช่น ต้องกด Request Deploy) — เป็นงานที่ผู้ใช้ต้องลงมือ ไม่ใช่ "สถานะคำขอ" และมีที่แสดงอยู่แล้วใน My Submissions → อย่าเพิ่มกลับมาในรอบหน้าโดยไม่ถามผู้ใช้
+- rejected ดึงด้วย `useMyRejected.js` (query เฉพาะของตัวเอง)
+
+### Badge
+**Inbox badge = unread announcements + approval-queue count** (เฉพาะ viewer ที่ได้แท็บ To approve: `showToApprove(v, queueCount)` = `fullAccess` หรือ queue > 0) รวมด้วย `inboxBadgeCount()`
+- queue count ใช้ **`inboxQueueCount()`** — เลียนแบบการนับของ approver แต่ **ไม่ใช้ fallback "own submissions" ของ base user** ใน `visiblePending` (ไม่งั้น user ธรรมดาเห็น badge จากงานตัวเอง) · เพราะแยกเป็นฟังก์ชันใน `inbox.js` **`pendingQueue.js` จึงไม่ถูกแตะ**
+- **Creator link requests นับรวมด้วยโดยตั้งใจ** (`visibleLinkRequests`)
+- read state: `readIds` ใน `/users/{uid}/inbox/state` ผ่าน `useInboxState.js`; `pruneReadIds` ตัดตาม id ที่ยังมีอยู่ + cap 300
+
+### Key files
+- `src/lib/inbox.js` — pure logic (audience, active/unread, validate, `splitLinks`, `myRequestItems`, `inboxQueueCount`, badge) · `src/lib/announcements.js` — create/update/delete (Firestore)
+- `src/components/InboxModal.jsx`, `src/components/AnnouncementComposer.jsx` (edit, pin, expiry, delete) · hooks `useAnnouncements` / `useInboxState` / `useMyRejected` · wiring ใน `App.jsx`
+- `firestore.rules` (บล็อก announcements + `audienceOk`) · `firebase.rules-test.json` (emulator config)
+- Seed สำหรับ emulator: `node functions/seed-emulator.cjs inbox` (ต้อง sign in ด้วย emu.user ก่อนหนึ่งครั้ง)
+
+### Verification (รันก่อน release ทุกครั้ง)
+- `node functions/verify-inbox.cjs` — pure logic (ไม่ต้องใช้ emulator)
+- `functions/verify-inbox-rules.cjs` — rules จริงบน emulator, **ต้องมี Java**:
+  ```
+  export JAVA_HOME=$(ls -d ~/.local/jdk-21*)/Contents/Home; export PATH="$JAVA_HOME/bin:$PATH"
+  npx firebase-tools emulators:exec --config firebase.rules-test.json --only auth,firestore --project wolfy-481609 "node functions/verify-inbox-rules.cjs"
+  ```
+- `npm run build` (JSX → build คือ gate)
+
+### Known limitations (v1)
+1. ไม่มี targeting ราย team / ราย person — มีแค่ 3 audience ตาม role
+2. Plain text เท่านั้น (ลิงก์ http(s) แปลงเป็น anchor ด้วย `splitLinks`; ไม่มี markdown/HTML)
+3. ประกาศที่หมดอายุ (`expiresAt`) **ถูกซ่อนจากผู้เขียนด้วย** — แก้/ลบย้อนหลังไม่ได้จาก UI
+4. ไม่มี email / Teams push — เห็นเฉพาะในแอป (Gmail SMTP ถูกบล็อกตามข้อ 9)
+
+### Release order (rules + hosting)
+1. **ผู้ใช้ publish `firestore.rules`** ใน Console (named DB `ai-agent-lib`) — ต้องทำก่อน hosting ไม่งั้นหน้า Inbox อ่าน/เขียนไม่ได้
+2. backup hosting channel (`prod-backup-inbox`, ทั้ง 2 site) → 3. `npm run build` + `deploy --only hosting` → 4. verify live bundle hash + เปิด Inbox → 5. `git push origin main`
+- ไม่แตะ functions → ไม่มีความเสี่ยงต่อ Portfolio
+
+### Commits
+`9b486c0` (logic + verify) · `a7afe23` (rules + rules test) · `bdcec71` (Inbox modal + hooks + wiring + seed) · `d79b938` (composer)
