@@ -7,6 +7,7 @@ import App from './App.jsx'
 import TimelinePage from './components/TimelinePage.jsx'
 import FileDownloadPage from './components/FileDownloadPage.jsx'
 import UsageReportPage from './components/UsageReportPage.jsx'
+import AssessmentResultsPage from './components/AssessmentResultsPage.jsx'
 import WorkshopPage from './components/WorkshopPage.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 
@@ -25,6 +26,7 @@ document.body.classList.add('v7');
 const path = window.location.pathname.replace(/\/+$/, '');
 const Root = path === '/timeline' ? TimelinePage
   : path === '/usage' ? UsageReportPage
+    : path === '/assessments' ? AssessmentResultsPage
     : path === '/workshop' ? WorkshopPage
       : path.startsWith('/f/') ? FileDownloadPage
         : App;
