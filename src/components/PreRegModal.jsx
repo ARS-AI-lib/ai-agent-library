@@ -1004,7 +1004,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
 
             <div className="fsec"><div className="fsec-h"><h4>What it does</h4><span>ใช้ตรวจความซ้ำและแสดงในไลบรารี</span></div></div>
             <div className="fg">
-              <label>Description <span className="req">*</span><span className="fcount">{form.description.trim().length} / {MIN_DETAIL_LEN}+</span></label>
+              <label>Description <span className="req">*</span></label>
               <textarea rows={3} value={form.description} onChange={(e) => setField('description', e.target.value)} placeholder="อธิบายว่า Agent/Skill นี้ทำอะไร" />
             </div>
 
@@ -1134,7 +1134,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             <div className="fsec"><div className="fsec-h"><h4>Tools & dependencies</h4></div></div>
             <div className="grid2">
               <div className="fg">
-                <label>Permitted Tools</label>
+                <label>Permitted Tools <span className="req">*</span></label>
                 <input value={form.tool} onChange={(e) => setField('tool', e.target.value)} placeholder={DECL_FIELDS[2].placeholder} />
                 <div className="fhelp">{DECL_FIELDS[2].hint}</div>
               </div>
@@ -1145,7 +1145,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             </div>
             <div className="fg">
-              <label>Required Skills</label>
+              <label>Required Skills <span className="req">*</span></label>
               <input
                 value={requiredSkillsValue}
                 onChange={(e) => setField('requiredSkills', e.target.value)}

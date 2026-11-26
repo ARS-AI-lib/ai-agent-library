@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { countChanges, nextSelected } from '../lib/screeningConfigEdit';
@@ -17,14 +17,14 @@ const newOption = () => ({ id: uid('o'), th: '', en: '', score: 0, fix: 'none', 
 
 export default function AssessmentSettingsModal({ onClose }) {
   const live = useScreeningConfig();
-  const baseline = useRef(clone(live));
+  const [baseline, setBaseline] = useState(() => clone(live));
   const [draft, setDraft] = useState(() => clone(live));
   const [selId, setSelId] = useState(() => live.questions[0]?.id ?? null);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
 
-  const changes = useMemo(() => countChanges(baseline.current, draft), [draft]);
+  const changes = useMemo(() => countChanges(baseline, draft), [baseline, draft]);
   const qi = draft.questions.findIndex((q) => q.id === selId);
   const q = qi >= 0 ? draft.questions[qi] : null;
   const groups = [...new Set(draft.questions.map((x) => x.group).filter(Boolean))];
@@ -50,8 +50,8 @@ export default function AssessmentSettingsModal({ onClose }) {
   }
   function discard() {
     if (!window.confirm('ทิ้งการแก้ไขที่ยังไม่บันทึกทั้งหมด?')) return;
-    setDraft(clone(baseline.current));
-    setSelId((id) => (baseline.current.questions.some((x) => x.id === id) ? id : baseline.current.questions[0]?.id ?? null));
+    setDraft(clone(baseline));
+    setSelId((id) => (baseline.questions.some((x) => x.id === id) ? id : baseline.questions[0]?.id ?? null));
     setMsg(null);
   }
   async function save() {
@@ -60,7 +60,7 @@ export default function AssessmentSettingsModal({ onClose }) {
     try {
       const fn = httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'manageScreeningConfig');
       const { data } = await fn({ action: 'save', config: draft });
-      baseline.current = clone(draft);
+      setBaseline(clone(draft));
       setMsg({ ok: true, text: `บันทึกแล้ว (version ${data.version})` });
     } catch (e) {
       setMsg({ ok: false, text: e.message || 'บันทึกไม่สำเร็จ' });

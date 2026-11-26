@@ -62,9 +62,13 @@ const blank = { agentName: '', description: '', input: '', output: '', businessV
 eq('requiredFieldStatus: empty form → 0 of 11', R.requiredFieldStatus(blank, false), { done: 0, total: 11 });
 eq('requiredFieldStatus: Workflow adds Workflow Name → total 12', R.requiredFieldStatus(blank, true).total, 12);
 eq('requiredFieldStatus: whitespace-only is not done', R.requiredFieldStatus({ ...blank, agentName: '   ' }, false).done, 0);
-const full = { ...blank, agentName: 'a', description: 'd', input: 'i', output: 'o', businessValue: 'b', owner: 'T', reusable: 'Reusable', tool: 't', requiredSkills: 'r', coreAbility: new Set(['x']), relatedRole: new Set(['y']) };
+const long = 'x'.repeat(100);
+const full = { ...blank, agentName: 'a', description: long, input: 'i', output: 'o', businessValue: long, owner: 'T', reusable: 'Reusable', tool: 't', requiredSkills: 'r', coreAbility: new Set(['x']), relatedRole: new Set(['y']) };
 eq('requiredFieldStatus: everything filled → done = total', R.requiredFieldStatus(full, false), { done: 11, total: 11 });
 eq('requiredFieldStatus: ability/role accept arrays too', R.requiredFieldStatus({ ...full, coreAbility: ['x'], relatedRole: [] }, false).done, 10);
 eq('requiredFieldStatus: Workflow derives Required Skills from the member rows', [R.requiredFieldStatus({ ...full, requiredSkills: '', workflowName: 'W', skills: [{}] }, true).done, R.requiredFieldStatus({ ...full, requiredSkills: '', workflowName: 'W', skills: [] }, true).done], [12, 11]);
+eq('requiredFieldStatus: Description / Business Value count only at the 100-char minimum (same as validate)', [R.requiredFieldStatus({ ...full, description: 'short' }, false).done, R.requiredFieldStatus({ ...full, businessValue: 'x'.repeat(99) }, false).done], [10, 10]);
+eq('requiredFieldStatus: Reusable with Conditions adds Reuse Conditions', [R.requiredFieldStatus({ ...full, reusable: 'Reusable with Conditions', reuseCondition: '' }, false), R.requiredFieldStatus({ ...full, reusable: 'Reusable with Conditions', reuseCondition: 'when X' }, false)], [{ done: 11, total: 12 }, { done: 12, total: 12 }]);
+eq('requiredFieldStatus: HML adds Human Job', [R.requiredFieldStatus({ ...full, hml: true, humanJob: '' }, false), R.requiredFieldStatus({ ...full, hml: true, humanJob: 'review' }, false)], [{ done: 11, total: 12 }, { done: 12, total: 12 }]);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

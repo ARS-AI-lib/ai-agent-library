@@ -31,19 +31,26 @@ export function workflowRequiredSkills(starterName, memberNames) {
   return [starterName, ...memberNames].map((n) => String(n || '').trim()).filter(Boolean).join(', ');
 }
 
-// "Required fields: n of N" in the registration footer. Counts only the always-required keys;
-// Workflow skills derives Required Skills from its member rows and adds Workflow Name.
-const REQUIRED_TEXT = ['agentName', 'description', 'input', 'output', 'businessValue', 'owner', 'reusable', 'tool'];
+// "Required fields: n of N" in the registration footer — mirrors validate() in PreRegModal for the
+// main form: Description / Business Value need MIN_DETAIL chars, Reuse Conditions when Reusable with
+// Conditions, Human Job when HML is on. Workflow skills derives Required Skills from its member rows
+// and adds Workflow Name. (Skill-row fields and Workflow-name uniqueness are checked at submit only.)
+export const MIN_DETAIL = 100;
+const REQUIRED_TEXT = ['agentName', 'input', 'output', 'owner', 'reusable', 'tool'];
+const LONG_TEXT = ['description', 'businessValue'];
 const filled = (v) => String(v ?? '').trim() !== '';
 const nonEmpty = (v) => (v instanceof Set ? v.size > 0 : Array.isArray(v) ? v.length > 0 : false);
 
 export function requiredFieldStatus(form, isWorkflow) {
   const checks = [
     ...REQUIRED_TEXT.map((k) => filled(form[k])),
+    ...LONG_TEXT.map((k) => String(form[k] ?? '').trim().length >= MIN_DETAIL),
     nonEmpty(form.coreAbility),
     nonEmpty(form.relatedRole),
     isWorkflow ? (form.skills || []).length >= 1 : filled(form.requiredSkills),
   ];
   if (isWorkflow) checks.push(filled(form.workflowName));
+  if (form.reusable === 'Reusable with Conditions') checks.push(filled(form.reuseCondition));
+  if (form.hml) checks.push(filled(form.humanJob));
   return { done: checks.filter(Boolean).length, total: checks.length };
 }
