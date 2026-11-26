@@ -5,6 +5,8 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
+import { DECL, PRE_CODES, preGate, buildScreening } from '../lib/screening';
+import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
@@ -127,6 +129,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const [connections, setConnections] = useState([]);  // rule-based directional connections
   const [aiResult, setAiResult] = useState(null);
   const [overlapReason, setOverlapReason] = useState('');
+  const [screeningAnswers, setScreeningAnswers] = useState({});
+  const [assessOpen, setAssessOpen] = useState(false);
   // Opt-in (default on) to REQUEST the AI-suggested link; a person still confirms it.
   const [requestLink, setRequestLink] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -281,6 +285,16 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       if (skErr) return skErr;
     }
     return '';
+  }
+
+  // Step 1 → 2: validate the form, then the screening assessment (pre-assessment).
+  // The duplicate check only starts from the Assessment step (runCheck below).
+  function goAssess() {
+    const err = validate();
+    if (err) { setValidationMsg(err); return; }
+    setValidationMsg('');
+    setAssessOpen(true);
+    setTab('assess');
   }
 
   async function runCheck() {
@@ -569,6 +583,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               categoryReason: aiResult.category_reason || '',
             }
           : null,
+        screening: { ...buildScreening(screeningAnswers), preAt: serverTimestamp() },
         developmentPhase: 'To Do',
         devProgress: 0,
         phaseSince: serverTimestamp(),
@@ -699,6 +714,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             businessValue: inheritedFromAgent.businessValue,
             matchingAgent: agentName,   // ← link to parent Agent
             analysisResult: null,
+            screening: { ...buildScreening(screeningAnswers), preAt: serverTimestamp() },
             developmentPhase: 'To Do',
             devProgress: 0,
             phaseSince: serverTimestamp(),
@@ -791,6 +807,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const needsReason = dupBlock.needsJustification;
   const reasonMissing = needsReason && overlapReason.trim().length < MIN_JUSTIFICATION;
   const maxAiConfidence = aiStats?.max ?? 0;
+  const preAssess = preGate(screeningAnswers);
   // "Kitchen-sink" breadth flag — deterministic, doesn't depend on the AI
   // getting overall_risk right. Warns and is stamped on the stored analysis so
   // the approver sees it in the pending queue.
@@ -827,12 +844,23 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
           <span className="v7-step-line" aria-hidden="true" />
           <button
             role="tab"
+            aria-selected={tab === 'assess'}
+            aria-disabled={!assessOpen}
+            className={`v7-step ${tab === 'assess' ? 'active' : ''} ${!assessOpen ? 'locked' : ''} ${ranked !== null ? 'done' : ''}`}
+            onClick={() => assessOpen && setTab('assess')}
+          >
+            <span className="v7-step-n">{ranked !== null && tab !== 'assess' ? '✓' : '2'}</span>
+            Assessment
+          </button>
+          <span className="v7-step-line" aria-hidden="true" />
+          <button
+            role="tab"
             aria-selected={tab === 'analysis'}
             aria-disabled={ranked === null}
             className={`v7-step ${tab === 'analysis' ? 'active' : ''} ${ranked === null ? 'locked' : ''}`}
             onClick={() => ranked !== null && setTab('analysis')}
           >
-            <span className="v7-step-n">2</span>
+            <span className="v7-step-n">3</span>
             Analysis {ranked !== null ? `(${analysisCount})` : ''}
           </button>
         </div>
@@ -1080,8 +1108,41 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             )}
 
             <div className="btn-group">
-              <button className="btn btn-primary" onClick={runCheck}>Submit</button>
-              <button className="btn btn-secondary" onClick={() => { setForm(EMPTY_FORM); analysisCacheRef.current.clear(); }}>Clear</button>
+              <button className="btn btn-primary" onClick={goAssess}>Next: Assessment →</button>
+              <button className="btn btn-secondary" onClick={() => { setForm(EMPTY_FORM); setScreeningAnswers({}); setAssessOpen(false); analysisCacheRef.current.clear(); }}>Clear</button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'assess' && (
+          <div className="tab-panel">
+            <div className="m-head">
+              <div>
+                <h2 className="mtitle">Pre-assessment</h2>
+                <div className="msub">ประกาศขอบเขตของ Agent/Skill และตอบแบบประเมินก่อนตรวจความซ้ำซ้อน</div>
+              </div>
+            </div>
+            <ScreeningQuestions
+              codes={[...DECL, ...PRE_CODES]}
+              answers={screeningAnswers}
+              onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
+            />
+            <div style={{ marginTop: 14 }}><ScreeningResult answers={screeningAnswers} /></div>
+            {preAssess.blocked && (
+              <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
+                ไม่สามารถไปต่อได้ — {preAssess.reasons[0]}
+              </div>
+            )}
+            <div className="btn-group" style={{ marginTop: 14 }}>
+              <button className="btn btn-secondary" onClick={() => setTab('form')}>← Back to Form</button>
+              <button
+                className="btn btn-primary"
+                onClick={runCheck}
+                disabled={!preAssess.complete || preAssess.blocked}
+                title={!preAssess.complete ? 'ตอบ D1–D6 และ C1–C9 ให้ครบก่อน' : undefined}
+              >
+                {!preAssess.complete ? 'ตอบให้ครบก่อน' : preAssess.blocked ? 'ถูกบล็อก (C7)' : 'Continue to Duplicate Check'}
+              </button>
             </div>
           </div>
         )}
