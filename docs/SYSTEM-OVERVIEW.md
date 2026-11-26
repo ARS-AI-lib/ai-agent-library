@@ -1,7 +1,8 @@
 # System Overview — AI Agent Library Suite v2
 
 > **อ่านไฟล์นี้ก่อนเริ่มงานทุกครั้ง** แล้วค่อยดู `CLAUDE.md` สำหรับกฎปฏิบัติและประวัติรายฟีเจอร์
-> ทุกอย่างในไฟล์นี้ตรวจสอบกับโค้ดจริงแล้ว ณ 2026-08-05 — ถ้าขัดกับเอกสารอื่น **ให้ยึดไฟล์นี้**
+> ตรวจกับโค้ด + production จริงล่าสุด **2026-11-26** (HEAD `776f0dd`) — ถ้าขัดกับเอกสารอื่น **ให้ยึดไฟล์นี้**
+> ตัวเลขที่เปลี่ยนเร็ว (จำนวน agent/function) วัดจาก Firestore + `functions:list` ตอนนั้น — **รันเช็คใหม่ก่อนอ้างอิง**
 > และไปแก้ที่อื่นให้ตรง
 
 ---
@@ -9,14 +10,17 @@
 ## 0. สรุป 60 วินาที
 
 เว็บแอปภายในองค์กรสำหรับ **ลงทะเบียน · ค้นหา · ติดตาม AI agents/skills** แทนระบบเดิมที่ใช้ Google Sheets
-ปัจจุบัน approved + ไม่ถูก archive = **239 รายการ** (รวมทุกสถานะ 245 doc)
+ปัจจุบัน approved + ไม่ถูก archive = **361 รายการ** (รวมทุกสถานะ 379 doc: archived 10 · rejected 8 · pending 0) · มีผู้ใช้ 552 คน
 
 จุดที่ทำให้ระบบนี้ไม่ใช่ CRUD ธรรมดา คือ **AI 3 ส่วน**:
 1. **ตรวจซ้ำตอนลงทะเบียน** — กันคนสร้าง agent ที่มีอยู่แล้ว
 2. **แชท ALPHA** — ถามภาษาคนว่า "มีตัวไหนช่วยเรื่อง X" แล้วได้คำตอบจากข้อมูลจริง
 3. **Semantic search** — เบื้องหลังของทั้งสองอัน (embeddings)
 
-**สถานะ:** ทุกอย่าง deploy แล้วและใช้งานจริง อยู่ในโหมด **เฝ้าดู + บำรุงรักษา** ไม่มีงานสร้างใหญ่ค้าง
+นอกจากนั้นมีงานรอบ ก.ย.–พ.ย. ที่ใหญ่พอจะรู้จักไว้: **การแจ้งเตือน Teams/อีเมล** (รวม delay alert ทุกจันทร์) ·
+**ไฟล์แนบ + versioning** · **Role Group (AI จำแนก)** · **Usage report** · **Workshop** · **Inbox + ประกาศ**
+
+**สถานะ:** ทุกอย่าง deploy แล้วและใช้งานจริง (ล่าสุด Inbox + announcements 2026-11-17) อยู่ในโหมด **เฝ้าดู + บำรุงรักษา** ไม่มีงานสร้างใหญ่ค้าง
 
 ---
 
@@ -41,13 +45,13 @@
 ของจริงคือ:
 
 ```
-repo นี้ = SPA เดียว (Vite + React, ไม่ใช้ router library)
+repo นี้ = SPA เดียว (Vite + React, ไม่ใช้ router library — เลือก component จาก pathname ใน main.jsx)
 │
-├── /            → App.jsx        ← มี 3 แท็บข้างใน (ไม่ใช่คนละ path)
-│                                    · Agent Library  (activeTab='lib')
-│                                    · SDLC AI Adoption (activeTab='sdlc')
-│                                    · Dashboard      (activeTab='dash')
-└── /timeline    → TimelinePage.jsx  ← หน้าแยก เลือกด้วย pathname ใน main.jsx
+├── /              → App.jsx          ← มี 3 แท็บข้างใน: Agent Library · SDLC AI Adoption · Dashboard
+├── /timeline      → TimelinePage.jsx ← access-gated ผ่าน /config/timeline
+├── /usage         → UsageReportPage.jsx   ← รายงาน adoption (callable usageReport)
+├── /workshop      → WorkshopPage.jsx      ← บอร์ด workshop แยกขาดจาก library (ดู docs/WORKSHOP.md)
+└── /f/{agentId}   → FileDownloadPage.jsx  ← ประตู SSO ก่อนโหลดไฟล์แนบ (ดู CLAUDE.md §24)
 ```
 
 **Portfolio เป็นคนละแอป คนละ repo คนละ hosting site** (`wolfy-portfolio`) — อยู่แค่ GCP project เดียวกัน
@@ -61,30 +65,40 @@ repo นี้ = SPA เดียว (Vite + React, ไม่ใช้ router li
 
 ทั้งสอง deploy จาก `dist/` ชุดเดียวกัน มี rewrite `**` → `/index.html` (SPA)
 
-### Cloud Functions (asia-southeast1, Node 22, callable ทั้งหมด)
-| function | หน้าที่ | ต้อง auth | หมายเหตุพิเศษ |
-|---|---|---|---|
-| `analyzeDuplicate` | ตรวจซ้ำตอน Pre-Registration | ✅ | Gemini 2.5 Flash, `thinkingBudget: 0` |
-| `chatLibrary` | สมองของแชท ALPHA | ✅ | `thinkingBudget: -1` (dynamic) |
-| `reindexAgentVectors` | สร้าง/อัปเดต embedding index | ✅ | **`full: true` เช็ค role admin ฝั่ง server** |
-| `embedQuery` | แปลงข้อความเป็น vector ให้ client | ✅ | **rate limit 20/นาที/คน** |
+### Cloud Functions (asia-southeast1, Node 22)
+`functions/index.js` ของ repo นี้ export **21 ตัว** (นับ 2026-11-26) แต่บน production project `wolfy-481609` มี **~76 ตัว**
+เพราะแชร์กับแอปอื่น — **รัน `firebase functions:list --project wolfy-481609` ก่อนแตะ functions ทุกครั้ง**
 
-> ⚠️ ใน GCP project เดียวกันยังมี functions ของแอปอื่นอีก 4 ตัว: `send-approval-email` (ของ AI Lib
-> แต่ไม่ได้อยู่ใน `functions/index.js` แล้ว) และ `files`, `logProjectActivity`, `logTaskActivity`
-> (ของ Portfolio) — **ดูข้อ 8 ก่อน deploy functions ทุกครั้ง**
+| กลุ่ม | function | หมายเหตุ |
+|---|---|---|
+| AI | `analyzeDuplicate` · `chatLibrary` · `classifyRoleGroup` | **`gemini-3.5-flash`** จาก `functions/modelConfig.js` (`GEN_MODEL`) — ใช้ `thinkingLevel` ไม่ใช่ `thinkingBudget` · chat = LOW |
+| Search | `embedQuery` (rate limit 20/นาที/คน) · `reindexAgentVectors` (`full:true` เช็ค admin ฝั่ง server) | `text-multilingual-embedding-002` @256 |
+| Workflow | `markAgentReady` · `decideRenameRequest` · `decideLinkSuggestion` · `manageRoleGroups` | สิทธิ์เช็คฝั่ง server ทั้งหมด |
+| ไฟล์ | `attachEndpointFile` · `getEndpointFile` · `listEndpointVersions` | เก็บ latest + previous · bucket ปิด ไม่มี public |
+| รายงาน/ตัวนับ | `recordAgentEvent` · `submitRating` · `usageReport` | `/agentEvents` client อ่านไม่ได้ |
+| แจ้งเตือน | `notifyEvent` · `delayAlertsMon` (scheduler จันทร์ 13:00 Bangkok) · `sendDelayDigest` (Cloud Tasks) | ส่ง Teams + อีเมลผ่าน Flow (`/config/mail`) |
+| Trigger/ความปลอดภัย | `claimPendingRoleGrant` · `auditUserRole` (เขียน `/userRoleAudit`) · `syncPortfolioAdoption` | ทุก onCall ต้องผ่าน `requireCompanyUser()` |
+
+> ⚠️ **ของแอปอื่นในโปรเจกต์เดียวกัน (ไม่ใช่ repo นี้):** Portfolio (`files`, `logProjectActivity`, `logTaskActivity`,
+> `pullLibraryToTask`, `pushTaskProgressToLibrary`, `requestDeployFromPortfolio`, `syncTaskCommentSummary`, `*Contribute*`),
+> VoteCup (`votecup*` ~50 ตัว), Governance (`governance*`) · และ **`send-approval-email`** ที่ยัง deploy อยู่แต่ **ไม่มี source เลย**
+> (zombie ยิงทุก write บน `/agents` แล้วข้ามเพราะเช็ค field `.status` ที่ตายแล้ว — ดู CLAUDE.md §26)
+> → unscoped deploy จะเสนอ **ลบทั้งหมดนี้** · **ดูข้อ 8 ก่อน deploy functions ทุกครั้ง**
 
 ### Firestore — named database `ai-agent-lib` (ไม่ใช่ `(default)`)
 | collection | เนื้อหา | เขียนโดย |
 |---|---|---|
-| `agents` | ตัวหลัก — agent/skill ทุกตัว (245 doc · active 239) | client (ตาม rules) |
-| `agentVectors` | embedding 256 มิติ ต่อ 1 agent | **function เท่านั้น** (client เขียนไม่ได้) |
+| `agents` | ตัวหลัก — agent/skill ทุกตัว (379 doc · live 361) | client (ตาม rules) + function |
+| `agentVectors` | embedding 256 มิติ ต่อ 1 agent | **function เท่านั้น** |
+| `agentStats` · `agentEvents` · `endpointFiles/…/endpointVersions` | ตัวนับ used/rating · event marker · ประวัติไฟล์แนบ | **function เท่านั้น** (client อ่านไม่ได้/เขียนไม่ได้) |
 | `sdlcProcesses` | 58 process | script |
-| `sdlcUseCases` | 82 use case (เดิม 106 — ลบชื่อซ้ำ 2026-08-11 ดู CLAUDE.md ข้อ 21) | script |
-| `users` | role + approveAreas | self-create ตอน login แรก, admin แก้ |
-| `config` | `schema` / `timeline` / `dashboard` / `directory` | admin (ยกเว้น schema.relatedRole โตได้) |
-| `analysisRuns` | เก็บผลตรวจซ้ำไว้เป็น knowledge base | client ตอน submit |
-| `metrics` | ตัวนับแชท ไม่มีข้อความ | **function เท่านั้น** |
-| `rateLimits` | ตัวนับ rate limit | **function เท่านั้น** (client อ่านไม่ได้ด้วย) |
+| `sdlcUseCases` | 82 use case (เดิม 106 — ลบชื่อซ้ำ ดู CLAUDE.md §21) | script |
+| `users` · `userRoleAudit` | role + approveAreas · log การเปลี่ยน role | self-create ตอน login แรก (create-only) / admin / trigger |
+| `config` | `schema` (category 26 · team 70) · `timeline` · `dashboard` · `directory` · `roleGroups` · `mail` · `alerts` | admin (ยกเว้น schema grow-only) |
+| `renameRequests` · `categoryProposals` · `alertRuns` · `mailLog` | คิวคำขอ + audit การส่งแจ้งเตือน | ตามแต่ละฟีเจอร์ |
+| `announcements` · `users/{uid}/inbox` | ประกาศ (audience 3 ระดับ) · read state | committee/admin (ประกาศ) · เจ้าของ (inbox) |
+| `analysisRuns` · `metrics` · `rateLimits` | KB ตรวจซ้ำ · ตัวนับแชทไม่เก็บข้อความ · rate limit | client(submit) / **function เท่านั้น** |
+| `workshopTeams` · `workshopIdeas` · `ideationStickers` | หน้า /workshop — **แยกขาด ห้ามแตะ `/agents`** | ตาม rules ของ workshop |
 
 > ⚠️ **ต้องระบุชื่อ DB เสมอ** — `getFirestore(app, 'ai-agent-lib')` ถ้าเรียก `getFirestore(app)`
 > เปล่าๆ จะไปชี้ default DB ที่ว่างเปล่า
@@ -112,15 +126,16 @@ repo นี้ = SPA เดียว (Vite + React, ไม่ใช้ router li
 ```
 isSkill = (aiAgent === false && skillMd === true)   // อย่างอื่น = Agent
 
-Internal/External (เรียงตามลำดับ):
+Internal/External (เรียงตามลำดับ — แก้ 2026-08-07):
   customerFacing === TRUE → External
   internalUse === TRUE    → Internal
-  ทั้งคู่ว่าง + มี sdlcStage → Internal
-  นอกนั้น → External
+  ทั้งคู่ว่าง              → Internal (default)
+  // เดิม step 3/4 เดาจาก sdlcStage แล้ว fallback External — พิสูจน์แล้วว่าผิดกับข้อมูลจริง 24 ตัว
 
 T1 = Skill+Internal · T2 = Agent+Internal · T3 = Skill+External · T4 = Agent+External
 ```
 ใช้ `getType()` / `getTier()` จาก `src/lib/tier.js` — **ห้ามเขียน logic เดาเอง**
+(ส่วน "Agent+Skill" = Agent ที่มี skill ลูก — derived จาก `childSkillIds`/`matchingAgent` ผ่าน `agentTypeLabel()` ไม่เก็บใน DB, CLAUDE.md §27)
 
 ### สถานะเชิงกระบวนการ (คนละแกนกับ devProgress)
 - `approvalStatus`: `pending` → `approved` | `rejected` (ผ่านคิวอนุมัติ)
@@ -138,14 +153,14 @@ T1 = Skill+Internal · T2 = Agent+Internal · T3 = Skill+External · T4 = Agent+
 
 ---
 
-## 4. สิทธิ์ (5 ระดับ)
+## 4. สิทธิ์ (6 ระดับ)
 
-`ROLES = ['user', 'staff', 'approver', 'committee', 'admin']`
+`ROLES = ['user', 'workshop', 'staff', 'approver', 'committee', 'admin']` (`workshop` = เหมือน `user` ใน library แต่เข้า `/workshop` ได้)
 เก็บที่ `/users/{uid}.role` · คนใหม่ที่ login ด้วยโดเมนที่อนุญาต **auto-provision เป็น `user`**
 
-> **`approveAreas` = Approve Area 16 ค่า (ไม่ใช่ SDLC stage แล้ว ตั้งแต่ 2026-08-10)**
+> **`approveAreas` = Approve Area 20 ค่า (ไม่ใช่ SDLC stage แล้ว ตั้งแต่ 2026-08-10 · 16→20 เมื่อ 2026-10-01)**
 > single source of truth: `src/lib/approveAreas.js` → `AREA_ORDER` + `agentApproveAreas()`
-> รายละเอียดเต็ม (fallback chain 7 ชั้น, สิทธิ์แก้ field, กฎห้าม inline) อยู่ใน **CLAUDE.md ข้อ 20**
+> รายละเอียดเต็ม (fallback chain 7 ชั้น, สิทธิ์แก้ field, กฎห้าม inline) อยู่ใน **CLAUDE.md ข้อ 20** · category (26 ค่า) แก้ได้เฉพาะ admin (§23) · sidebar จัดกลุ่มเป็น 7 หมวดยุบได้ (§34)
 
 | ทำอะไรได้ | user | staff | approver | committee | admin |
 |---|:-:|:-:|:-:|:-:|:-:|
@@ -157,6 +172,7 @@ T1 = Skill+Internal · T2 = Agent+Internal · T3 = Skill+External · T4 = Agent+
 | Archive / Unarchive | — | ✅ เฉพาะ area ตัวเอง | ✅ | ✅ | ✅ |
 | แก้ field `approveArea` | — | ✅ | — | — | ✅ |
 | แก้ทุก field | — | — | — | ✅ | ✅ |
+| โพสต์ประกาศ (Inbox) | — | — | — | ✅ | ✅ |
 | จัดการ user | — | — | — | — | ✅ |
 | Rebuild Search Index | — | — | — | — | ✅ |
 
@@ -204,7 +220,7 @@ agent doc ─→ buildEmbedText() ─→ Vertex embedding ─→ /agentVectors/{
 ### 6.2 แชท ALPHA
 
 **สถาปัตยกรรม: client-mediated function calling** — server ตัดสินใจว่าจะเรียก tool ไหน แต่ **client เป็น
-คนรัน tool จริง** จาก `src/lib/skills.js` แล้วส่งผลกลับ (วนได้สูงสุด 3 รอบ)
+คนรัน tool จริง** จาก `src/lib/skills.js` แล้วส่งผลกลับ (วนได้สูงสุด **6 รอบ** — `MAX_LOOP`)
 
 ```
 ผู้ใช้พิมพ์
@@ -215,7 +231,8 @@ agent doc ─→ buildEmbedText() ─→ Vertex embedding ─→ /agentVectors/{
        └── answer    → แสดงผล
 ```
 
-**Tools:** `query_library` · `query_sdlc` · `capability_search` · `get_agent_detail` · `connection_suggest`
+**Tools:** `query_library` · `query_sdlc` · `capability_search` · `get_agent_detail` · `connection_suggest` · `sdlc_gap_match`
+(จับคู่ agent กับ SDLC gap คำนวณใน `skills.js` **ไม่ให้โมเดลผลิตชื่อเอง** — CLAUDE.md §30–31)
 
 **การแสดงผล — กฎที่สำคัญที่สุด:**
 > **Layout ไม่อยู่ใน prompt** LLM ส่งมาแค่ `@@ ชื่อ | เหตุผล` (agent) หรือ `## หัวข้อ | รายละเอียด` (SDLC)
@@ -277,15 +294,15 @@ draft → rankCandidates() (rule-based)  ─┐
 ## 8. Deploy — กฎเหล็ก
 
 ### ⛔ ห้ามรัน `firebase deploy` เปล่าๆ หรือ `--only functions` เปล่าๆ เด็ดขาด
-GCP project `wolfy-481609` **แชร์กับแอป Portfolio** — `functions/index.js` ใน repo นี้มีแค่ 4 ตัว แต่
-บน production มี 8 ตัว → deploy แบบไม่ระบุชื่อจะ**เสนอลบ functions ของ Portfolio ทิ้ง**
+GCP project `wolfy-481609` **แชร์กับแอปอื่น (Portfolio, VoteCup, Governance)** — `functions/index.js` ใน repo นี้มี 21 ตัว แต่
+บน production มี ~76 ตัว → deploy แบบไม่ระบุชื่อจะ**เสนอลบ functions ของแอปอื่นทิ้ง**
 
 ```bash
 # hosting — ปลอดภัยโดยธรรมชาติ (target-isolated ตาม .firebaserc)
 npm run build && npx firebase-tools deploy --only hosting --project wolfy-481609
 
-# functions — ต้องระบุชื่อเสมอ
-npx firebase-tools deploy --only functions:chatLibrary --project wolfy-481609
+# functions — ต้องระบุชื่อเสมอ (ใน session ของ Claude ใช้ binary `firebase` แทน `npx firebase-tools`)
+firebase deploy --only functions:chatLibrary --project wolfy-481609
 
 # ทดสอบก่อนขึ้นจริง (ไม่แตะ live)
 npx firebase-tools hosting:channel:deploy <ชื่อ> --project wolfy-481609
@@ -293,7 +310,7 @@ npx firebase-tools hosting:channel:deploy <ชื่อ> --project wolfy-481609
 
 ### ต้องรันก่อน deploy แชททุกครั้ง
 ```bash
-node functions/regression.cjs     # 12 เคส รวมโหมด B (Agile/SDLC/ขอไอเดีย)
+node functions/regression.cjs     # ~17 เคส รวมโหมด B (Agile/SDLC/ขอไอเดีย) — แกว่ง 16/17 เป็นปกติ ต้อง baseline เทียบ
 ```
 ใช้ prompt จริงจาก `functions/chatPrompt.js` **ไม่ใช่สำเนา** → prompt เปลี่ยนแล้วพังจะรู้ทันที
 
@@ -306,25 +323,42 @@ Firebase เก็บ release เดิมให้ rollback ได้ (Console 
 
 ---
 
-## 9. สถานะล่าสุด (2026-08-05)
+## 9. สถานะล่าสุด (2026-11-26)
 
-**deploy แล้วและทดสอบผ่านทั้งหมด** · ไลบรารี 239 รายการ (active) · ย้ายเครื่องทำงานมาเครื่องบริษัทเรียบร้อย
+**deploy แล้วและใช้งานจริง** · bundle ที่เปิดอยู่ทั้ง 2 โดเมน = `index-CWWlaZK5.js` (Inbox + announcements, 2026-11-17) ·
+ไลบรารี 361 รายการ (live) · เครื่องทำงานคือเครื่องบริษัท
+
+### ไทม์ไลน์ตั้งแต่ ส.ค. (ละเอียดอยู่ใน CLAUDE.md ตามหมายเลข §)
+| ช่วง | สิ่งที่ขึ้น production |
+|---|---|
+| ส.ค. | semantic search ทั้งระบบ (§18) · Approve Area (§20) · ไฟล์แนบ + SSO gate (§24) · Ready-to-Use gate + rename (§25) · แจ้งเตือน (§26) · ผูก skill ข้ามทีม (§27) · sort/view (§28) |
+| ก.ย. | Teams/อีเมลผ่าน Flow (§26+) · Role Group AI (§33) · Library star ใน Workshop · link request · gemini-3.5-flash · หน้า `/workshop` |
+| ต.ค. | company-account gate 3 ชั้น (rules/functions/client) · delay alerts · redesign V7 · External Source · Attach file สำหรับ creator · endpoint versioning + Usage report (`functions/CLAUDE.md` §32) · Library star ใน Workshop |
+| พ.ย. | category group sidebar (§34, 6 พ.ย.) · Usage page ปรับ (§35, 10 พ.ย.) · **Inbox + announcements (§36, 17 พ.ย.)** |
 
 ### เฝ้าดู (ไม่ใช่งานสร้าง)
 1. **`/metrics/chat-YYYY-MM-DD`** — สัญญาณ 2 ตัว **คนละสาเหตุ**
    - `answer_notFound` พุ่ง → ปัญหา **retrieval** หรือไลบรารีขาดของ → `node functions/calibrate.cjs`
    - `tool_query_library` ชนะคำถามความสามารถ → ปัญหา **tool routing** ❗ไม่ใช่ embedding
      → ไปดูคำอธิบาย tool ใน `chatPrompt.js` แล้วรัน `regression.cjs`
-2. **`node functions/flag-internal.cjs`** เป็นระยะ — ถ้ามีคนลงไฟล์ `*.md` เพิ่ม
+2. **Inbox:** console เคยเจอ `ERR_CONNECTION_REFUSED`/400 ตอนทดสอบบน emulator (ยังไม่ได้ตามหาสาเหตุ) — ดู console ตอนใช้งานจริง
+3. **`/mailLog` + `/alertRuns`** — เช็คว่า Teams/อีเมล/delay digest ส่งผ่านจริง ไม่ติด `held`/`error`
 
 ### ยังไม่ตัดสินใจ
-3. **กติกาว่าอะไรควร/ไม่ควรอยู่ในไลบรารี** ← ถ้าจะต่อยอด อันนี้คุ้มที่สุด (แก้ต้นเหตุ)
-4. Rename Firebase web app `test-auth` → `ai-agent-library` (แค่ชื่อ ไม่กระทบ App ID)
-5. Setup backup admin account (deferred, accepted risk)
+4. **กติกาว่าอะไรควร/ไม่ควรอยู่ในไลบรารี** ← ถ้าจะต่อยอด อันนี้คุ้มที่สุด (แก้ต้นเหตุ) · รวม 3 ไฟล์ `.md` ที่ `internalTool` แต่ `customerFacing` (CLAUDE.md §22)
+5. Rename Firebase web app `test-auth` → `ai-agent-library` (แค่ชื่อ ไม่กระทบ App ID)
+6. Setup backup admin account (deferred, accepted risk)
+7. **ช่องที่ยังไม่ปิด (จาก security fix 9 ต.ค.):** `/config/timeline` — viewer ใน `viewers[]` เขียนทับทั้ง doc ได้ · และ `/users` doc ของบัญชีนอกโดเมนที่สร้างก่อน fix ยังค้างอยู่ (เข้าอะไรไม่ได้แล้ว)
+8. **ไอเดียวัดผลหลังใช้งาน (B+A+C)** — ทิศทางผ่านแล้ว (2026-11-11) แต่ **ยังไม่ได้เขียน spec / ไม่ได้ build** (memory `project_adoption_value_measurement`)
+9. dependencies ของ functions ที่ patch ไว้แต่ยัง **ไม่ได้ deploy** → รวมกับการอัป firebase-admin 14 / firebase-functions 7 (memory `project_functions_deps_upgrade`)
+
+### 📅 วันที่ต้องจำ
+- **5 ม.ค. 2027** — GitHub PAT `ai-lib` หมดอายุ (push จะ fail) · **28 มี.ค. 2027** — Cloud Build เปลี่ยน default channel → เฝ้า functions deploy ครั้งแรกหลังวันนั้น
 
 ### ⏸️ พักไว้ — **ยังไม่จบ ต้องกลับมาคุย (ไม่ใช่ cut)**
 - **GitLab skill integration** + ข้อกำหนดทีม security ว่า `wolfy-481609` ควรเป็น sandbox เท่านั้น
   ผู้ใช้สั่งเอง *"พักเรื่องนี้ไว้ก่อน จนกว่าจะได้ข้อสรุปเพิ่มเติม"* (2026-07-30)
+  ⚠️ ตั้งแต่ไฟล์แนบ (§24) ระบบเก็บ artifact ของงานจริงไว้ในโปรเจกต์นี้ตอน runtime แล้ว — ผู้ใช้ตัดสินใจเดินหน้า แต่ควรแจ้งทีม security
 
 ### ❌ Cut แล้ว — ปิดถาวร อย่าเสนอซ้ำ
 Connections 129 คู่ · UID backfill ที่เหลือ · Owner auto-fill จาก credential
@@ -337,10 +371,12 @@ Connections 129 คู่ · UID backfill ที่เหลือ · Owner auto
 ### ✅ ต่ออยู่แล้ววันนี้
 | ระบบ | ใช้ทำอะไร |
 |---|---|
-| **Vertex AI** | Gemini 2.5 Flash (ตรวจซ้ำ + แชท) · `text-multilingual-embedding-002` (search) |
+| **Vertex AI** | `gemini-3.5-flash` (ตรวจซ้ำ + แชท + Role Group) · `text-multilingual-embedding-002` (search) |
 | **Firebase Auth** | Google SSO จำกัดโดเมนองค์กร |
 | **Google People API** | ดึงรายชื่อคนในองค์กรมาทำ directory cache (`src/lib/directory.js`) — scope `directory.readonly` เป็น sensitive scope ขอเฉพาะตอนจำเป็น ไม่ใช่ตอน login ปกติ |
-| **Skill packages** | เสิร์ฟไฟล์ `.zip` ที่ `wolfy-ai-library.web.app/skills/*.zip` (ตอนนี้ 3 ตัว: duplicate-check, connection-suggest, library-query) |
+| **ไฟล์แนบ (endpoint file)** | เก็บใน GCS bucket ปิดสนิท เสิร์ฟผ่าน `/f/{agentId}` (SSO) + callable — แทน `public/skills/*.zip` เดิมที่เปิดสาธารณะ (CLAUDE.md §24) |
+| **Microsoft Teams + อีเมล** | Teams Workflow (`TEAMS_FLOW_URL` ใน Secret Manager) ส่งการ์ด + อีเมลต่อผู้รับหนึ่งคน · สลับที่ `/config/mail` · approver ทุก event ถูก override ไปที่ `tinnapat.p@arise.tech` จนกว่าผู้ใช้จะสั่งเปลี่ยน |
+| **Portfolio app** | `syncPortfolioAdoption` นับ task ที่ลิงก์ agent/skill เป็น adoption (อ่านอย่างเดียว) |
 | **`endpoint` field** | ทางที่ agent ตัวอื่น/คนอื่นเข้าถึงของในไลบรารีได้ |
 
 ### ⏸️ วางแผนไว้แต่พักอยู่ — GitLab
@@ -349,12 +385,11 @@ Connections 129 คู่ · UID backfill ที่เหลือ · Owner auto
 **ห้ามเริ่มทำจนกว่าผู้ใช้จะบอกว่าได้ข้อสรุปแล้ว**
 
 ### 🔮 ต่อยอดที่ระบบเปิดทางไว้ให้แล้ว (ยังไม่ทำ)
-1. **Adoption / Satisfaction metrics บน Dashboard** — ตัดออกจาก v1 โดยตั้งใจ เพราะ**ยังไม่มีข้อมูลจริง**
-   รอ marketplace integration · **อย่าใส่ตัวเลขปลอมหรือประมาณเอาเด็ดขาด**
+1. **Adoption metrics** — ตอนนี้มีข้อมูลจริงแล้ว (used count จาก `agentEvents`, ดาวจาก `agentStats`, Usage report) แต่ยัง **ไม่มีการวัด business value หลังใช้งาน** (ดู §9 ข้อ 8) · **อย่าใส่ตัวเลขปลอมหรือประมาณเอาเด็ดขาด**
 2. **Learning loop จาก `/analysisRuns`** — ทุกผลตรวจซ้ำถูกเก็บพร้อม outcome (approved/rejected) แล้ว
    ตั้งใจให้เอาไปทำ RAG/feedback ในอนาคต **ยังไม่ได้สร้าง** และเคยเตือนไว้ว่า *"เก็บข้อมูล ≠ ฉลาดขึ้น"*
    ต้องมี design pass ของตัวเองก่อน
-3. **ขยาย skill packages** — โครงเสิร์ฟ `.zip` มีแล้ว เพิ่มตัวใหม่ได้เลยโดยไม่ต้องแก้สถาปัตยกรรม
+3. **ขยายไฟล์แนบ** — โครง upload/versioning/SSO มีแล้ว (เพดาน 5 MB ต่อไฟล์ ถ้าใหญ่กว่านี้เปลี่ยนเป็น signed URL)
 
 ---
 
@@ -365,9 +400,9 @@ Connections 129 คู่ · UID backfill ที่เหลือ · Owner auto
 | ไฟล์ prompt ภายในถูกลงเป็น agent | ทำให้ผลค้นหาเพี้ยน | แก้ปลายเหตุด้วย `internalTool` · ต้นเหตุยังอยู่ |
 | ไม่มีเกณฑ์ตอนอนุมัติว่าอะไรควรอยู่ในไลบรารี | ปัญหาข้างบนจะกลับมา | ยังไม่ตัดสินใจ (ข้อ 9.3) |
 | `firestore.rules` ต้อง publish มือทุกครั้ง | ลืมแล้วฟีเจอร์ใหม่พังเงียบ | ตั้งใจให้เป็นแบบนี้ · ต้องจำเอง |
-| bundle ~985KB (เกิน 500KB warning) | โหลดครั้งแรกช้า | รับได้ · ยังไม่ทำ code-splitting |
+| bundle ใหญ่กว่า 500KB warning (วัดล่าสุด ~985KB เมื่อ ส.ค. — โตขึ้นแล้ว) | โหลดครั้งแรกช้า | รับได้ · ยังไม่ทำ code-splitting |
 | `analysisRuns` dedup อ่านทั้ง collection ต่อ 1 submit | O(n) | ยังเล็กอยู่ · ทบทวนถ้าโตขึ้น |
-| ไม่มี automated test นอกจาก `regression.cjs` | logic เปลี่ยนแล้วไม่มีอะไรจับ | ยอมรับไว้ · regression ครอบเฉพาะแชท |
+| ไม่มี test framework — มีแต่ `functions/regression.cjs` (แชท) + `verify-*.cjs` ~21 ไฟล์ รายฟีเจอร์ | ต้องจำรันเองก่อน deploy | verify script โหลดโมดูลจริงผ่าน `loadEsm()` ไม่ก๊อปตาราง · ไม่ผูก CI |
 | web app registration ชื่อ `test-auth` แต่รัน production | ชวนเข้าใจผิด | ข้อ 9.4 |
 
 ---
@@ -415,6 +450,11 @@ GitHub **ไม่รองรับ password แล้ว** — `git clone/push
   · ถ้า keychain ยังจำ token เก่าอยู่ ให้ลบด้วย
   `git credential-osxkeychain erase` (พิมพ์ `host=github.com` แล้ว `protocol=https` แล้ว Enter 2 ครั้ง)
 
+- ⚠️ **push บนเครื่องนี้ (พบ 2026-11-17):** Keychain หยิบบัญชี `tinnapatptm-ship-it` (ไม่มีสิทธิ์) →
+  ใช้ `git -c credential.helper= -c credential.helper="!gh auth git-credential" push origin main` กับ gh account `ARS-AI-lib`
+  (`gh auth switch -u ARS-AI-lib`) หรือลบ credential เก่าของ github.com ใน Keychain Access
+- 🔒 **deploy production ต้องหยุดถามผู้ใช้ก่อนทุกครั้ง** แม้อยู่ในโหมด auto/bypass (กฎถาวร 2026-10-29 — `docs/SETUP-AUTONOMY.md` §6)
+
 ### สิ่งที่ **ไม่ต้อง**ย้ายมา (ตรวจแล้ว)
 ⚠️ **แก้ 2026-10-29:** `~/.claude/settings.json` **ไม่ว่างแล้ว** — มี `env` (proxy/โมเดลภายในองค์กร), `model`, `effortLevel`, `theme`, `enableWorkflows` และ **`sandbox.network.allowedDomains`** ที่เพิ่มเข้าไปเพื่อให้ autonomous deploy ทำงานได้ (ดู `docs/SETUP-AUTONOMY.md`) → **ย้ายเครื่องต้องตั้งไฟล์นี้ใหม่** ไม่ใช่ปล่อยว่าง
 ไม่มี custom command/agent/output-style · โลโก้และ skill package อยู่ใน `public/` ใน git แล้ว ·
@@ -424,7 +464,7 @@ permission allowlist อยู่ที่ `.claude/settings.json` ใน repo (
 **ก่อนแก้อะไรที่เกี่ยวกับ search/prompt** → อ่าน `CLAUDE.md` §18 + memory
 `project_chat_retrieval_rearchitecture.md` ให้จบก่อน มีเหตุผลที่วัดมาแล้วของทุกการตัดสินใจ
 
-**ก่อน deploy** → `node functions/regression.cjs` ต้องผ่าน 12/12
+**ก่อน deploy** → `node functions/regression.cjs` (ผ่านราว 16–17/17 · ดู memory `feedback_regression_flaky`) + `node functions/verify-*.cjs` ของฟีเจอร์ที่แตะ
 
 **ถ้าผู้ใช้ถามว่ามีอะไรค้าง** → ต้องรวม **GitLab (พักไว้)** ด้วยเสมอ ห้ามรายงานว่าถูก cut
 
@@ -440,4 +480,9 @@ permission allowlist อยู่ที่ `.claude/settings.json` ใน repo (
 | `docs/memory/project_work_queue.md` | ประวัติว่าทำอะไรไปบ้างและ**ทำไม** (STATUS block บนสุด) |
 | `docs/memory/project_chat_retrieval_rearchitecture.md` | หลักฐานเชิงตัวเลขของทุกการตัดสินใจเรื่อง search |
 | `docs/memory/feedback_*.md` | กฎที่ผู้ใช้เคยสั่งไว้ — **อย่าถามซ้ำ** |
+| `functions/CLAUDE.md` | §32 endpoint versioning + Usage report (อยู่ใน functions/ ไม่ใช่ root) |
+| `docs/WORKSHOP.md` | หน้า `/workshop` ทั้งหมด + กฎ isolation |
+| `docs/CHANGELOG-2026-09-23.md` · `docs/CHANGELOG-2026-10-28.md` | สรุปรอบงานพร้อมเหตุผล |
+| `docs/SETUP-AUTONOMY.md` · `docs/MOVE-TO-NEW-MACHINE.md` | ตั้ง Claude Code ให้ทำงานเอง · ย้ายเครื่อง |
+| `docs/superpowers/specs/` · `plans/` | design + implementation plan รายฟีเจอร์ (Workshop star, category group, usage page, inbox) |
 | `docs/presentation/` | สไลด์แนะนำระบบ 5-6 นาที (self-contained เปิด offline ได้) + ข้อควรระวังถ้าจะแก้วิดีโอ |

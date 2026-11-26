@@ -105,49 +105,42 @@ Tier:
 
 ---
 
-## 5. สถานะปัจจุบัน (Current State — อัปเดต 2026-08-11)
+## 5. สถานะปัจจุบัน (Current State — อัปเดต 2026-11-26)
 
-**ทุกอย่างที่ระบุด้านล่าง deploy ขึ้น production แล้วและทดสอบผ่านแล้ว**
-ข้อมูลจริงในระบบ ณ ตอนนี้: **agent/skill approved + not archived = 239 รายการ**
-(รวม pending/rejected/archived ทั้งหมด 245 doc)
+> ตัวเลขวัดจริง 2026-11-26 (Firestore + `functions:list` + live bundle) — รายละเอียดเต็มอยู่ใน `docs/SYSTEM-OVERVIEW.md` §9
 
-### เสร็จแล้ว — ของเดิม (ก่อน ส.ค.)
-- Migration agent + SDLC catalog เข้า Firestore ครบ (ตอน migrate: 57 processes + 106 use cases —
-  ปัจจุบันเป็น 58 + 82 ดูข้อ 3 และข้อ 20)
-- `SDLCTab.jsx`, Dashboard (ข้อ 14), Timeline, Sign-in/Branding (ข้อ 16) — ครบ
-- Chat Assistant "ALPHA" v1 (ข้อ 15) + Feature Batch 2026-07-06 (ข้อ 17)
-- Deploy workflow ย้ายมา local direct แล้ว (ข้อ 11)
+**ทุกอย่างขึ้น production แล้วและใช้งานจริง · โหมดเฝ้าดู + บำรุงรักษา ไม่มีงานสร้างใหญ่ค้าง**
+- ข้อมูล: **agents 379 doc · live (approved + ไม่ archive) 361** · archived 10 · rejected 8 · pending 0 ·
+  users 552 · `sdlcProcesses` 58 · `sdlcUseCases` 82 · category 26 · team 70
+- ฟีเจอร์ล่าสุดบน production: **Inbox + announcements (§36, 2026-11-17)** — bundle `index-CWWlaZK5.js` ทั้ง 2 โดเมน
+  (`wolfy-ai-library.web.app`, `wolfy-481609.web.app`) · rules publish ผ่าน Console แล้ว
+- Functions: `functions/index.js` export **21 ตัว** · production มี **~76 ตัว** (แชร์กับ Portfolio/VoteCup/Governance + zombie
+  `send-approval-email`) → **scoped deploy เสมอ + รัน `functions:list` ก่อน** (ข้อ 11)
+- Roles 6 ระดับ (`user`/`workshop`/`staff`/`approver`/`committee`/`admin`) · Approve Area **20 ค่า** · โมเดล `gemini-3.5-flash`
+- เส้นทาง SPA: `/` · `/timeline` · `/usage` · `/workshop` · `/f/{agentId}`
 
-### เสร็จแล้ว — รอบล่าสุด (ส.ค. 2026)
-- **Archive agent/skill** — ไม่ลบ แค่ซ่อนจากไลบรารี/แชท แต่ **ยังใช้ตรวจซ้ำได้** (approver+ เท่านั้น)
-- **`endpoint` field** (optional) — ลิงก์ไปใช้งาน/ดาวน์โหลด แสดงเป็นไอคอนลิงก์ · sanitize ผ่าน `safeEndpointUrl()`
-- **Preview card แสดง Owner แทน Creator** (detail card ยังแสดงครบ)
-- **CSV export เพิ่ม UTF-8 BOM** — Excel เคยอ่านภาษาไทยเป็นตัวต่างดาว (Numbers ไม่เป็น เลยไม่มีใครเห็นบั๊ก)
-- **Default view เปลี่ยนเป็น By Owner** (เดิม By Role)
-  ⚠️ **เปลี่ยนอีกครั้ง 2026-08-20 เป็น By Category** — ดูข้อ 28
-- **Import 73 รายการใหม่จาก Google Sheet** — เพิ่มอย่างเดียว ไม่แตะของเดิม
-- **⭐ รื้อ semantic search ทั้งระบบ (ข้อ 18)** — งานใหญ่ที่สุดของรอบนี้
-- **ตรวจซ้ำตอน Pre-Registration เป็น hybrid ด้วย** — เดิมพลาดตัวซ้ำที่เขียนคนละคำ (วัดได้อันดับ #89/#135/#43 จาก 244 = หลุด top-15 ทั้งหมด)
-- **Metrics แบบไม่เก็บข้อความ** — `/metrics/chat-YYYY-MM-DD` นับ turn/tool/ไม่พบ · ข้อตกลง session-only ยังอยู่ครบ
-- **Rate limit** `embedQuery` 20 ครั้ง/นาที/คน · **full reindex เช็ค role ฝั่ง server** (เดิมซ่อนแค่ปุ่ม)
-- **ปุ่ม Rebuild Search Index** ในเมนู admin (เห็นเฉพาะ `role === 'admin'`)
-- **ย้ายเครื่องทำงานสำเร็จ (2026-08-05)** — จาก Mac เดิม → เครื่องบริษัท (ดูข้อ 19)
-
-### เสร็จแล้ว — รอบ 2026-08-10/11 (Approve Area + data quality)
-- **⭐ Approve Area taxonomy 16 area** แทน SDLC stage — ดูข้อ 20 (งานใหญ่สุดของรอบนี้)
-- **Staff archive ตาม area ตัวเอง** + **Approve Area แก้ได้เฉพาะ admin/staff**
-- **แก้บั๊กข้อมูลหายเงียบ** — scope External เคยลบ SDLC field ทิ้งตอน Save (ดูข้อ 20 ท้ายหัวข้อ)
-- **Use case ชื่อซ้ำ** — ลบ 24 doc (106→82) + แก้วิธี join ใน SDLC tab (ดูข้อ 21)
-- **`internalTool` ติดอัตโนมัติตอน submit** — ดูข้อ 22
+### ไทม์ไลน์ฟีเจอร์ (ดูรายละเอียดตามหมายเลข §)
+| ช่วง | ที่ขึ้นแล้ว |
+|---|---|
+| ก่อน ส.ค. | Migration agent + SDLC catalog · SDLCTab · Dashboard (§14) · Timeline · ALPHA v1 (§15) · Sign-in/Branding (§16) · Feature batch (§17) |
+| ส.ค. | Archive · `endpoint` field · import 73 รายการ · semantic search (§18) · Approve Area (§20) · use case dedupe (§21) · `internalTool` (§22) · category (§23) · ไฟล์แนบ + SSO gate (§24) · Ready-to-Use gate + rename (§25) · แจ้งเตือน (§26) · ผูก skill + type derived (§27) · card sort (§28) · fix แชท (§29–31) |
+| ก.ย. | Owner edit / Virtual Assistant / merge ทีมนก (§32) · Role Group AI (§33) · Teams/อีเมลผ่าน Flow · link request · gemini-3.5-flash (§7, §15) · หน้า `/workshop` (`docs/WORKSHOP.md`) |
+| ต.ค. | company-account gate 3 ชั้น (9 ต.ค.) · delay alerts (จันทร์ 13:00) · redesign V7 · External Source · Attach file สำหรับ creator · endpoint versioning + Usage report (`functions/CLAUDE.md` §32) · Library star ใน Workshop (spec 29–30 ต.ค.) · รอบสรุป `docs/CHANGELOG-2026-10-28.md` |
+| พ.ย. | category group sidebar (§34) · Usage page (§35) · Inbox + announcements (§36) |
 
 ### ค้างอยู่ / ต้องเฝ้าดู
-- **ต้อง publish `firestore.rules` ทุกครั้งที่แก้** ผ่าน Console (named DB `ai-agent-lib`) — collection ใหม่รอบนี้: `/agentVectors`, `/metrics`, `/rateLimits`
-  ⚠️ **บทเรียน 2026-08-11:** deploy hosting แล้วแต่ลืม publish rules → ปุ่ม Archive ของ staff
-  โผล่ใน UI แต่เขียนจริงไม่ผ่าน (permission denied) **ถ้าแก้ rules ต้อง publish คู่กับ deploy เสมอ**
-- **เฝ้าดู `/metrics`** — ถ้า `answer_notFound` พุ่ง หรือ `tool_query_library` ชนะคำถามความสามารถ = retrieval เริ่มเพี้ยน
-- **คุณภาพข้อมูลในไลบรารี** — มีคนลงทะเบียนไฟล์ prompt ภายใน (`*.md`) เป็น agent ทำให้ค้นหาเพี้ยน
-  แก้ชั่วคราวด้วย `internalTool` flag แล้ว แต่ **ถ้ามีคนลงเพิ่มอาการจะกลับมา** — ควรคุยเป็นกติกาตอนอนุมัติ
-- Connections 129 คู่ / UID backfill / Owner auto-fill — **cut แล้วทั้งหมด** อย่าเสนอซ้ำ (ดู memory backlog_decisions_20260704)
+- **ต้อง publish `firestore.rules` ทุกครั้งที่แก้** ผ่าน Console (named DB `ai-agent-lib`) คู่กับ deploy hosting เสมอ
+  (บทเรียน 2026-08-11: ลืม publish → ปุ่ม Archive ของ staff โผล่แต่เขียนไม่ผ่าน) · collection ใหม่ที่ต้องมี rules: `/agentVectors`, `/metrics`,
+  `/rateLimits`, `/announcements`, `/users/{uid}/inbox`
+- **เฝ้าดู `/metrics`** (`answer_notFound` = retrieval · `tool_query_library` ชนะ = tool routing — คนละสาเหตุ ดูข้อ 10) +
+  `/mailLog` / `/alertRuns` (แจ้งเตือนส่งผ่านจริงไหม)
+- **Inbox:** console เคยแสดง `ERR_CONNECTION_REFUSED`/400 ตอนทดสอบ emulator — ยังไม่ได้ตามหา
+- **คุณภาพข้อมูล:** ไฟล์ prompt ภายในถูกลงเป็น agent — กันปลายเหตุด้วย `internalTool` (§22) · ต้นเหตุ (ไม่มีเกณฑ์ตอนอนุมัติ) ยังไม่ตัดสินใจ
+- **ช่องที่ยังไม่ปิด:** `/config/timeline` viewer เขียนทับ `viewers[]` ได้ · `/users` doc ของบัญชีนอกโดเมนที่สร้างก่อน fix 9 ต.ค.
+- **ไอเดียวัดผลหลังใช้งาน (B+A+C)** ผ่านทิศทางแล้ว 2026-11-11 แต่ยังไม่มี spec/ไม่ build — พักไว้ ไม่ใช่ cut
+- **พักไว้ (ไม่ใช่ cut):** GitLab skill integration รอข้อสรุปทีม security (ข้อ 10)
+- Connections 129 คู่ / UID backfill / Owner auto-fill — **cut แล้วทั้งหมด** อย่าเสนอซ้ำ (memory `backlog_decisions_20260704`)
+- ⚠️ ข้อ 4 (Tier) ใน CLAUDE.md นี้ยังเขียน rule เก่า (ข้อ 3/4 เดาจาก `sdlcStage`) — **โค้ดจริงใน `src/lib/tier.js` แก้เป็น default Internal ตั้งแต่ 2026-08-07** ยึดโค้ด/`docs/SYSTEM-OVERVIEW.md` §3
 
 ---
 
