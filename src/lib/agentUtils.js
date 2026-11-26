@@ -378,7 +378,8 @@ export function skillsOfAgent(agent, allAgents) {
 export function agentsOfSkill(skill, allAgents) {
   const names = matchingAgentNames(skill);
   if (!Array.isArray(allAgents) || !allAgents.length) return names;
-  const live = new Set(allAgents.map((a) => a.agentName));
+  // A workflow is not an "Agent" parent — its members show a separate Workflow row.
+  const live = new Set(allAgents.filter((a) => !isWorkflow(a)).map((a) => a.agentName));
   const byId = allAgents.filter((a) => getType(a) === 'agent' && childSkillIdList(a).includes(skill?.id)).map((a) => a.agentName);
   return [...new Set([...names.filter((n) => live.has(n)), ...byId])];
 }
@@ -503,6 +504,13 @@ export function agentTypeLabel(agent, allAgents = []) {
   if (isWorkflow(agent)) return 'Workflow skills';
   if (getType(agent) === 'skill') return 'Skill';
   return pairedSubSkills(agent, allAgents).length > 0 ? 'Agent+Skill' : 'Agent';
+}
+
+// Short type name for badges ("T1 Skill"): workflows get their own name, everything else keeps
+// the two-value Agent/Skill reading the badges always had.
+export function typeBadgeName(agent) {
+  if (isWorkflow(agent)) return 'Workflow skills';
+  return getType(agent) === 'agent' ? 'Agent' : 'Skill';
 }
 
 // ── Cascade guard (2026-08-20) ───────────────────────────────────────

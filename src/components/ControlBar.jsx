@@ -23,6 +23,7 @@ const TYPES = [
   ['all', 'All'],
   ['agent', 'Agent'],
   ['skill', 'Skill'],
+  ['workflow', 'Workflow skills'],
 ];
 
 

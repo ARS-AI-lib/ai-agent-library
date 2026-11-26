@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { isMyAgent, normalizeProgress, fmtDate, toJsDate } from '../lib/agentUtils';
+import { isMyAgent, normalizeProgress, fmtDate, toJsDate, typeBadgeName } from '../lib/agentUtils';
 import { agentStatus, ST_DEF } from '../lib/status';
 import { getType, getTier, TIER_DEF } from '../lib/tier';
 import { nextStep } from '../lib/mySubmissions';
@@ -111,7 +111,7 @@ export default function MySubmissionsModal({ user, allAgents = [], pending = [],
               return (
                 <article key={a.id} className={`v7-sub-card ${urgent ? 'urgent' : ''}`}>
                   <div className="v7-ac-top">
-                    <span className="tier-badge" style={{ color: td.color, background: td.bg }} title={td.label}>{tier} {getType(a) === 'agent' ? 'Agent' : 'Skill'}</span>
+                    <span className="tier-badge" style={{ color: td.color, background: td.bg }} title={td.label}>{tier} {typeBadgeName(a)}</span>
                     <span className="v7-ac-scope">{a.owner || '—'}</span>
                     <span
                       className={`status-pill v7-ac-status ${st.cls || ''}`}

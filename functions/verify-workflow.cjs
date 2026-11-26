@@ -35,6 +35,8 @@ eq('isPairedSubSkill: members true, listed-nowhere skill false', [U.isPairedSubS
 eq('a workflow is never a sub-skill, even if another workflow lists it', U.isPairedSubSkill(W, [...all, { ...W, id: 'w2', agentName: 'Flow2', childSkillIds: ['w1'] }]), false);
 eq('unlisted skill with matchingAgent=workflow name is NOT a member', U.isPairedSubSkill(s3, all), false);
 eq('workflowOf', [U.workflowOf(s2, all)?.agentName, U.workflowOf(loose, all)], ['Flow', null]);
+eq('agentsOfSkill never lists a workflow as an Agent parent', [U.agentsOfSkill(s1, all), U.agentsOfSkill(s3, all), U.agentsOfSkill(kid, all)], [[], [], ['Ag']]);
+eq('typeBadgeName', [U.typeBadgeName(W), U.typeBadgeName(s1), U.typeBadgeName(agent)], ['Workflow skills', 'Skill', 'Agent']);
 eq('agentTypeLabel', [U.agentTypeLabel(W, all), U.agentTypeLabel(s1, all), U.agentTypeLabel(agent, all), U.agentTypeLabel({ ...agent, id: 'a2', agentName: 'Solo' }, all)], ['Workflow skills', 'Skill', 'Agent+Skill', 'Agent']);
 const f = (type) => U.buildAgentFilter({ type, owner: 'all', role: 'all', tier: 'all', reusable: 'all', hasEndpoint: false, category: null, stage: null, platformTools: false, externalSkills: false, search: '' });
 eq('filter skill excludes workflows', [f('skill')(W), f('skill')(s1)], [false, true]);

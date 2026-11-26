@@ -8,7 +8,7 @@ import { PRE_CODES, DEPLOY_CODES, deployGate, pendingRecheck, buildScreening } f
 import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
-import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
+import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames, typeBadgeName, isWorkflow, workflowMembers, workflowOf } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { recordAgentEvent, submitRating } from '../lib/agentEvents';
@@ -544,7 +544,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         <div className="v7-dhead">
           <div className="v7-dhead-meta">
             <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
-              {tier} {type === 'agent' ? 'Agent' : 'Skill'}
+              {tier} {typeBadgeName(agent)}
             </span>
             {agent.reusable && <span className="v7-dhead-scope">{agent.reusable}</span>}
             {isArchived && (
@@ -788,7 +788,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               </div>
               {lockedSubSkill && (
                 <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 6 }}>
-                  Status และ Progress ของ Skill นี้จะปรับตาม Agent หลัก
+                  Status และ Progress ของ Skill นี้จะปรับตาม {workflowOf(agent, allAgents) ? 'Workflow' : 'Agent หลัก'}
                 </div>
               )}
               {((canEdit) || (mayEditThisAgent && !lockedSubSkill)) && (
@@ -851,6 +851,20 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             </div>
           )}
           <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
+          {isWorkflow(agent) && (
+            <div className="mrow">
+              <span className="mk">Skills</span>
+              <span style={{ color: 'var(--sk)', fontSize: 11, fontWeight: 600 }}>
+                {workflowMembers(agent, allAgents).map((m, i) => `${i + 1}. ${m.agentName}${i === 0 ? ' (Starter)' : ''}`).join(' → ') || '—'}
+              </span>
+            </div>
+          )}
+          {!isWorkflow(agent) && workflowOf(agent, allAgents)?.agentName && (
+            <div className="mrow">
+              <span className="mk">Workflow</span>
+              <span style={{ color: 'var(--sk)', fontSize: 11, fontWeight: 600 }}>{workflowOf(agent, allAgents).agentName}</span>
+            </div>
+          )}
           {related.length > 0 && (
             <div className="mrow">
               <span className="mk">{type === 'skill' ? 'Agent' : 'Skill'}</span>
@@ -1069,7 +1083,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               </div>
               <div style={{ padding: 18 }}>
                 <h2 className="mtitle">Request deploy</h2>
-                <div className="msub">{tier} · {type === 'skill' ? 'Skill' : 'Agent'} · {isInternalOrExternal(agent)}</div>
+                <div className="msub">{tier} · {typeBadgeName(agent)} · {isInternalOrExternal(agent)}</div>
                 {deployStep === 1 ? (
                   <>
                     <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, margin: '0 0 12px' }}>

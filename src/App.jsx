@@ -388,7 +388,7 @@ export default function App() {
     ...[...role_].map((v) => ({ key: `r-${v}`, label: `Role: ${v}`, onRemove: () => setRole_(without(role_, v)) })),
     ...[...tier].map((v) => ({ key: `t-${v}`, label: `Tier: ${v}`, onRemove: () => setTier(without(tier, v)) })),
     ...[...reusable].map((v) => ({ key: `u-${v}`, label: v, onRemove: () => setReusable(without(reusable, v)) })),
-    ...(type !== 'all' ? [{ key: 'type', label: `Type: ${type === 'agent' ? 'Agent' : 'Skill'}`, onRemove: () => setType('all') }] : []),
+    ...(type !== 'all' ? [{ key: 'type', label: `Type: ${({ agent: 'Agent', skill: 'Skill', workflow: 'Workflow skills' })[type] || type}`, onRemove: () => setType('all') }] : []),
     ...(hasEndpoint ? [{ key: 'ep', label: 'Has endpoint', onRemove: () => setHasEndpoint(false) }] : []),
     ...(search.trim() ? [{ key: 'q', label: `“${search.trim()}”`, onRemove: () => setSearch('') }] : []),
   ];
