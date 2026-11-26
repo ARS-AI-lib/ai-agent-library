@@ -27,5 +27,16 @@ eq('thresholds md >= hi → error', bad((c) => { c.thresholds = { md: 10, hi: 10
 eq('duplicate question code → error', bad((c) => { c.questions[1].code = c.questions[0].code; }), true);
 eq('empty Thai text → error', bad((c) => { c.questions[0].th = '  '; }), true);
 eq('no pre-stage question → error (registration needs one)', bad((c) => { c.questions.forEach((q) => { q.stage = 'deploy'; }); }), true);
+// unsaved-change counter for the Settings save bar
+const E = (() => { const code = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'screeningConfigEdit.js'), 'utf8').replace(/^export\s+/gm, ''); const decls = [...code.matchAll(/^(?:function|const|let)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]); return new Function(`${code}\n;return { ${[...new Set(decls)].join(', ')} };`)(); })();
+const base = clone();
+const edit = (fn) => { const c = clone(); fn(c); return E.countChanges(base, c); };
+eq('countChanges: untouched → 0', E.countChanges(base, clone()), 0);
+eq('countChanges: one score edit → 1', edit((c) => { c.questions[3].options[1].score = 99; }), 1);
+eq('countChanges: two questions edited → 2', edit((c) => { c.questions[0].th += 'x'; c.questions[1].en += 'y'; }), 2);
+eq('countChanges: question added → 1, removed → 1', [edit((c) => { c.questions.push({ ...c.questions[0], id: 'qNEW', code: 'N' }); }), edit((c) => { c.questions.pop(); })], [1, 1]);
+eq('countChanges: thresholds → 1', edit((c) => { c.thresholds.hi = 20; }), 1);
+eq('countChanges: reorder only → 1', edit((c) => { c.questions.reverse(); }), 1);
+eq('nextSelected: deleting the selected question picks its neighbour', [E.nextSelected(['a', 'b', 'c'], 'b'), E.nextSelected(['a', 'b', 'c'], 'c'), E.nextSelected(['a'], 'a'), E.nextSelected([], 'a')], ['c', 'b', null, null]);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
