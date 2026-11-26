@@ -1,0 +1,26 @@
+/* Screening questionnaire (2026-11-26). Tokens + shapes follow theme.css / .fg / .msg. */
+.scr-grp { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mu); margin: 16px 0 6px; }
+.scr-grp:first-child { margin-top: 0; }
+.scr-q { border: 1px solid var(--bd-soft); border-radius: var(--r-sm); padding: 10px 12px; margin-bottom: 8px; background: var(--surface, transparent); }
+.scr-q.unans { border-left: 3px solid var(--warn); }
+.scr-q.ans { border-left: 3px solid var(--ok); }
+.scr-qh { display: flex; gap: 8px; align-items: baseline; }
+.scr-code { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--mu); flex-shrink: 0; }
+.scr-qt { font-size: 12.5px; color: var(--tx); line-height: 1.5; }
+.scr-qe { font-size: 11px; color: var(--mu); margin-top: 2px; }
+.scr-opts { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.scr-opt { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; padding: 4px 2px; cursor: pointer; }
+.scr-opt input { margin-top: 2px; }
+.scr-opt em { color: var(--mu); font-style: normal; font-size: 11px; }
+.scr-q textarea { width: 100%; margin-top: 8px; min-height: 56px; font-family: inherit; font-size: 12.5px; }
+.scr-lvl { display: inline-block; font-weight: 700; font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; }
+.scr-lvl.Low { color: var(--ok); }
+.scr-lvl.Medium { color: var(--warn); }
+.scr-lvl.High { color: var(--late); }
+.scr-res h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--mu); margin: 12px 0 4px; }
+.scr-res ul { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; color: var(--tx2); }
+.scr-fix { font-size: 12px; line-height: 1.6; margin-bottom: 6px; }
+.scr-fix b { font-family: 'IBM Plex Mono', monospace; }
+.scr-fix .scr-now { color: var(--mu); font-size: 11px; }
+.scr-must { border: 1px solid var(--late); border-radius: var(--r-sm); padding: 8px 12px; margin-top: 10px; }
+.scr-must h4 { color: var(--late); margin-top: 0; }
