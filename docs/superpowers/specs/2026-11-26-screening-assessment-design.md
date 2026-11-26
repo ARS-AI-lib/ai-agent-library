@@ -74,3 +74,15 @@ Server-side enforcement · re-assessment on edit · Questionnaire 2 · CSV/PDF e
   check; deploy request blocked by C11 with C4=web; approver sees level.
 - Deploy order: publish rules (user, Console) → hosting (preview channel first). No functions change.
 - Update CLAUDE.md (new §37) + SYSTEM-OVERVIEW.
+
+## Deploy checklist (added 2026-11-26)
+At **Request deploy**, step 1 shows a per-Tier checkbox list of what the package contains
+(T from `getTier()`); items marked `*` are required before Next. Step 2 = the deployment
+assessment above. Lists (user): T1 readme* template no_secret* · T2 readme template rbac*
+prompt_injection guardrail audit_log · T3 readme* template no_secret* guardrail pii* ·
+T4 readme template rbac* prompt_injection* guardrail* pii* audit_log* cab*.
+Stored as `deployChecklist: { tier, checked[], at }` with the request; cascades to sub-skills
+with the parent's values; shown to the approver. Rules: add `deployChecklist` next to
+`screening` in the deploy-request `hasOnly`. UI reuses the existing `mov`/`mbox` dialog and the
+`v7-step` stepper. Checklist ("what is in the package") and C7/C11 ("was it tested") are
+separate on purpose; overlapping items are not merged.
