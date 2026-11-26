@@ -868,9 +868,12 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         </>
         )}
 
-        <div className="btn-row" style={{ marginTop: 12 }}>
-          <button className="btn btn-secondary" disabled={saving} onClick={requestClose}>Cancel</button>
-          <button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'Saving…' : 'Save Changes'}</button>
+        <div className="fsticky">
+          <span className="fmeta" />
+          <div className="fbtns">
+            <button className="btn btn-secondary" disabled={saving} onClick={requestClose}>Cancel</button>
+            <button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'Saving…' : 'Save Changes'}</button>
+          </div>
         </div>
       </div>
       {confirmDialog}

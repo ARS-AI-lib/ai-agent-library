@@ -1684,3 +1684,17 @@ Spec `docs/superpowers/specs/2026-11-26-assessment-menu-design.md` · plan `docs
 - Verify: `verify-screening.cjs` · `verify-screening-config.cjs` · `verify-assessments.cjs` · `verify-assessment-archive.cjs` · emulator: `verify-assessment-rules.cjs`, `verify-assessment-archive-run.cjs`.
 - Not done: edit-history UI for the questionnaire; the three callables and the Archived-tab buttons were not clicked end-to-end before release (no functions emulator) — check after deploy.
 
+---
+
+## 40. Forms & Assessment redesign (2026-11-26, not deployed yet)
+
+Plan `docs/superpowers/plans/2026-11-26-forms-redesign.md` · mockup `mockup-redesign.html` (repo root, 4 screens). Same V7 look (pill buttons, tint-blue selection, 36px/8px fields) — only structure changed; no behaviour, data or rules change.
+
+- **Primitives** `src/styles/forms.css` (loaded after `v7.css`): `.fsec`/`.fsec-h` (section title + muted note + hairline), `.fgrid` (+`.full`), `.fhelp` (visible help under a field), `.fopt` (Optional pill), `.fcount`, `.ftype`/`.ftype-card` (type cards), `.fcheck`/`.fcheck-item`/`.freq` (checklist cards, Required pill), `.fsticky` (sticky bottom action bar: `.fmeta` left, `.fbtns` right; full-bleed inside a 22px/26px-padded `.mbox` or `.tab-panel`). `.mform` on a `.mbox` hides the red `*` — only do that where optional fields carry `.fopt` (the registration form).
+- **Registration form** (`PreRegModal`): sections *What are you registering? / What it does / Scope of use / Ownership & reuse / Tools & dependencies*, type cards, help text instead of ⓘ, "Required fields n of N" (`requiredFieldStatus()` in `src/lib/registrationType.js`) in the sticky bar.
+- **Assessment questions** (`ScreeningQuestions.jsx` + `Screening.css` `.as-*`): option tiles (2 columns, points at the right, red + advice when the option blocks — `blockKey` = `blocksPre`/`blocksDeploy`), live `ScreeningSide` (score, level on a Low|Medium|High bar via `meterPosition()`, progress, Blocks / Must / Should list). Used by the registration Assessment step and the deploy dialog step 2.
+- **Request deploy dialog:** checklist cards with a Required pill and "n of m required ticked"; sticky footer; step 2 widens to 880px.
+- **Assessment Settings:** question list (search, Pre / Deploy groups, "blocks" tail) + editor for the selected question (thresholds band, option cards: stepper, Needs fixing pills, block switches) + save bar counting unsaved changes (`countChanges()`, `nextSelected()` in `src/lib/screeningConfigEdit.js`).
+- **Adopting in another form:** wrap blocks in `.fsec` headings, use `.fgrid`/`.fg`, add `.fopt` to optional labels (then add `mform`), replace the bottom `btn-row` with `.fsticky`.
+- Not done: the other modals (announcement composer, user management, …) only inherit the global V7 styles; drag-to-reorder in Settings; the pre-registration Assessment tab and the Settings *Save* callable were not clicked end-to-end.
+
