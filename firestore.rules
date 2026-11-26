@@ -483,6 +483,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Assessment records (2026-11-26): one immutable doc per registration ('pre') and per deploy
+    // request ('deploy'). Anyone known may CREATE their own; approver-or-above may READ all —
+    // per-Area scoping for approvers is UI-side (Firestore cannot prove an array-contains-any
+    // query satisfies a hasAny rule). No update/delete: archiving moves docs via the Admin SDK.
+    match /assessments/{id} {
+      allow read: if isApproverOrAbove();
+      allow create: if isKnownUser()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.keys().hasOnly(['agentId', 'agentName', 'owner', 'approveArea', 'stage', 'answers', 'decl', 'createdBy', 'year', 'createdAt'])
+        && request.resource.data.stage in ['pre', 'deploy']
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+    // Frozen yearly archive — callables (Admin SDK) only.
+    match /assessmentArchive/{document=**} {
+      allow read, write: if false;
+    }
+
     // Dedup markers: {agentId}__{uid}__{YYYY-MM-DD}__{kind}. Their existence
     // turns the counters above into "unique users per day" instead of raw
     // hits — which is both un-inflatable and the more honest number to put in

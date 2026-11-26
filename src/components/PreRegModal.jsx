@@ -7,6 +7,7 @@ import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
 import { questionsFor, preGate, buildScreening } from '../lib/screening';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
+import { assessmentRecord } from '../lib/assessments';
 import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills } from '../lib/registrationType';
 import { DECL_FIELDS } from '../lib/declaration';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
@@ -628,6 +629,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         updatedAt: serverTimestamp(),
       };
       const agentRef = await addDoc(collection(db, 'agents'), mainDoc);
+      // One assessment record per registration (for a workflow: on its Starter skill). Never blocks the submit.
+      addDoc(collection(db, 'assessments'), {
+        ...assessmentRecord({ ...mainDoc, id: agentRef.id }, 'pre', screeningAnswers, createdBy),
+        createdAt: serverTimestamp(),
+      }).catch((e) => console.warn('assessment record not saved:', e?.message || e));
 
       // ── Category proposal (2026-08): the AI decided no existing shortcut
       // fits well. Best-effort, never blocks submission — the agent already

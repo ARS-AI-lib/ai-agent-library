@@ -7,6 +7,7 @@ import { checklistFor, checklistGate, buildDeployChecklist } from '../lib/deploy
 import { questionsFor, deployGate, pendingRecheck, buildScreening, normalizeAnswers } from '../lib/screening';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
+import { assessmentRecord } from '../lib/assessments';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames, typeBadgeName, isWorkflow, workflowMembers, workflowOf } from '../lib/agentUtils';
@@ -500,6 +501,11 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       const withPhase = (d) => (phaseChanged(d.devProgress, 95) ? { ...patch, phaseSince: serverTimestamp() } : patch);
       // Older items predate the declaration fields — fill whatever is still empty (per doc).
       await updateDoc(doc(db, 'agents', agent.id), { ...withPhase(agent), ...declarationPatch(agent, deployDecl) });
+      // One assessment record per deploy request (parent only, not per cascaded child). Never blocks.
+      addDoc(collection(db, 'assessments'), {
+        ...assessmentRecord({ ...agent, ...declarationPatch(agent, deployDecl) }, 'deploy', deployAnswers, user?.uid || ''),
+        createdAt: serverTimestamp(),
+      }).catch((e) => console.warn('assessment record not saved:', e?.message || e));
       // Parent only: the cascade below writes one doc per sub-skill, and a
       // 7-child parent would otherwise produce 8 emails for one request.
       notifyEvent('deploy.requested', { agentId: agent.id });
