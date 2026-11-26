@@ -5,6 +5,7 @@ import { db } from '../lib/firebase';
 import { getTier, TIER_DEF } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
 import { matchingAgentNames, pairedSubSkills, agentTypeLabel, fmtDate, categoryColor } from '../lib/agentUtils';
+import { ScreeningSummary } from './ScreeningQuestions';
 import { queueViewer, visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { decideRenameRequest } from '../lib/endpointFiles';
@@ -526,6 +527,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                     <strong>Overlap reason</strong> (vs {agent.analysisResult.overlapWith} {agent.analysisResult.overlapConfidence}%): {agent.analysisResult.overlapJustification}
                   </div>
                 )}
+                <ScreeningSummary agent={agent} />
                 {agent.analysisResult?.summary && (
                   <div style={{ fontSize: 11, color: 'var(--tx2)', marginTop: 3, maxWidth: 480, fontStyle: 'italic' }}>
                     "{agent.analysisResult.summary}"
@@ -605,6 +607,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                       )}
                     </div>
                   </div>
+                  <ScreeningSummary agent={agent} />
                 </div>
                 <div className="queue-actions">
                   {(fullAccess || (mine.size > 0 && resolveAreas(agent).some((area) => mine.has(area)))) && (

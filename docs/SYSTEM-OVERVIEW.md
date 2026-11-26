@@ -336,6 +336,9 @@ Firebase เก็บ release เดิมให้ rollback ได้ (Console 
 | ต.ค. | company-account gate 3 ชั้น (rules/functions/client) · delay alerts · redesign V7 · External Source · Attach file สำหรับ creator · endpoint versioning + Usage report (`functions/CLAUDE.md` §32) · Library star ใน Workshop |
 | พ.ย. | category group sidebar (§34, 6 พ.ย.) · Usage page ปรับ (§35, 10 พ.ย.) · **Inbox + announcements (§36, 17 พ.ย.)** |
 
+### อยู่ระหว่าง release (2026-11-26, branch `feat/screening-assessment`)
+Screening assessment + deploy package checklist (CLAUDE.md §37): ฟอร์มลงทะเบียนมีขั้น Assessment (C7 บล็อก) ก่อน AI duplicate check · ช่อง declaration ใหม่ 3 ช่อง · ขอ Deploy ต้องติ๊ก package ตาม Tier แล้วตอบ C10–C11. ⚠️ ต้อง publish `firestore.rules` ผ่าน Console ก่อน deploy hosting
+
 ### เฝ้าดู (ไม่ใช่งานสร้าง)
 1. **`/metrics/chat-YYYY-MM-DD`** — สัญญาณ 2 ตัว **คนละสาเหตุ**
    - `answer_notFound` พุ่ง → ปัญหา **retrieval** หรือไลบรารีขาดของ → `node functions/calibrate.cjs`

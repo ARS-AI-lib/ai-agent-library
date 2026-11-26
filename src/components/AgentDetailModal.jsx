@@ -863,6 +863,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           )}
           <div className="mrow"><span className="mk">Role</span><span>{role || '—'}</span></div>
           <div className="mrow"><span className="mk">Process</span><span style={{ color: 'var(--mu)', fontSize: 11 }}>{process || '—'}</span></div>
+          {DECL_FIELDS.filter((f) => String(agent[f.key] ?? '').trim()).map((f) => (
+            <div className="mrow" key={f.key}><span className="mk">{f.label}</span><span style={{ fontSize: 11.5 }}>{agent[f.key]}</span></div>
+          ))}
 
         </div>
         {agent.description && <p className="v7-ddesc">{agent.description}</p>}

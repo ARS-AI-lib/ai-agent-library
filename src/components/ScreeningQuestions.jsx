@@ -1,4 +1,5 @@
 import { QUESTIONS, RECO, evaluate, questionByCode } from '../lib/screening';
+import { CHECKLIST } from '../lib/deployChecklist';
 import '../styles/Screening.css';
 
 // Renders any subset of the screening questions (decl = free text, others = radio).
@@ -72,6 +73,26 @@ export function ScreeningResult({ answers }) {
           })}
         </>
       )}
+    </div>
+  );
+}
+
+// One-line summary for approvers: level, must/should codes and the ticked package items.
+export function ScreeningSummary({ agent }) {
+  const sc = agent?.screening;
+  const cl = agent?.deployChecklist;
+  if (!sc && !cl) return null;
+  const labels = cl ? (CHECKLIST[cl.tier] || []).filter((i) => (cl.checked || []).includes(i.id)).map((i) => i.label) : [];
+  return (
+    <div className="scr-sum">
+      {sc && (
+        <span>
+          Screening: <span className={`scr-lvl ${sc.level || ''}`}>{sc.level || '—'}</span>
+          {sc.must?.length > 0 && <span className="scr-sum-must"> · Must fix {sc.must.join(', ')}</span>}
+          {sc.should?.length > 0 && <span> · Should fix {sc.should.join(', ')}</span>}
+        </span>
+      )}
+      {labels.length > 0 && <div className="scr-now">Package: {labels.join(' · ')}</div>}
     </div>
   );
 }

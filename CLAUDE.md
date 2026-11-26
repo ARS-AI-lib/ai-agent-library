@@ -1638,3 +1638,19 @@ Sidebar จัดกลุ่ม 26 category (จาก `/config/schema.category
 
 ### Commits
 `9b486c0` (logic + verify) · `a7afe23` (rules + rules test) · `bdcec71` (Inbox modal + hooks + wiring + seed) · `d79b938` (composer) · `e01d264`/`c84df20` (docs) · `25aafe9` (fix wave: past expiry, ✕ guard, aria-label, createdByName freeze) · `5f95f64` (ย้าย New announcement ไป ☰ menu)
+
+---
+
+## 37. Screening assessment + deploy package checklist (2026-11-26)
+
+Spec `docs/superpowers/specs/2026-11-26-screening-assessment-design.md` · plan `docs/superpowers/plans/2026-11-26-screening-assessment.md`. From the bank's screening questionnaire (`Skill_Library_Screening`).
+
+- **Registration:** Fill in details → **Assessment** (C1–C9) → Analysis (duplicate check). The duplicate check only starts from the Assessment step. **Only C7 blocks** (embedded real data / not checked). C6/C8/C9 that are not "ผ่าน" are saved and asked again at deploy.
+- **D1–D6 are form fields, not assessment questions** (`src/lib/declaration.js`): D1 purpose = `description`, D4 = `tool` ("Permitted Tools"), D6 = `llm` ("Models Tested") — existing fields; **new top-level fields** `permittedDomains`, `prohibitedUses`, `requiredSkills`. All required at registration; sub-skills inherit them from the parent.
+- **Request deploy** (AgentDetailModal) is 2 steps: **(1) Package checklist** per Tier (`src/lib/deployChecklist.js`; items marked required must be ticked) → **(2) Assessment**: C10–C11 + re-ask C6/C8/C9 that failed. **Blocks** when C10 is not "ผ่าน" or C11 is "ต้องแก้" (C4 reads documents/web and C11 not passed). Items with no stored `screening` (all that predate this) answer C1–C11 here, and fill any empty declaration field.
+- **Stored:** `agent.screening = { v, answers{C1..C11 index}, level, total, must[], should[], preAt, deployAt }`, `agent.deployChecklist = { tier, checked[], at }`. Both cascade to paired sub-skills with the parent's values. Approvers see level + must/should + ticked package items in the Pending queue; the detail modal shows the declaration fields.
+- **Level:** sum of option scores, Low 0–6 · Medium 7–13 · High ≥14 (from the HTML tool). ⛔ questions/scores/gates live only in `src/lib/screening.js` — don't copy.
+- **Client-side gates**, same trust model as the duplicate block and the deploy request. `firestore.rules`: the creator deploy-request `hasOnly` now also allows `deployChecklist`, `screening`, `permittedDomains`, `prohibitedUses`, `requiredSkills`, `tool`, `llm` → **publish rules via Console (named DB `ai-agent-lib`) before the hosting deploy.**
+- Verify: `node functions/verify-screening.cjs` (31, replays xlsx sheet 3) · `node functions/verify-deploy-checklist.cjs` (15) · rules: `firebase emulators:exec --config firebase.rules-test.json --only auth,firestore --project wolfy-481609 "node functions/verify-screening-rules.cjs"`.
+- Not done: Questionnaire 2 (user confirmation at adoption); editing the 3 new declaration fields from the Edit form (existing items fill them at deploy request); server-side enforcement.
+
