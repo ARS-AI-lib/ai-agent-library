@@ -1,37 +1,51 @@
-import { evaluate, optionOf, questionById, stageResults } from '../lib/screening';
+import { evaluate, optionOf, questionById, stageResults, meterPosition } from '../lib/screening';
 import { CHECKLIST } from '../lib/deployChecklist';
 import '../styles/Screening.css';
 
-// Renders the given questions (radio per option). answers: { questionId: optionId }.
-export function ScreeningQuestions({ config, questionIds, answers, onChange }) {
-  let lastGroup = null;
+// Assessment questions as option tiles (2 columns). answers: { questionId: optionId }.
+// blockKey ('blocksPre' | 'blocksDeploy'): a chosen option carrying it turns red and shows the
+// question's advice right under it — the reason the next step is blocked.
+export function ScreeningQuestions({ config, questionIds, answers, onChange, blockKey }) {
+  const qs = config.questions.filter((q) => questionIds.includes(q.id));
+  const groups = [...new Set(qs.map((q) => q.group))];
   return (
     <div>
-      {config.questions.filter((q) => questionIds.includes(q.id)).map((q) => {
-        const v = answers[q.id];
-        const done = !!optionOf(config, q.id, v);
-        const head = q.group !== lastGroup ? <div className="scr-grp">{q.group}</div> : null;
-        lastGroup = q.group;
+      {groups.map((g) => {
+        const inGroup = qs.filter((q) => q.group === g);
+        const done = inGroup.filter((q) => optionOf(config, q.id, answers[q.id])).length;
         return (
-          <div key={q.id}>
-            {head}
-            <div className={`scr-q ${done ? 'ans' : 'unans'}`}>
-              <div className="scr-qh">
-                <span className="scr-code">{q.code}</span>
-                <div>
-                  <div className="scr-qt">{q.th}</div>
-                  {q.en && <div className="scr-qe">{q.en}</div>}
+          <div key={g} className="as-group">
+            <div className="as-group-h">{g}<em>{done} / {inGroup.length} answered</em></div>
+            {inGroup.map((q) => {
+              const picked = optionOf(config, q.id, answers[q.id]);
+              const blocks = !!(picked && blockKey && picked[blockKey]);
+              return (
+                <div key={q.id} className="as-q">
+                  <div className="as-qt">
+                    <span className="as-code">{q.code}</span>
+                    <div>
+                      <div className="as-title">{q.th}</div>
+                      {q.en && <div className="as-en">{q.en}</div>}
+                    </div>
+                  </div>
+                  <div className="as-opts" role="radiogroup" aria-label={q.code}>
+                    {q.options.map((o) => {
+                      const on = answers[q.id] === o.id;
+                      const bad = blockKey && o[blockKey];
+                      return (
+                        <label key={o.id} className={`as-opt${on ? ' on' : ''}${bad ? ' bad' : ''}`}>
+                          <input type="radio" name={`as-${q.id}`} checked={on} onChange={() => onChange(q.id, o.id)} />
+                          <span className="as-dot" aria-hidden="true" />
+                          <span className="as-otext">{o.th}</span>
+                          <span className="as-pts" title="Points">{o.score}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {blocks && <div className="as-flag">⛔ ข้อนี้บล็อกขั้นถัดไป{q.advice ? ` — ${q.advice}` : ''}</div>}
                 </div>
-              </div>
-              <div className="scr-opts" role="radiogroup">
-                {q.options.map((o) => (
-                  <label key={o.id} className="scr-opt">
-                    <input type="radio" name={`scr-${q.id}`} checked={v === o.id} onChange={() => onChange(q.id, o.id)} />
-                    <span>{o.th} <em>({o.en})</em></span>
-                  </label>
-                ))}
-              </div>
-            </div>
+              );
+            })}
           </div>
         );
       })}
@@ -39,39 +53,28 @@ export function ScreeningQuestions({ config, questionIds, answers, onChange }) {
   );
 }
 
-// Result panel: level, must fix, main factors, should fix.
-export function ScreeningResult({ config, answers }) {
-  const r = evaluate(config, answers);
+// Live result next to the questions: score, level on a Low|Medium|High bar, progress, what blocks / needs fixing.
+export function ScreeningSide({ config, answers, questionIds, stage, blockKey }) {
+  const ids = questionIds || config.questions.map((q) => q.id);
+  const answered = ids.filter((id) => optionOf(config, id, answers[id])).length;
+  const r = evaluate(config, answers, stage);
+  const blocking = ids.map((id) => questionById(config, id)).filter((q) => q && blockKey && optionOf(config, q.id, answers[q.id])?.[blockKey]);
+  const pos = meterPosition(r.total, config.thresholds);
   return (
-    <div className="scr-res">
-      <div>
-        <span className={`scr-lvl ${r.level || ''}`}>{r.level || 'Not enough answers'}</span>
-        {r.level && <span className="scr-score" title="Total points from the answers">Score {r.total}</span>}
-      </div>
-      {r.must.length > 0 && (
-        <div className="scr-must">
-          <h4>Must fix</h4>
-          {r.must.map((m) => (
-            <div key={m.id} className="scr-fix"><b>{m.item}</b> {questionById(config, m.id).th.split(' ').slice(0, 9).join(' ')}…
-              <div className="scr-now">{m.why.join(' · ')}</div></div>
-          ))}
+    <aside className="as-side" aria-live="polite">
+      <div className="as-k">Result so far</div>
+      <div className="as-big"><b>{r.total}</b>{r.level && <span className={`scr-lvl ${r.level}`}>{r.level}</span>}</div>
+      <div className="as-meter"><i style={{ left: `${pos}%` }} /></div>
+      <div className="as-scale"><span>Low 0–{config.thresholds.md - 1}</span><span>Medium {config.thresholds.md}–{config.thresholds.hi - 1}</span><span>High {config.thresholds.hi}+</span></div>
+      <div className="as-prog">{answered} of {ids.length} answered<div className="as-bar"><i style={{ width: `${ids.length ? (answered / ids.length) * 100 : 0}%` }} /></div></div>
+      {(blocking.length > 0 || r.must.length > 0 || r.should.length > 0) && (
+        <div className="as-list">
+          {blocking.map((q) => <div key={`b${q.id}`} className="as-li"><span className="as-pill must">Blocks</span>{q.code} {q.th.split(' ').slice(0, 6).join(' ')}</div>)}
+          {r.must.filter((m) => !blocking.some((q) => q.id === m.id)).map((m) => <div key={`m${m.id}`} className="as-li"><span className="as-pill must">Must fix</span>{m.item}</div>)}
+          {r.should.map((m) => <div key={`s${m.id}`} className="as-li"><span className="as-pill should">Should fix</span>{m.item} {(questionById(config, m.id).advice || '').slice(0, 60)}</div>)}
         </div>
       )}
-      <h4>Main factors</h4>
-      {r.hits.length ? <ul>{r.hits.map((h) => <li key={h}>{h}</li>)}</ul> : <div className="scr-now">ไม่มีปัจจัยเสี่ยงเด่น</div>}
-      {r.should.length > 0 && (
-        <>
-          <h4>Should fix</h4>
-          {r.should.map((m) => {
-            const q = questionById(config, m.id);
-            return (
-              <div key={m.id} className="scr-fix"><b>{m.item}</b> {q.advice || q.th}
-                <div className="scr-now">คำตอบตอนนี้: {optionOf(config, m.id, answers[m.id])?.th}</div></div>
-            );
-          })}
-        </>
-      )}
-    </div>
+    </aside>
   );
 }
 

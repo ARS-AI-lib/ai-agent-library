@@ -97,5 +97,11 @@ eq('evaluate partial: level computed over the answered pre questions', S.evaluat
 eq('evaluate (strict) is still null while a pre question is unanswered', S.evaluate(cNew, { ...PASS, C4: 'C4d' }, 'pre').level, null);
 eq('stageResults uses the partial level', S.stageResults(cNew, { answers: { ...PASS, C4: 'C4d' }, deployAt: null }).pre.level, 'Medium');
 eq('stageResults: deploy result carries the overall score', [r1.deploy.total, r1.pre.total], [S.evaluate(CFG, { ...PASS, C10: 'C10b', C6: 'C6b' }).total, S.evaluate(CFG, { ...PASS, C6: 'C6b' }, 'pre').total]);
+// level meter marker (thirds: Low | Medium | High), % from the left
+const mp = (t) => Math.round(S.meterPosition(t, CFG.thresholds) * 10) / 10;
+eq('meterPosition: 0 → 0, md → 33.3, hi → 66.7', [mp(0), mp(7), mp(14)], [0, 33.3, 66.7]);
+eq('meterPosition: inside bands interpolates', [mp(3.5), mp(10.5), mp(21)], [16.7, 50, 83.3]);
+eq('meterPosition: capped at 100 and floored at 0', [mp(1000), mp(-5)], [100, 0]);
+eq('meterPosition follows edited thresholds', Math.round(S.meterPosition(5, { md: 5, hi: 10 }) * 10) / 10, 33.3);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

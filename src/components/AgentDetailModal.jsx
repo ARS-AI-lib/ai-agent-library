@@ -8,7 +8,7 @@ import { questionsToAsk, deployGate, buildScreening, normalizeAnswers } from '..
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
 import { assessmentRecord } from '../lib/assessments';
-import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
+import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames, typeBadgeName, isWorkflow, workflowMembers, workflowOf } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
@@ -1078,7 +1078,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         const close = () => setConfirmingDeploy(false);
         return (
           <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && close()}>
-            <div className="mbox" style={{ padding: 0, maxWidth: 640 }}>
+            <div className="mbox" style={{ padding: 0, maxWidth: deployStep === 2 ? 880 : 640 }}>
               <button className="mclose" onClick={close} style={{ zIndex: 1 }}>✕</button>
               <div className="v7-steps" aria-label="Deploy request steps">
                 <span className={`v7-step ${deployStep === 1 ? 'active' : ''} ${deployStep === 2 ? 'done' : ''}`}>
@@ -1122,7 +1122,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                         ? 'ตอบแบบประเมินการทดสอบ (และข้อที่ยังไม่ผ่านตอนลงทะเบียน) ก่อนขออนุมัติ'
                         : 'รายการนี้ยังไม่เคยตอบแบบประเมิน — ตอบให้ครบก่อนขออนุมัติ'}
                     </p>
-                    <div style={{ maxHeight: '50vh', overflowY: 'auto', paddingRight: 4 }}>
+                    <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: 4 }}>
                       {missingDecl.length > 0 && (
                         <div style={{ marginBottom: 12 }}>
                           <div className="scr-grp">Declaration</div>
@@ -1137,13 +1137,16 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                           })}
                         </div>
                       )}
-                      <ScreeningQuestions
-                        config={screeningConfig}
-                        questionIds={codes}
-                        answers={deployAnswers}
-                        onChange={(code, v) => setDeployAnswers((p) => ({ ...p, [code]: v }))}
-                      />
-                      <div style={{ marginTop: 12 }}><ScreeningResult config={screeningConfig} answers={deployAnswers} /></div>
+                      <div className="as-wrap">
+                        <ScreeningQuestions
+                          config={screeningConfig}
+                          questionIds={codes}
+                          answers={deployAnswers}
+                          blockKey="blocksDeploy"
+                          onChange={(code, v) => setDeployAnswers((p) => ({ ...p, [code]: v }))}
+                        />
+                        <ScreeningSide config={screeningConfig} answers={deployAnswers} questionIds={codes} blockKey="blocksDeploy" />
+                      </div>
                     </div>
                     {dGate.blocked && (
                       <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />

@@ -237,3 +237,12 @@ export function stageResults(config, sc) {
   const all = evaluate(config, answers, undefined, { partial: true });
   return { pre, deploy: { rows, level: all.level, total: all.total, must: idsOf(all.must), should: idsOf(all.should) } };
 }
+
+// Where the result marker sits on the Low | Medium | High bar (thirds), as a % from the left.
+export function meterPosition(total, thresholds) {
+  const { md, hi } = thresholds;
+  const t = Math.max(0, total);
+  if (t < md) return (t / md) * (100 / 3);
+  if (t < hi) return 100 / 3 + ((t - md) / (hi - md)) * (100 / 3);
+  return Math.min(100, (200 / 3) + ((t - hi) / hi) * (100 / 3));
+}

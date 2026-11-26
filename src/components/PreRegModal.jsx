@@ -10,7 +10,7 @@ import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { assessmentRecord } from '../lib/assessments';
 import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills, requiredFieldStatus } from '../lib/registrationType';
 import { DECL_FIELDS } from '../lib/declaration';
-import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
+import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
@@ -1209,13 +1209,22 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 <div className="msub">ตอบแบบประเมินก่อนตรวจความซ้ำซ้อน</div>
               </div>
             </div>
-            <ScreeningQuestions
-              config={screeningConfig}
-              questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
-              answers={screeningAnswers}
-              onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
-            />
-            <div style={{ marginTop: 14 }}><ScreeningResult config={screeningConfig} answers={screeningAnswers} /></div>
+            <div className="as-wrap">
+              <ScreeningQuestions
+                config={screeningConfig}
+                questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
+                answers={screeningAnswers}
+                blockKey="blocksPre"
+                onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
+              />
+              <ScreeningSide
+                config={screeningConfig}
+                answers={screeningAnswers}
+                questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
+                stage="pre"
+                blockKey="blocksPre"
+              />
+            </div>
             {preAssess.blocked && (
               <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
                 ไม่สามารถไปต่อได้ — {preAssess.reasons[0]}
