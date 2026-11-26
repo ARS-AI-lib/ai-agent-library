@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/theme.css'
 import './styles/v7.css'
+import './styles/forms.css'
 
 import App from './App.jsx'
 import TimelinePage from './components/TimelinePage.jsx'
