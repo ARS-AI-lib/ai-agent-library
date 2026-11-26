@@ -9,3 +9,24 @@ export function typeFlags(type) {
   // Agent+Skill: the MAIN doc is a pure Agent — each paired skill becomes its own Skill doc.
   return { aiAgent: true, skillMd: false };
 }
+
+// Workflow skills (rev 2026-11-26): the MAIN form creates the Starter skill (a plain Skill whose
+// matchingAgent = workflow name); this builds the wrapping workflow doc from the same payload.
+// Members are listed in step order, Starter first. No link request, no self-parent.
+export function buildWorkflowDoc(mainDoc, workflowName, starterId, memberIds, extra = {}) {
+  const { linkSuggestion, ...rest } = mainDoc;
+  return {
+    ...rest,
+    ...typeFlags(WORKFLOW),
+    agentName: workflowName,
+    matchingAgent: '',
+    compatibleAgents: [],
+    childSkillIds: [starterId, ...memberIds],
+    ...extra,
+  };
+}
+
+// Required Skills (D5) of a workflow = Starter + the other member names, in order.
+export function workflowRequiredSkills(starterName, memberNames) {
+  return [starterName, ...memberNames].map((n) => String(n || '').trim()).filter(Boolean).join(', ');
+}

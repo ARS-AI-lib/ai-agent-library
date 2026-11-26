@@ -1,6 +1,14 @@
 // Emulator test: deploy request may carry deployChecklist + screening (2026-11-26).
 //   npx firebase-tools emulators:exec --config firebase.rules-test.json \
 //     --only auth,firestore --project wolfy-481609 "node functions/verify-screening-rules.cjs"
+const fs = require('fs');
+const path = require('path');
+function loadEsm(file) {
+  const code = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', file), 'utf8').replace(/^\s*import\s[^;]*;\s*$/gm, '').replace(/^export\s+/gm, '');
+  const decls = [...code.matchAll(/^(?:function|const|let)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
+  return new Function(`${code}\n;return { ${[...new Set(decls)].join(', ')} };`)();
+}
+const { buildWorkflowDoc } = loadEsm('registrationType.js');
 const { initializeApp } = require('firebase/app');
 const { getAuth, connectAuthEmulator, signInWithCredential, GoogleAuthProvider } = require('firebase/auth');
 const fsdk = require('firebase/firestore');
@@ -53,6 +61,12 @@ async function connect(key, email) {
   await denied('creator deploy request with an extra unknown key', fsdk.updateDoc(ref(creator, 'a2'), base({ ...extras, sneaky: true })));
   await denied('non-creator cannot file the request', fsdk.updateDoc(ref(other, 'a3'), base(extras)));
   await denied('screening alone (no deploy fields) is not a creator edit', fsdk.updateDoc(ref(creator, 'a3'), { screening: extras.screening, updatedAt: fsdk.serverTimestamp() }));
+
+  // Workflow registration (2026-11-26): the doc the form builds must pass the create rule.
+  const starter = { agentName: 'Starter', aiAgent: false, skillMd: true, approvalStatus: 'pending', createdBy: creator.uid, creatorEmails: ['cr@arise.tech'], matchingAgent: 'Flow', devProgress: 0, deploymentStatus: 'none', createdAt: fsdk.serverTimestamp(), updatedAt: fsdk.serverTimestamp() };
+  await allowed('creator creates the Starter skill', fsdk.setDoc(fsdk.doc(creator.db, 'agents', 'wf-starter'), starter));
+  await allowed('creator creates the workflow doc built by buildWorkflowDoc', fsdk.setDoc(fsdk.doc(creator.db, 'agents', 'wf-doc'), buildWorkflowDoc(starter, 'Flow', 'wf-starter', ['m1', 'm2'])));
+  await denied('another user cannot create a workflow in the creator\'s name', fsdk.setDoc(fsdk.doc(other.db, 'agents', 'wf-doc2'), buildWorkflowDoc(starter, 'Flow2', 'wf-starter', [])));
 
   console.log(failed ? `\n${failed} FAILED` : '\nall passed');
   process.exit(failed ? 1 : 0);

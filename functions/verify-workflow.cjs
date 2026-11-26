@@ -49,5 +49,13 @@ eq('typeFlags: Workflow skills writes isWorkflow + skill flags', R.typeFlags('Wo
 eq('typeFlags: Skill / Agent / Agent+Skill never set isWorkflow', ['Skill', 'Agent', 'Agent+Skill'].map((t) => 'isWorkflow' in R.typeFlags(t)), [false, false, false]);
 eq('typeFlags: Skill = skill flags, Agent+Skill main doc = pure Agent', [R.typeFlags('Skill'), R.typeFlags('Agent+Skill')], [{ aiAgent: false, skillMd: true }, { aiAgent: true, skillMd: false }]);
 eq('a doc written from typeFlags(Workflow skills) is a workflow', U.isWorkflow({ ...R.typeFlags('Workflow skills') }), true);
+// Starter-in-main-form model (2026-11-26 rev): the main form makes the Starter skill; the workflow doc wraps it.
+const main = { agentName: 'Starter', aiAgent: false, skillMd: true, owner: 'Team A', businessValue: 'bv', linkSuggestion: { agentId: 'x' }, matchingAgent: 'Flow', compatibleAgents: ['a'], analysisResult: { overallRisk: 'low' }, approvalStatus: 'pending' };
+const wd = R.buildWorkflowDoc(main, 'Flow', 'st1', ['m1', 'm2'], { internalTool: false });
+eq('buildWorkflowDoc: name, flags, ordered members (Starter first)', [wd.agentName, wd.isWorkflow, wd.aiAgent, wd.skillMd, wd.childSkillIds], ['Flow', true, false, true, ['st1', 'm1', 'm2']]);
+eq('buildWorkflowDoc: inherits shared fields, drops link request, no self-parent', [wd.owner, wd.businessValue, wd.analysisResult.overallRisk, 'linkSuggestion' in wd, wd.matchingAgent, wd.compatibleAgents], ['Team A', 'bv', 'low', false, '', []]);
+eq('buildWorkflowDoc does not mutate the starter doc', [main.agentName, 'isWorkflow' in main, main.matchingAgent], ['Starter', false, 'Flow']);
+eq('workflowRequiredSkills: starter first, blanks dropped', R.workflowRequiredSkills('Starter', ['A', '', 'B']), 'Starter, A, B');
+eq('a built workflow doc is a workflow with its members', (() => { const d = { id: 'w9', ...wd }; const st = { id: 'st1', agentName: 'Starter', ...SK }; const m1 = { id: 'm1', agentName: 'M1', ...SK }; return [U.isWorkflow(d), names(U.workflowMembers(d, [d, st, m1]))]; })(), [true, ['Starter', 'M1']]);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

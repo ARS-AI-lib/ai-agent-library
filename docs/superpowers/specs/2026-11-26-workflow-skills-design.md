@@ -97,3 +97,12 @@ the workflow is not), so finished work is never dragged backwards.
 ## Left to the builder
 Exact placement of the "N skills" note; whether `isWorkflow` lives in `tier.js` or
 `agentUtils.js`; the wording of the Starter section hint.
+
+## Revision 2026-11-26 (user, after first release)
+The **main registration form is the Starter skill** (not a row at the bottom). Selecting the type adds one
+field, **Workflow Name**. The bottom panel holds only the *additional* skills (≥ 1, 1 seeded). Submit
+creates: Starter (plain Skill, `matchingAgent = workflow name`) → additional members → the workflow doc
+(`isWorkflow`, `childSkillIds = [starter, ...members]`, shared fields inherited from the form, dup-check
+result copied). Queue/notification use the workflow doc. Also: Permitted Domains, Prohibited Uses and Models
+Tested are optional (only Permitted Tools and Required Skills are required), and Domains/Prohibited Uses
+moved before Business Value.

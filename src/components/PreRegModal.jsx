@@ -6,7 +6,7 @@ import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
 import { PRE_CODES, preGate, buildScreening } from '../lib/screening';
-import { WORKFLOW, typeFlags } from '../lib/registrationType';
+import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills } from '../lib/registrationType';
 import { DECL_FIELDS } from '../lib/declaration';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
@@ -83,6 +83,7 @@ const EMPTY_FORM = {
   hml: false,
   externalSource: false,
   humanJob: '',
+  workflowName: '',       // Workflow skills only: the workflow's own name (the main form is its Starter skill)
   tool: '',
   llm: '',
   permittedDomains: '',
@@ -261,7 +262,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     : (r.link?.name || '').trim());
   const lib = allAgents.length ? allAgents : approvedAgents;
   const workflowTakenIds = isWf ? lib.filter((a) => isWorkflow(a) || isPairedSubSkill(a, lib)).map((a) => a.id) : [];
-  const requiredSkillsValue = isWf ? form.skills.map(skillRowName).filter(Boolean).join(', ') : form.requiredSkills;
+  const requiredSkillsValue = isWf ? workflowRequiredSkills(form.agentName, form.skills.map(skillRowName)) : form.requiredSkills;
 
   function validate() {
     if (!form.agentName.trim()) return 'ใส่ชื่อ Agent/Skill';
@@ -281,16 +282,19 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     if (form.businessValue.trim().length < MIN_DETAIL_LEN) {
       return `Business Value สั้นเกินไป — ช่วยอธิบายคุณค่าทางธุรกิจให้ชัด (อย่างน้อย ${MIN_DETAIL_LEN} ตัวอักษร, ตอนนี้ ${form.businessValue.trim().length})`;
     }
-    if (isWf && form.skills.length < 2) return 'Workflow ต้องมี Starter skill และอีกอย่างน้อย 1 skill';
+    if (isWf) {
+      const wn = form.workflowName.trim();
+      if (!wn) return 'ใส่ Workflow Name';
+      if (wn.toLowerCase() === form.agentName.trim().toLowerCase()) return 'Workflow Name ต้องต่างจากชื่อ Starter skill';
+      if (lib.some((a) => String(a.agentName || '').trim().toLowerCase() === wn.toLowerCase())) return 'ชื่อ Workflow ซ้ำกับรายการที่มีอยู่แล้วใน library';
+      if (form.skills.length < 1) return 'Workflow ต้องมี skill เพิ่มอีกอย่างน้อย 1 ตัวนอกจาก Starter skill';
+    }
     if (hasPairedSkills) {
       const skErr = validateSkillRows(form.skills, allAgents);
       if (skErr) return skErr;
     }
-    if (!form.permittedDomains.trim()) return 'ใส่ Permitted Domains (Domain ที่ใช้ได้)';
-    if (!form.prohibitedUses.trim()) return 'ใส่ Prohibited Uses (ข้อห้ามการใช้งาน)';
     if (!form.tool.trim()) return 'ใส่ Permitted Tools (ประเภท tool ที่อนุญาต)';
     if (!requiredSkillsValue.trim()) return 'ใส่ Required Skills (ถ้าไม่ต้องใช้ร่วมกับ skill อื่น ให้พิมพ์ "ไม่ต้อง")';
-    if (!form.llm.trim()) return 'ใส่ Models Tested (โมเดลที่ทดสอบแล้ว)';
     if (!form.owner.trim()) return 'ใส่ Owner team';
     if (!isValidTeamName(form.owner)) return 'ชื่อ Owner team ต้องมีอย่างน้อย 2 ตัวอักษร';
     if (!form.reusable) return 'เลือก Reusable';
@@ -460,7 +464,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     setSubmitting(true);
     setSubmitError('');
     try {
-      const { aiAgent, skillMd, isWorkflow: workflowFlag } = typeFlags(form.type);
+      // Workflow skills: the main form IS the Starter skill (a plain Skill); the workflow doc wraps it below.
+      const { aiAgent, skillMd } = typeFlags(isWf ? 'Skill' : form.type);
+      const workflowName = form.workflowName.trim();
       const isExternal = form.scope === 'External';
       const agentName = form.agentName.trim();
       const createdBy = user?.uid || '';
@@ -529,12 +535,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         ? (approvedAgents || []).find((a) => a.agentName === aiResult.suggested_matching_agent && getType(a) === 'agent') || null
         : null;
 
-      const agentRef = await addDoc(collection(db, 'agents'), {
+      const mainDoc = {
         agentName,
         description: form.description.trim(),
         aiAgent,
         skillMd,
-        ...(workflowFlag ? { isWorkflow: true } : {}),
         owner: inheritedFromAgent.owner,
         coreAbility: [...form.coreAbility],
         relatedRole: [...form.relatedRole],
@@ -584,7 +589,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         // that silent write is how skills got linked to other teams' agents.
         // A Skill with a suggestion carries it as a pending link request,
         // confirmed in the Pending queue (functions/linkRules.js).
-        matchingAgent: '',
+        // Workflow skills: the Starter points at its workflow by name (approval cascade); otherwise empty.
+        matchingAgent: isWf ? workflowName : '',
         ...(linkTarget ? { linkSuggestion: { agentId: linkTarget.id, agentName: linkTarget.agentName, status: 'pending', source: 'ai' } } : {}),
         // Snapshot of the duplicate-check result at submit time, so the
         // Pending Approval queue can show reviewers the same risk signal
@@ -618,7 +624,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         createdBy,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      const agentRef = await addDoc(collection(db, 'agents'), mainDoc);
 
       // ── Category proposal (2026-08): the AI decided no existing shortcut
       // fits well. Best-effort, never blocks submission — the agent already
@@ -736,7 +743,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             input: s.input.trim(),
             output: s.output.trim(),
             businessValue: inheritedFromAgent.businessValue,
-            matchingAgent: agentName,   // ← link to parent Agent
+            matchingAgent: isWf ? workflowName : agentName,   // ← link to parent Agent / workflow
             analysisResult: null,
             screening: { ...buildScreening(screeningAnswers), preAt: serverTimestamp() },
             developmentPhase: 'To Do',
@@ -761,7 +768,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // Explicit doc-ID link on the PARENT. matchingAgent (a name) still ties
       // new skills back for legacy readers, but only this survives a rename
       // and only this works across submitters (CLAUDE.md §25).
-      if (childIds.length) {
+      // Workflow skills: wrap the Starter + members in the workflow doc (members in step order,
+      // Starter first); the Starter itself never carries childSkillIds.
+      let workflowId = null;
+      if (isWf) {
+        const wfRef = await addDoc(collection(db, 'agents'), buildWorkflowDoc(mainDoc, workflowName, agentRef.id, childIds, { internalTool: isInternalToolName(workflowName) }));
+        workflowId = wfRef.id;
+        reindexAgent(wfRef.id);
+      } else if (childIds.length) {
         await updateDoc(doc(db, 'agents', agentRef.id), { childSkillIds: childIds, updatedAt: serverTimestamp() });
       }
 
@@ -772,7 +786,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // One email for the whole submission — the parent agent. Sub-skills are
       // filed as separate docs but reviewed as a package, and the notifier
       // skips anything carrying matchingAgent for exactly that reason.
-      notifyEvent('agent.pending', { agentId: agentRef.id });
+      notifyEvent('agent.pending', { agentId: workflowId || agentRef.id });
       if (linkTarget) notifyEvent('link.requested', { agentId: agentRef.id });
 
       // Analysis is now committed to the KB — drop the transient session cache
@@ -906,7 +920,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             )}
 
             <div className="fg">
-              <label>Agent / Skill Name <span className="req">*</span></label>
+              <label>{isWf ? 'Starter Skill Name' : 'Agent / Skill Name'} <span className="req">*</span></label>
               <input value={form.agentName} onChange={(e) => setField('agentName', e.target.value)} placeholder="เช่น Epic Writer v2" />
             </div>
 
@@ -927,8 +941,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                         // Default the first skill row in immediately — it's
                         // the only one that can't be deleted, so it should
                         // always exist the moment the type is selected.
-                        skills: t === 'Agent+Skill' && f.skills.length === 0 ? [emptySkill()]
-          : t === WORKFLOW ? [...f.skills, ...Array.from({ length: Math.max(0, 2 - f.skills.length) }, emptySkill)]
+                        skills: (t === 'Agent+Skill' || t === WORKFLOW) && f.skills.length === 0 ? [emptySkill()]
           : f.skills,
                       }))}
                     >
@@ -978,6 +991,13 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             )}
 
+            {isWf && (
+              <div className="fg">
+                <label>Workflow Name <span className="req">*</span><Hint text="ชื่อ workflow ที่ครอบ Starter skill นี้ (ข้อมูลในฟอร์มด้านล่างคือของ Starter skill)" /></label>
+                <input value={form.workflowName} onChange={(e) => setField('workflowName', e.target.value)} placeholder="เช่น Release Note Pipeline" />
+              </div>
+            )}
+
             <div className="fg">
               <label>Description <span className="req">*</span></label>
               <textarea rows={3} value={form.description} onChange={(e) => setField('description', e.target.value)} placeholder="อธิบายว่า Agent/Skill นี้ทำอะไร" />
@@ -1002,6 +1022,17 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               <div className="fg">
                 <label>Output <span className="req">*</span></label>
                 <textarea rows={2} value={form.output} onChange={(e) => setField('output', e.target.value)} placeholder="ผลลัพธ์ที่สร้าง" />
+              </div>
+            </div>
+
+            <div className="grid2">
+              <div className="fg">
+                <label>Permitted Domains<Hint text={DECL_FIELDS[0].hint} /></label>
+                <input value={form.permittedDomains} onChange={(e) => setField('permittedDomains', e.target.value)} placeholder={DECL_FIELDS[0].placeholder} />
+              </div>
+              <div className="fg">
+                <label>Prohibited Uses<Hint text={DECL_FIELDS[1].hint} /></label>
+                <input value={form.prohibitedUses} onChange={(e) => setField('prohibitedUses', e.target.value)} placeholder={DECL_FIELDS[1].placeholder} />
               </div>
             </div>
 
@@ -1090,24 +1121,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 </div>
             </>
 
-            {/* Declaration (bank screening D1–D6): purpose = Description above; the rest are here */}
-            <div className="grid2">
-              <div className="fg">
-                <label>Permitted Domains *<Hint text={DECL_FIELDS[0].hint} /></label>
-                <input value={form.permittedDomains} onChange={(e) => setField('permittedDomains', e.target.value)} placeholder={DECL_FIELDS[0].placeholder} />
-              </div>
-              <div className="fg">
-                <label>Prohibited Uses *<Hint text={DECL_FIELDS[1].hint} /></label>
-                <input value={form.prohibitedUses} onChange={(e) => setField('prohibitedUses', e.target.value)} placeholder={DECL_FIELDS[1].placeholder} />
-              </div>
-            </div>
+            {/* Declaration (bank screening D1–D6): purpose = Description above; Domains + Prohibited Uses sit before Business Value; the rest below */}
             <div className="grid2">
               <div className="fg">
                 <label>Permitted Tools *<Hint text={DECL_FIELDS[2].hint} /></label>
                 <input value={form.tool} onChange={(e) => setField('tool', e.target.value)} placeholder={DECL_FIELDS[2].placeholder} />
               </div>
               <div className="fg">
-                <label>Models Tested *<Hint text={DECL_FIELDS[4].hint} /></label>
+                <label>Models Tested<Hint text={DECL_FIELDS[4].hint} /></label>
                 <input value={form.llm} onChange={(e) => setField('llm', e.target.value)} placeholder={DECL_FIELDS[4].placeholder} />
               </div>
             </div>
@@ -1130,7 +1151,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             {hasPairedSkills && (
               <div style={{ marginTop: 6, padding: '12px 14px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf2)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{isWf ? 'Workflow Skills' : 'Cascade Skills'}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{isWf ? 'Additional Skills' : 'Cascade Skills'}</div>
                   <button type="button" className="btn btn-secondary v7-btn-compact" onClick={addSkill}>+ Add Skill</button>
                 </div>
 
@@ -1141,8 +1162,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                     index={idx}
                     onField={(k, v) => setSkillField(s._id, k, v)}
                     onRemove={() => removeSkill(s._id)}
-                    canRemove={form.skills.length > (isWf ? 2 : 1)}
-                    label={isWf ? (idx === 0 ? 'Starter skill' : `Skill #${idx + 1}`) : undefined}
+                    canRemove={form.skills.length > 1}
+                    label={isWf ? `Skill #${idx + 2}` : undefined}
                     allAgents={allAgents.length ? allAgents : approvedAgents}
                     excludeIds={[
                       ...form.skills.filter((x) => x._id !== s._id && x.link?.mode === 'existing').map((x) => x.link.id),
