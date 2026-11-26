@@ -29,3 +29,4 @@
 .scr-sum-must { color: var(--late); font-weight: 600; }
 .scr-now { color: var(--mu); font-size: 11px; }
 .scr-ok { color: var(--ok); font-weight: 600; }
+.scr-score { margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--tx2); }

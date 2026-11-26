@@ -44,7 +44,10 @@ export function ScreeningResult({ config, answers }) {
   const r = evaluate(config, answers);
   return (
     <div className="scr-res">
-      <div><span className={`scr-lvl ${r.level || ''}`}>{r.level || 'Not enough answers'}</span></div>
+      <div>
+        <span className={`scr-lvl ${r.level || ''}`}>{r.level || 'Not enough answers'}</span>
+        {r.level && <span className="scr-score" title="Total points from the answers">Score {r.total}</span>}
+      </div>
       {r.must.length > 0 && (
         <div className="scr-must">
           <h4>Must fix</h4>
@@ -90,7 +93,7 @@ export function ScreeningSummary({ agent, config }) {
     <div className="scr-sum">
       {r && (
         <div>
-          Pre-assessment: <span className={`scr-lvl ${r.pre.level || ''}`}>{r.pre.level || '—'}</span>{fixes(r.pre)}
+          Pre-assessment: <span className={`scr-lvl ${r.pre.level || ''}`}>{r.pre.level || '—'}</span><span className="scr-score">Score {r.pre.total}</span>{fixes(r.pre)}
         </div>
       )}
       {r?.deploy && (
@@ -99,7 +102,7 @@ export function ScreeningSummary({ agent, config }) {
           {r.deploy.rows.map((row) => (
             <span key={row.id} className={row.ok ? 'scr-ok' : 'scr-sum-must'} title={row.answer}>{row.code} {row.ok ? '✓' : '✗'} </span>
           ))}
-          · Overall <span className={`scr-lvl ${r.deploy.level || ''}`}>{r.deploy.level || '—'}</span>{fixes(r.deploy)}
+          · Overall <span className={`scr-lvl ${r.deploy.level || ''}`}>{r.deploy.level || '—'}</span><span className="scr-score">Score {r.deploy.total}</span>{fixes(r.deploy)}
         </div>
       )}
       {labels.length > 0 && <div>Deployment checklist: {labels.map((l) => `✓ ${l}`).join(' · ')}</div>}

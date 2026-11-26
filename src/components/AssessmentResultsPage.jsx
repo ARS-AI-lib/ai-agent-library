@@ -42,7 +42,8 @@ export function RecordsTable({ config, records, groupOwner }) {
           <td className="usage-mono">{bangkokDay(r.createdAt)}</td>
           <td className="usage-strong">{r.agentName}</td>
           <td>{r.stage === 'pre' ? 'Pre-assessment' : 'Deploy request'}</td>
-          <td><span className={`scr-lvl ${e.level || ''}`}>{e.level || '—'}</span> <span className="usage-dim">{e.total}</span></td>
+          <td><span className={`scr-lvl ${e.level || ''}`}>{e.level || '—'}</span></td>
+          <td className="usage-mono">{e.total}</td>
           <td className="usage-dim">
             {e.must.length > 0 && <span className="scr-sum-must">Must {e.must.map((m) => m.item).join(', ')} </span>}
             {e.should.length > 0 && <span>Should {e.should.map((m) => m.item).join(', ')}</span>}
@@ -52,7 +53,7 @@ export function RecordsTable({ config, records, groupOwner }) {
         </tr>
         {isOpen && (
           <tr>
-            <td colSpan={6} style={{ background: 'var(--sf2)' }}>
+            <td colSpan={7} style={{ background: 'var(--sf2)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '6px 18px', fontSize: 11.5, padding: '4px 0' }}>
                 {DECL_ROWS.map((d) => <div key={d.key}><span className="usage-dim">{d.label}: </span>{r.decl?.[d.key] || '—'}</div>)}
                 {config.questions.map((q) => <div key={q.id}><span className="usage-dim">{q.code}: </span>{answerText(config, r, q) || '—'}</div>)}
@@ -66,10 +67,10 @@ export function RecordsTable({ config, records, groupOwner }) {
   return (
     <div className="usage-scroll">
       <table className="usage-table">
-        <thead><tr><th>Date</th><th>Agent/Skill Name</th><th>Stage</th><th>Level</th><th>Fix</th><th>Area</th></tr></thead>
+        <thead><tr><th>Date</th><th>Agent/Skill Name</th><th>Stage</th><th>Level</th><th>Score</th><th>Fix</th><th>Area</th></tr></thead>
         {groups.map((g) => (
           <tbody key={g.owner ?? 'all'}>
-            {g.owner !== null && <tr className="usage-group"><td colSpan={6}>{g.owner}<span className="usage-badge">{g.rows.length}</span></td></tr>}
+            {g.owner !== null && <tr className="usage-group"><td colSpan={7}>{g.owner}<span className="usage-badge">{g.rows.length}</span></td></tr>}
             {g.rows.map((r) => <Row key={r.id} r={r} />)}
           </tbody>
         ))}

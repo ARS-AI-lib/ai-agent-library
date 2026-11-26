@@ -96,5 +96,6 @@ eq('questionsToAsk: a removed-option answer is asked again', S.questionsToAsk(c4
 eq('evaluate partial: level computed over the answered pre questions', S.evaluate(cNew, { ...PASS, C4: 'C4d' }, 'pre', { partial: true }).level, 'Medium');
 eq('evaluate (strict) is still null while a pre question is unanswered', S.evaluate(cNew, { ...PASS, C4: 'C4d' }, 'pre').level, null);
 eq('stageResults uses the partial level', S.stageResults(cNew, { answers: { ...PASS, C4: 'C4d' }, deployAt: null }).pre.level, 'Medium');
+eq('stageResults: deploy result carries the overall score', [r1.deploy.total, r1.pre.total], [S.evaluate(CFG, { ...PASS, C10: 'C10b', C6: 'C6b' }).total, S.evaluate(CFG, { ...PASS, C6: 'C6b' }, 'pre').total]);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

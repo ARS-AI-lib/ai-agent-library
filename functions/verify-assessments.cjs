@@ -43,7 +43,7 @@ eq('area filter matches any overlap', ids(A.filterRecords(R, { area: 'Security' 
 const g = A.groupByOwner(R);
 eq('groupByOwner: groups ordered by newest row; rows newest first', g.map((x) => [x.owner, ids(x.rows)]), [['Team A', ['1', '3']], ['Team B', ['2']]]);
 const csv = A.recordCsv(CFG, [mk('1', 'Team A', ['QA'], '2026-11-26T05:00:00Z', 'deploy', { C10: 'C10a', C11: 'C11x' })]);
-eq('csv headers: fixed + 6 declaration + one per question', csv.headers.slice(0, 7), ['Date', 'Owner', 'Agent/Skill', 'Stage', 'Level', 'Total', 'Must fix']);
+eq('csv headers: fixed (Score = total points) + 6 declaration + one per question', csv.headers.slice(0, 7), ['Date', 'Owner', 'Agent/Skill', 'Stage', 'Level', 'Score', 'Must fix']);
 eq('csv has a column per question code', csv.headers.slice(-11), CFG.questions.map((q) => q.code));
 const cRow = csv.rows[0];
 eq('csv answer text; removed option shows (removed option)', [cRow[csv.headers.indexOf('C10')], cRow[csv.headers.indexOf('C11')]], [CFG.questions.find((q) => q.id === 'C10').options[0].th, '(removed option)']);

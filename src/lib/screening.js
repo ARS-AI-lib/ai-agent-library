@@ -235,5 +235,5 @@ export function stageResults(config, sc) {
     return { id: q.id, code: q.code, answer: o.th, ok: o.fix === 'none' };
   });
   const all = evaluate(config, answers, undefined, { partial: true });
-  return { pre, deploy: { rows, level: all.level, must: idsOf(all.must), should: idsOf(all.should) } };
+  return { pre, deploy: { rows, level: all.level, total: all.total, must: idsOf(all.must), should: idsOf(all.should) } };
 }

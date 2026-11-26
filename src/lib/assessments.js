@@ -67,7 +67,7 @@ export function answerText(config, r, q) {
 const safeCell = (v) => (typeof v === 'string' && /^[=+\-@\t\r]/.test(v) ? `'${v}` : v);
 
 export function recordCsv(config, records) {
-  const headers = ['Date', 'Owner', 'Agent/Skill', 'Stage', 'Level', 'Total', 'Must fix', 'Should fix', ...DECL_COLUMNS.map((c) => c.label), ...config.questions.map((q) => q.code)];
+  const headers = ['Date', 'Owner', 'Agent/Skill', 'Stage', 'Level', 'Score', 'Must fix', 'Should fix', ...DECL_COLUMNS.map((c) => c.label), ...config.questions.map((q) => q.code)];
   const rows = records.map((r) => {
     const e = recordResult(config, r);
     return [
