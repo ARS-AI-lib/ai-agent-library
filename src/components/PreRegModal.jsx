@@ -920,52 +920,58 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             )}
 
             <div className="fg">
+              <label>Type <span className="req">*</span></label>
+              <div className="toggle2" role="radiogroup" aria-label="Type">
+                {['Agent', 'Skill', 'Agent+Skill', WORKFLOW].map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.type === t}
+                    className={form.type === t ? 'sel' : ''}
+                    onClick={() => setForm((f) => ({
+                      ...f,
+                      type: t,
+                      // Default the first skill row in immediately — it's
+                      // the only one that can't be deleted, so it should
+                      // always exist the moment the type is selected.
+                      skills: (t === 'Agent+Skill' || t === WORKFLOW) && f.skills.length === 0 ? [emptySkill()]
+        : f.skills,
+                    }))}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {isWf && (
+              <div className="fg">
+                <label>Workflow Name <span className="req">*</span><Hint text="ชื่อ workflow ที่ครอบ Starter skill นี้ (ข้อมูลในฟอร์มด้านล่างคือของ Starter skill)" /></label>
+                <input value={form.workflowName} onChange={(e) => setField('workflowName', e.target.value)} placeholder="เช่น Release Note Pipeline" />
+              </div>
+            )}
+
+            <div className="fg">
               <label>{isWf ? 'Starter Skill Name' : 'Agent / Skill Name'} <span className="req">*</span></label>
               <input value={form.agentName} onChange={(e) => setField('agentName', e.target.value)} placeholder="เช่น Epic Writer v2" />
             </div>
 
-            <div className="grid2">
-              <div className="fg">
-                <label>Type <span className="req">*</span></label>
-                <div className="toggle2" role="radiogroup" aria-label="Type">
-                  {['Agent', 'Skill', 'Agent+Skill', WORKFLOW].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      role="radio"
-                      aria-checked={form.type === t}
-                      className={form.type === t ? 'sel' : ''}
-                      onClick={() => setForm((f) => ({
-                        ...f,
-                        type: t,
-                        // Default the first skill row in immediately — it's
-                        // the only one that can't be deleted, so it should
-                        // always exist the moment the type is selected.
-                        skills: (t === 'Agent+Skill' || t === WORKFLOW) && f.skills.length === 0 ? [emptySkill()]
-          : f.skills,
-                      }))}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="fg">
-                <label>Scope <span className="req">*</span></label>
-                <div className="toggle2" role="radiogroup" aria-label="Scope">
-                  {[['Internal', 'Internal Use'], ['External', 'Customer Facing']].map(([v, lbl]) => (
-                    <button
-                      key={v}
-                      type="button"
-                      role="radio"
-                      aria-checked={form.scope === v}
-                      className={form.scope === v ? 'sel' : ''}
-                      onClick={() => setField('scope', v)}
-                    >
-                      {lbl}
-                    </button>
-                  ))}
-                </div>
+            <div className="fg">
+              <label>Scope <span className="req">*</span></label>
+              <div className="toggle2" role="radiogroup" aria-label="Scope">
+                {[['Internal', 'Internal Use'], ['External', 'Customer Facing']].map(([v, lbl]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.scope === v}
+                    className={form.scope === v ? 'sel' : ''}
+                    onClick={() => setField('scope', v)}
+                  >
+                    {lbl}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -988,13 +994,6 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                   selected={new Set(form.compatibleAgents)}
                   onChange={(s) => setField('compatibleAgents', [...s])}
                 />
-              </div>
-            )}
-
-            {isWf && (
-              <div className="fg">
-                <label>Workflow Name <span className="req">*</span><Hint text="ชื่อ workflow ที่ครอบ Starter skill นี้ (ข้อมูลในฟอร์มด้านล่างคือของ Starter skill)" /></label>
-                <input value={form.workflowName} onChange={(e) => setField('workflowName', e.target.value)} placeholder="เช่น Release Note Pipeline" />
               </div>
             )}
 

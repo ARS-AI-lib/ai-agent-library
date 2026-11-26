@@ -1,4 +1,4 @@
-import { QUESTIONS, RECO, evaluate, questionByCode } from '../lib/screening';
+import { QUESTIONS, RECO, evaluate, questionByCode, stageResults } from '../lib/screening';
 import { CHECKLIST } from '../lib/deployChecklist';
 import '../styles/Screening.css';
 
@@ -77,22 +77,36 @@ export function ScreeningResult({ answers }) {
   );
 }
 
-// One-line summary for approvers: level, must/should codes and the ticked package items.
+// Approver view: pre-assessment result, deploy-assessment result (once a deploy was requested)
+// and the ticked Deployment checklist items.
 export function ScreeningSummary({ agent }) {
-  const sc = agent?.screening;
+  const r = stageResults(agent?.screening);
   const cl = agent?.deployChecklist;
-  if (!sc && !cl) return null;
+  if (!r && !cl) return null;
   const labels = cl ? (CHECKLIST[cl.tier] || []).filter((i) => (cl.checked || []).includes(i.id)).map((i) => i.label) : [];
+  const fixes = (res) => (
+    <>
+      {res.must?.length > 0 && <span className="scr-sum-must"> · Must fix {res.must.join(', ')}</span>}
+      {res.should?.length > 0 && <span> · Should fix {res.should.join(', ')}</span>}
+    </>
+  );
   return (
     <div className="scr-sum">
-      {sc && (
-        <span>
-          Screening: <span className={`scr-lvl ${sc.level || ''}`}>{sc.level || '—'}</span>
-          {sc.must?.length > 0 && <span className="scr-sum-must"> · Must fix {sc.must.join(', ')}</span>}
-          {sc.should?.length > 0 && <span> · Should fix {sc.should.join(', ')}</span>}
-        </span>
+      {r && (
+        <div>
+          Pre-assessment: <span className={`scr-lvl ${r.pre.level || ''}`}>{r.pre.level || '—'}</span>{fixes(r.pre)}
+        </div>
       )}
-      {labels.length > 0 && <div className="scr-now">Package: {labels.join(' · ')}</div>}
+      {r?.deploy && (
+        <div>
+          Deploy assessment:{' '}
+          {r.deploy.rows.map((row) => (
+            <span key={row.code} className={row.ok ? 'scr-ok' : 'scr-sum-must'} title={row.answer}>{row.code} {row.ok ? '✓' : '✗'} </span>
+          ))}
+          · Overall <span className={`scr-lvl ${r.deploy.level || ''}`}>{r.deploy.level || '—'}</span>{fixes(r.deploy)}
+        </div>
+      )}
+      {labels.length > 0 && <div>Deployment checklist: {labels.map((l) => `✓ ${l}`).join(' · ')}</div>}
     </div>
   );
 }

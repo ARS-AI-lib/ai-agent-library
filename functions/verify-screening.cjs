@@ -65,5 +65,15 @@ eq('deployGate: unrelated C6 fail does not block', S.deployGate({ ...PASS, C6: 1
 const b = S.buildScreening({ ...PASS, C4: 3, C11: 2 });
 eq('buildScreening shape', [b.v, b.level, b.must, 'decl' in b, Object.keys(b.answers).length, Object.values(b).includes(undefined)], [1, 'High', ['C11'], false, 11, false]);
 
+// stageResults: what the approver sees (pre-assessment vs deploy assessment)
+const sc0 = S.buildScreening({ ...PASS, C4: 3 });
+const r0 = S.stageResults({ ...sc0, deployAt: null });
+eq('stageResults: before deploy → pre only, level from C1–C9', [r0.pre.level, r0.pre.total, r0.deploy], ['Medium', 8, null]);
+const sc1 = S.buildScreening({ ...PASS, C10: 1, C11: 0, C6: 1 });
+const r1 = S.stageResults({ ...sc1, deployAt: { seconds: 1 } });
+eq('stageResults: deploy rows C10/C11 with pass flag', r1.deploy.rows.map((r) => [r.code, r.ok]), [['C10', false], ['C11', true]]);
+eq('stageResults: pre part ignores C10/C11 (C6 fix is a pre should-fix)', [r1.pre.level, r1.pre.should], ['Low', ['C6']]);
+eq('stageResults: deploy part carries overall level + all must/should', [r1.deploy.level, r1.deploy.should], [sc1.level, sc1.should]);
+eq('stageResults on empty/legacy input is null', [S.stageResults(null), S.stageResults({})], [null, null]);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

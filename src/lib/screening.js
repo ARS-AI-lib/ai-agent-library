@@ -99,3 +99,20 @@ export function buildScreening(answers) {
   [...PRE_CODES, ...DEPLOY_CODES].forEach((c) => { if (typeof answers?.[c] === 'number') out[c] = answers[c]; });
   return { v: 1, answers: out, level: r.level || '', total: r.total, must: r.must.map((m) => m.item), should: r.should.map((m) => m.item) };
 }
+
+// What an approver sees from a stored `agent.screening` (2026-11-26):
+//   pre    — the pre-assessment (C1–C9) re-evaluated from the stored answers
+//   deploy — only once a deploy request was filed (`deployAt`): C10/C11 outcome + the overall result
+export function stageResults(sc) {
+  if (!sc?.answers) return null;
+  const preAnswers = {};
+  PRE_CODES.forEach((c) => { if (typeof sc.answers[c] === 'number') preAnswers[c] = sc.answers[c]; });
+  const pe = evaluate(preAnswers);
+  const pre = { level: pe.level, total: pe.total, must: pe.must.map((m) => m.item), should: pe.should.map((m) => m.item) };
+  if (!sc.deployAt) return { pre, deploy: null };
+  const rows = DEPLOY_CODES.filter((c) => typeof sc.answers[c] === 'number').map((c) => {
+    const o = opt(sc.answers, c);
+    return { code: c, answer: o.th, ok: o.lv === 'ผ่าน' };
+  });
+  return { pre, deploy: { rows, level: sc.level || null, must: sc.must || [], should: sc.should || [] } };
+}

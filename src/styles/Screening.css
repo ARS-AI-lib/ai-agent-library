@@ -28,3 +28,4 @@
 .scr-sum .scr-lvl { font-size: 11px; padding: 1px 8px; }
 .scr-sum-must { color: var(--late); font-weight: 600; }
 .scr-now { color: var(--mu); font-size: 11px; }
+.scr-ok { color: var(--ok); font-weight: 600; }

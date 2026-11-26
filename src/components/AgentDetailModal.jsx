@@ -1087,7 +1087,8 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 {deployStep === 1 ? (
                   <>
                     <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, margin: '0 0 12px' }}>
-                      เลือกสิ่งที่มีอยู่ใน package นี้ — ข้อที่มี <strong>*</strong> จำเป็นต้องมี
+                      <strong style={{ color: 'var(--tx)' }}>Deployment checklist</strong>{' '}
+                      <span style={{ color: 'var(--mu)' }}>— ข้อที่มี * จำเป็นต้องมี</span>
                     </p>
                     <div style={{ border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-sm)', padding: '4px 2px' }}>
                       {items.map((it) => (
