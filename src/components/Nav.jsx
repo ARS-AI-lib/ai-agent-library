@@ -20,6 +20,7 @@ const ICON = {
   gov: 'M12 2l8 3v6c0 5-3.5 9.5-8 11-4.5-1.5-8-6-8-11V5l8-3zM9 12l2 2 4-4',
   workshop: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
   announce: 'M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15.5 8.5a5 5 0 0 1 0 7M18.5 6a9 9 0 0 1 0 12',
+  assessment: 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h9',
   roles: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21c1-4 4-6 8-6s7 2 8 6',
   reindex: 'M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5',
   subs: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 14l2 2 4-4',
@@ -46,7 +47,7 @@ export default function Nav({
   agentCount, skillCount,
   user, role, onSignOut,
   activeTab, setActiveTab,
-  onOpenExport, onOpenRoleGroups, canManageRoleGroups, onNewAnnouncement, canPostAnnouncement, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
+  onOpenExport, onOpenRoleGroups, canManageRoleGroups, onOpenAssessment, canSeeAssessment, onNewAnnouncement, canPostAnnouncement, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
   onOpenMySubmissions, onOpenGlossary, mySubsNeedAction = 0,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -107,6 +108,7 @@ export default function Nav({
   ].filter(Boolean);
   const admin = [
     canPostAnnouncement && { k: 'announce', label: 'New announcement', on: () => { onNewAnnouncement?.(); close(); } },
+    canSeeAssessment && { k: 'assessment', label: 'Assessment', on: () => { onOpenAssessment?.(); close(); } },
     canManageRoleGroups && { k: 'roles', label: 'Role Group Management', on: () => { onOpenRoleGroups?.(); close(); } },
     isAdmin && { k: 'reindex', label: reindexing ? 'Rebuilding…' : 'Rebuild Search Index', on: rebuild, disabled: reindexing },
   ].filter(Boolean);

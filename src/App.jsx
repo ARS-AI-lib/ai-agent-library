@@ -37,6 +37,8 @@ import ChatAssistant from './components/ChatAssistant';
 import UserManagementModal from './components/UserManagementModal';
 import ExportDataModal from './components/ExportDataModal';
 import RoleGroupManagerModal from './components/RoleGroupManagerModal';
+import AssessmentMenuModal from './components/AssessmentMenuModal';
+import AssessmentSettingsModal from './components/AssessmentSettingsModal';
 import UploadEndpointFileModal from './components/UploadEndpointFileModal';
 import EditAgentModal from './components/EditAgentModal';
 import SDLCTab from './components/SDLCTab';
@@ -211,6 +213,8 @@ export default function App() {
   const [showUsers, setShowUsers] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showRoleGroups, setShowRoleGroups] = useState(false);
+  const [showAssessmentMenu, setShowAssessmentMenu] = useState(false);
+  const [showAssessmentSettings, setShowAssessmentSettings] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
 
   // Deep links from Teams notifications (2026-09-28): ?agent=<id> opens that
@@ -532,6 +536,8 @@ export default function App() {
         setActiveTab={setActiveTab}
         onOpenExport={() => setShowExport(true)}
         onOpenRoleGroups={() => setShowRoleGroups(true)}
+        onOpenAssessment={() => setShowAssessmentMenu(true)}
+        canSeeAssessment={isAdmin || isCommittee || role === 'approver'}
         canManageRoleGroups={isAdmin || isCommittee}
         canPostAnnouncement={canPostAnnouncements(role)}
         onNewAnnouncement={() => setComposer({})}
@@ -724,6 +730,17 @@ export default function App() {
 
       {showCategoryProposals && isAdmin && (
         <CategoryApprovalPanel onClose={() => setShowCategoryProposals(false)} user={user} schema={schema} />
+      )}
+
+      {showAssessmentMenu && (isAdmin || isCommittee || role === 'approver') && (
+        <AssessmentMenuModal
+          onClose={() => setShowAssessmentMenu(false)}
+          canSettings={isAdmin || isCommittee}
+          onOpenSettings={() => setShowAssessmentSettings(true)}
+        />
+      )}
+      {showAssessmentSettings && (isAdmin || isCommittee) && (
+        <AssessmentSettingsModal onClose={() => setShowAssessmentSettings(false)} />
       )}
 
       {showRoleGroups && (isAdmin || isCommittee) && (
