@@ -493,7 +493,13 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.keys().hasOnly(['agentId', 'agentName', 'owner', 'approveArea', 'stage', 'answers', 'decl', 'createdBy', 'year', 'createdAt'])
         && request.resource.data.stage in ['pre', 'deploy']
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time
+        // The record must belong to an agent the writer owns (admin: any), carry a plausible
+        // year (current UTC year or the next — Bangkok runs 7 h ahead) so it cannot dodge the
+        // archive guard, and stay small.
+        && request.resource.data.year in [request.time.year(), request.time.year() + 1]
+        && request.resource.data.answers.size() <= 60
+        && (isAdmin() || isOwnerCreatorOrApprover(get(/databases/$(database)/documents/agents/$(request.resource.data.agentId)).data));
       allow update, delete: if false;
     }
     // Frozen yearly archive — callables (Admin SDK) only.
