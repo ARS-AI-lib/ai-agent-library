@@ -1654,3 +1654,17 @@ Spec `docs/superpowers/specs/2026-11-26-screening-assessment-design.md` · plan 
 - Verify: `node functions/verify-screening.cjs` (31, replays xlsx sheet 3) · `node functions/verify-deploy-checklist.cjs` (15) · rules: `firebase emulators:exec --config firebase.rules-test.json --only auth,firestore --project wolfy-481609 "node functions/verify-screening-rules.cjs"`.
 - Not done: Questionnaire 2 (user confirmation at adoption); editing the 3 new declaration fields from the Edit form (existing items fill them at deploy request); server-side enforcement.
 
+---
+
+## 38. Workflow skills (2026-11-26)
+
+Spec `docs/superpowers/specs/2026-11-26-workflow-skills-design.md` · plan `docs/superpowers/plans/2026-11-26-workflow-skills.md`. Third registration Type next to Agent / Skill / Agent+Skill.
+
+- **Model:** a workflow is a **Skill** (`aiAgent:false, skillMd:true`) with `isWorkflow: true` and ordered `childSkillIds` (index 0 = Starter skill). `getType()`/`getTier()` unchanged → Tier is T1/T3 by scope. Members are normal Skill docs (new ones also get `matchingAgent = <workflow name>` so approval and rename paths still work).
+- **One place for the logic:** `src/lib/agentUtils.js` — `isWorkflow`, `workflowMembers` (step order), `workflowOf`, `typeBadgeName`; `pairedSubSkills`/`isPairedSubSkill`/`agentTypeLabel`/`agentsOfSkill`/`buildAgentFilter` know workflows. ⛔ Membership is by **id only** (no name/submitter heuristic) and a workflow is never a member. Port in `functions/delayAlertRules.js` (`verify-delay-alerts.cjs --live` fails on drift → **scoped functions deploy `delayAlertsMon,sendDelayDigest` at release**).
+- **Form:** Type toggle "Workflow skills" → Starter skill (required) + ≥1 more (2 rows seeded, cannot remove below 2); existing approved skills can be picked unless already in a workflow / paired under an Agent. **Required Skills** (screening D5) is read-only and derived from the member names.
+- **Display:** card `T1/T3 Workflow skills` + "N skills"; workflow detail "Skills: 1. X (Starter) → 2. Y"; member detail "Workflow: …" with locked progress ("ปรับตาม Workflow"); TYPE filter has "Workflow skills" and "Skill" excludes workflows; export type = `typeBadgeName`.
+- **Progress / deploy:** exactly the Agent+Skill cascade (`cascadeTargets` guard included). Pending/deploy queues show only the workflow (members de-duplicated by `isPairedSubSkill`).
+- **Not done:** editing members/order from the Edit form, drag-to-reorder, converting existing items, nested workflows. KPI/Dashboard count workflows as Skills (via `getType`).
+- Verify: `node functions/verify-workflow.cjs` (19). No `firestore.rules` change.
+

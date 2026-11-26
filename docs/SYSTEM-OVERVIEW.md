@@ -338,6 +338,7 @@ Firebase เก็บ release เดิมให้ rollback ได้ (Console 
 
 ### อยู่ระหว่าง release (2026-11-26, branch `feat/screening-assessment`)
 Screening assessment + deploy package checklist (CLAUDE.md §37): ฟอร์มลงทะเบียนมีขั้น Assessment (C7 บล็อก) ก่อน AI duplicate check · ช่อง declaration ใหม่ 3 ช่อง · ขอ Deploy ต้องติ๊ก package ตาม Tier แล้วตอบ C10–C11. ⚠️ ต้อง publish `firestore.rules` ผ่าน Console ก่อน deploy hosting
+Workflow skills (CLAUDE.md §38): Type ใหม่ = Skill ที่มีลูกเรียงลำดับ (Starter + ≥1) · cascade แบบ Agent+Skill · ต้อง deploy functions `delayAlertsMon,sendDelayDigest` (scoped) ตอน release
 
 ### เฝ้าดู (ไม่ใช่งานสร้าง)
 1. **`/metrics/chat-YYYY-MM-DD`** — สัญญาณ 2 ตัว **คนละสาเหตุ**
