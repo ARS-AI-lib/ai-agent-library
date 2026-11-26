@@ -93,8 +93,13 @@ function sameSubmitter(a, b) {
   const cb = (b?.creator || '').trim().toLowerCase();
   return !!ca && ca === cb;
 }
+function isWorkflow(agent) {
+  return agent?.isWorkflow === true && getType(agent) === 'skill';
+}
 function isPairedSubSkill(skill, all) {
   if (!skill || getType(skill) !== 'skill') return false;
+  if (isWorkflow(skill)) return false;
+  if (all.some((a) => isWorkflow(a) && a.id !== skill.id && Array.isArray(a.childSkillIds) && a.childSkillIds.includes(skill.id))) return true;
   const parents = matchingAgentNames(skill);
   return all.some((a) => {
     if (getType(a) !== 'agent') return false;
