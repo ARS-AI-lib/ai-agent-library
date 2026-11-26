@@ -4,7 +4,7 @@ import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { checklistFor, checklistGate, buildDeployChecklist } from '../lib/deployChecklist';
-import { questionsFor, deployGate, pendingRecheck, buildScreening, normalizeAnswers } from '../lib/screening';
+import { questionsToAsk, deployGate, buildScreening, normalizeAnswers } from '../lib/screening';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
 import { assessmentRecord } from '../lib/assessments';
@@ -1073,9 +1073,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         const declDone = missingDecl.every((k) => String(deployDecl[k] ?? '').trim() !== '');
         const items = checklistFor(tier);
         const cGate = checklistGate(tier, deployChecked);
-        const preIds = questionsFor(screeningConfig, 'pre').map((q) => q.id);
-        const deployIds = questionsFor(screeningConfig, 'deploy').map((q) => q.id);
-        const codes = agent.screening ? [...pendingRecheck(screeningConfig, prev), ...deployIds] : [...preIds, ...deployIds];
+        const codes = questionsToAsk(screeningConfig, prev, !!agent.screening);
         const dGate = deployGate(screeningConfig, deployAnswers);
         const close = () => setConfirmingDeploy(false);
         return (

@@ -15,11 +15,14 @@ function validateScreeningConfig(cfg) {
   if (!Array.isArray(qs) || qs.length === 0) return 'ต้องมีอย่างน้อย 1 คำถาม';
   if (!qs.some((q) => q?.stage === 'pre')) return 'ต้องมีคำถามขั้นลงทะเบียน (pre) อย่างน้อย 1 ข้อ';
   const qids = new Set();
+  const codes = new Set();
   const oids = new Set();
   for (const q of qs) {
     if (!q || !nonEmpty(q.id) || !nonEmpty(q.code)) return 'คำถามต้องมี id และ code';
     if (qids.has(q.id)) return `id คำถามซ้ำ: ${q.id}`;
     qids.add(q.id);
+    if (codes.has(q.code.trim())) return `code คำถามซ้ำ: ${q.code}`;
+    codes.add(q.code.trim());
     if (!nonEmpty(q.th)) return `คำถาม ${q.code} ต้องมีข้อความภาษาไทย`;
     if (!STAGES.includes(q.stage)) return `คำถาม ${q.code}: stage ต้องเป็น pre หรือ deploy`;
     if (!Array.isArray(q.options) || q.options.length === 0) return `คำถาม ${q.code} ต้องมีตัวเลือกอย่างน้อย 1 ตัว`;

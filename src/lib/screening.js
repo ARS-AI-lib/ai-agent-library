@@ -165,9 +165,11 @@ export function normalizeAnswers(config, answers) {
 const chosen = (config, answers, q) => optionOf(config, q.id, answers?.[q.id]);   // null if unanswered / removed
 const answeredAll = (config, answers, qs) => qs.every((q) => chosen(config, answers, q));
 
-function evalQuestions(config, answers, qs) {
+function evalQuestions(config, answers, qs, partial = false) {
   const total = qs.reduce((t, q) => t + (chosen(config, answers, q)?.score || 0), 0);
-  const level = answeredAll(config, answers, qs) ? (total >= config.thresholds.hi ? 'High' : total >= config.thresholds.md ? 'Medium' : 'Low') : null;
+  // partial: a STORED result is shown even when the questionnaire gained a question after it was
+  // answered (otherwise every old level would turn into "—"); live forms stay strict.
+  const level = (partial || answeredAll(config, answers, qs)) ? (total >= config.thresholds.hi ? 'High' : total >= config.thresholds.md ? 'Medium' : 'Low') : null;
   const hits = qs.filter((q) => (chosen(config, answers, q)?.score || 0) >= HIT_SCORE)
     .map((q) => `${q.th.split(' ').slice(0, 6).join(' ')}: ${chosen(config, answers, q).th} (${q.code})`);
   const must = [];
@@ -180,9 +182,9 @@ function evalQuestions(config, answers, qs) {
   return { total, level, hits, must, should };
 }
 
-// stage?: restrict to one stage ('pre' | 'deploy'); default = every question.
-export function evaluate(config, answers, stage) {
-  return evalQuestions(config, answers, stage ? questionsFor(config, stage) : config.questions);
+// stage?: restrict to one stage ('pre' | 'deploy'); default = every question. opts.partial: see evalQuestions.
+export function evaluate(config, answers, stage, opts = {}) {
+  return evalQuestions(config, answers, stage ? questionsFor(config, stage) : config.questions, !!opts.partial);
 }
 
 function gate(config, answers, qs, flag) {
@@ -196,6 +198,18 @@ export const deployGate = (config, answers) => gate(config, answers, config.ques
 // Pre-stage questions answered with something that still needs fixing — asked again at deploy.
 export function pendingRecheck(config, answers) {
   return questionsFor(config, 'pre').filter((q) => { const o = chosen(config, answers, q); return o && o.fix !== 'none'; }).map((q) => q.id);
+}
+
+// Question ids the deploy dialog must show: everything when nothing was stored; otherwise the
+// pre questions not (validly) answered yet — e.g. added in Settings after registration — plus the
+// ones to re-check, plus every deploy-stage question.
+export function questionsToAsk(config, answers, hasScreening) {
+  if (!hasScreening) return config.questions.map((q) => q.id);
+  const pre = questionsFor(config, 'pre');
+  const unanswered = pre.filter((q) => !chosen(config, answers, q)).map((q) => q.id);
+  const recheck = pendingRecheck(config, answers);
+  const askPre = pre.filter((q) => unanswered.includes(q.id) || recheck.includes(q.id)).map((q) => q.id);
+  return [...askPre, ...questionsFor(config, 'deploy').map((q) => q.id)];
 }
 
 // What gets stored on agent.screening (latest answers; per-event history is in /assessments).
@@ -212,7 +226,7 @@ export function buildScreening(config, answers) {
 export function stageResults(config, sc) {
   if (!sc?.answers) return null;
   const answers = normalizeAnswers(config, sc.answers);
-  const pe = evaluate(config, answers, 'pre');
+  const pe = evaluate(config, answers, 'pre', { partial: true });
   const idsOf = (list) => list.map((m) => m.id);
   const pre = { level: pe.level, total: pe.total, must: idsOf(pe.must), should: idsOf(pe.should) };
   if (!sc.deployAt) return { pre, deploy: null };
@@ -220,6 +234,6 @@ export function stageResults(config, sc) {
     const o = chosen(config, answers, q);
     return { id: q.id, code: q.code, answer: o.th, ok: o.fix === 'none' };
   });
-  const all = evaluate(config, answers);
+  const all = evaluate(config, answers, undefined, { partial: true });
   return { pre, deploy: { rows, level: all.level, must: idsOf(all.must), should: idsOf(all.should) } };
 }

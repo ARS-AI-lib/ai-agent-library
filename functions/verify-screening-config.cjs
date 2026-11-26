@@ -24,6 +24,7 @@ eq('bad stage → error', bad((c) => { c.questions[0].stage = 'later'; }), true)
 eq('bad fix value → error', bad((c) => { c.questions[0].options[0].fix = 'maybe'; }), true);
 eq('non-boolean block flag → error', bad((c) => { c.questions[0].options[0].blocksPre = 'yes'; }), true);
 eq('thresholds md >= hi → error', bad((c) => { c.thresholds = { md: 10, hi: 10 }; }), true);
+eq('duplicate question code → error', bad((c) => { c.questions[1].code = c.questions[0].code; }), true);
 eq('empty Thai text → error', bad((c) => { c.questions[0].th = '  '; }), true);
 eq('no pre-stage question → error (registration needs one)', bad((c) => { c.questions.forEach((q) => { q.stage = 'deploy'; }); }), true);
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -17,6 +17,8 @@ async function archiveYear({ db, FieldValue, year, by, cfg }) {
       batch.delete(d.ref);
     });
     await batch.commit();
+    // count follows each committed batch, so a failure midway never understates what was moved
+    await yearRef.set({ count: FieldValue.increment(Math.min(200, snap.size - i)) }, { merge: true });
   }
   if (snap.size === 0) return { archived: 0 };
   const existing = await yearRef.get();
@@ -24,7 +26,6 @@ async function archiveYear({ db, FieldValue, year, by, cfg }) {
     year,
     archivedAt: FieldValue.serverTimestamp(),
     archivedBy: by,
-    count: FieldValue.increment(snap.size),
     ...(existing.data()?.configSnapshot ? {} : { configSnapshot: { version: cfg.version || 1, thresholds: cfg.thresholds, questions: cfg.questions } }),
   }, { merge: true });
   return { archived: snap.size };
@@ -38,12 +39,15 @@ async function listArchivedYears(db) {
 }
 
 // { configSnapshot, items[] } with Timestamps as ISO strings (callables cannot carry Timestamps), or null.
-async function loadArchivedYear(db, year) {
+async function loadArchivedYear(db, year, max = 5000) {
   const yearRef = db.collection('assessmentArchive').doc(archiveDocId(year));
-  const [meta, items] = await Promise.all([yearRef.get(), yearRef.collection('items').limit(5000).get()]);
+  const [meta, items] = await Promise.all([yearRef.get(), yearRef.collection('items').limit(max).get()]);
   if (!meta.exists) return null;
+  const total = meta.data().count || 0;
   return {
     configSnapshot: meta.data().configSnapshot,
+    total,
+    truncated: items.size < total,
     items: items.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: iso(x.createdAt), archivedAt: iso(x.archivedAt) }; }),
   };
 }

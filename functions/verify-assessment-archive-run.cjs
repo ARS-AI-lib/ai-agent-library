@@ -32,6 +32,9 @@ const rec = (id, year) => db.collection('assessments').doc(id).set({ agentId: 'a
   const r3 = await archiveYear({ db, FieldValue, year: 2025, by: 'admin@x', cfg: cfgV(2) });
   eq('re-run with nothing left is a no-op', r3.archived, 0);
   eq('unknown year → null', await loadArchivedYear(db, 1999), null);
+  eq('loadArchivedYear reports total + truncated flag', [y25b.total, y25b.truncated], [3, false]);
+  const small = await loadArchivedYear(db, 2025, 2);
+  eq('a smaller read limit is flagged truncated (count stays the real total)', [small.items.length, small.total, small.truncated], [2, 3, true]);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

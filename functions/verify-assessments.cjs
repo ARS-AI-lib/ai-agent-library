@@ -48,5 +48,10 @@ eq('csv has a column per question code', csv.headers.slice(-11), CFG.questions.m
 const cRow = csv.rows[0];
 eq('csv answer text; removed option shows (removed option)', [cRow[csv.headers.indexOf('C10')], cRow[csv.headers.indexOf('C11')]], [CFG.questions.find((q) => q.id === 'C10').options[0].th, '(removed option)']);
 eq('csv unanswered question is empty', cRow[csv.headers.indexOf('C1')], '');
+// csv formula injection: text cells starting with = + - @ are neutralised
+const evil = { ...mk('9', '=SUM(A1)', [], '2026-11-26T05:00:00Z'), agentName: '@cmd', decl: { description: '+1+1', tool: '-2' } };
+const ec = A.recordCsv(CFG, [evil]);
+eq('csv: formula-looking owner/agent/declaration cells are prefixed with a quote', [ec.rows[0][1], ec.rows[0][2], ec.rows[0][ec.headers.indexOf('Description')], ec.rows[0][ec.headers.indexOf('Permitted Tools')]], ["'=SUM(A1)", "'@cmd", "'+1+1", "'-2"]);
+eq('csv: ordinary text is unchanged', A.recordCsv(CFG, [mk('8', 'Team A', [], '2026-11-26T05:00:00Z')]).rows[0][1], 'Team A');
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -84,5 +84,17 @@ eq('stageResults: pre part ignores deploy questions (C6 is a pre should-fix)', [
 eq('stageResults on empty/legacy input is null', [S.stageResults(CFG, null), S.stageResults(CFG, {})], [null, null]);
 eq('stageResults reads legacy v1 index answers', S.stageResults(CFG, { answers: { C1: 0, C2: 0, C3: 0, C4: 3, C5: 0, C6: 0, C7: 0, C8: 0, C9: 0 }, deployAt: null }).pre.level, 'Medium');
 
+// questionsToAsk: what the deploy dialog must show (new pre questions must not lock old agents)
+const ids = (a) => a.map((q) => (typeof q === 'string' ? q : q.id));
+eq('questionsToAsk: no stored screening → every pre + deploy question', S.questionsToAsk(CFG, {}, false).length, 11);
+eq('questionsToAsk: stored all-pass → only deploy questions', S.questionsToAsk(CFG, { ...PASS }, true), ['C10', 'C11']);
+eq('questionsToAsk: recheck + deploy', S.questionsToAsk(CFG, { ...PASS, C6: 'C6b' }, true), ['C6', 'C10', 'C11']);
+const cNew = clone(); cNew.questions.splice(3, 0, { id: 'qNEW', code: 'N1', group: 'g', th: 'ใหม่', en: 'new', advice: '', stage: 'pre', options: [{ id: 'oNEW', th: 'ok', en: 'ok', score: 0, fix: 'none', blocksPre: false, blocksDeploy: false }] });
+eq('questionsToAsk: a pre question added AFTER registration is asked at deploy', S.questionsToAsk(cNew, { ...PASS }, true), ['qNEW', 'C10', 'C11']);
+eq('questionsToAsk: a removed-option answer is asked again', S.questionsToAsk(c4, { ...PASS, C11: 'C11b' }, true).includes('C11'), true);
+// partial level for STORED data (a question added later must not blank every level)
+eq('evaluate partial: level computed over the answered pre questions', S.evaluate(cNew, { ...PASS, C4: 'C4d' }, 'pre', { partial: true }).level, 'Medium');
+eq('evaluate (strict) is still null while a pre question is unanswered', S.evaluate(cNew, { ...PASS, C4: 'C4d' }, 'pre').level, null);
+eq('stageResults uses the partial level', S.stageResults(cNew, { answers: { ...PASS, C4: 'C4d' }, deployAt: null }).pre.level, 'Medium');
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

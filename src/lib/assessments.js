@@ -54,7 +54,7 @@ export function groupByOwner(records) {
 }
 
 export function recordResult(config, r) {
-  return evaluate(config, normalizeAnswers(config, r.answers), r.stage === 'pre' ? 'pre' : undefined);
+  return evaluate(config, normalizeAnswers(config, r.answers), r.stage === 'pre' ? 'pre' : undefined, { partial: true });
 }
 
 export function answerText(config, r, q) {
@@ -63,14 +63,17 @@ export function answerText(config, r, q) {
   return optionOf(config, q.id, typeof v === 'number' ? normalizeAnswers(config, { [q.id]: v })[q.id] : v)?.th ?? '(removed option)';
 }
 
+// Spreadsheet formula injection: text a creator typed must not start with = + - @ in Excel.
+const safeCell = (v) => (typeof v === 'string' && /^[=+\-@\t\r]/.test(v) ? `'${v}` : v);
+
 export function recordCsv(config, records) {
   const headers = ['Date', 'Owner', 'Agent/Skill', 'Stage', 'Level', 'Total', 'Must fix', 'Should fix', ...DECL_COLUMNS.map((c) => c.label), ...config.questions.map((q) => q.code)];
   const rows = records.map((r) => {
     const e = recordResult(config, r);
     return [
-      bangkokDateTime(r.createdAt), r.owner || '', r.agentName || '', r.stage, e.level || '', e.total,
+      bangkokDateTime(r.createdAt), safeCell(r.owner || ''), safeCell(r.agentName || ''), r.stage, e.level || '', e.total,
       e.must.map((m) => m.item).join(' '), e.should.map((m) => m.item).join(' '),
-      ...DECL_COLUMNS.map((c) => r.decl?.[c.key] || ''),
+      ...DECL_COLUMNS.map((c) => safeCell(r.decl?.[c.key] || '')),
       ...config.questions.map((q) => answerText(config, r, q)),
     ];
   });

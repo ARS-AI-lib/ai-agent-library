@@ -34,9 +34,13 @@ async function connect(key, email, role) {
   const committee = await connect('committee', 'co@arise.tech', 'committee');
   const admin_ = await connect('admin', 'ad@arise.tech', 'admin');
 
+  // agents the records point at
+  await adb.collection('agents').doc('a1').set({ agentName: 'A', createdBy: user.uid, creatorEmails: ['u@arise.tech'], owner: 'T' });
+  await adb.collection('agents').doc('a2').set({ agentName: 'B', createdBy: 'someone-else', creatorEmails: ['x@arise.tech'], owner: 'T' });
+  const thisYear = new Date().getUTCFullYear();
   const rec = (uid, over = {}) => ({
     agentId: 'a1', agentName: 'A', owner: 'T', approveArea: ['QA'], stage: 'pre', answers: { C1: 'C1a' },
-    decl: { description: 'd' }, createdBy: uid, year: 2026, createdAt: fsdk.serverTimestamp(), ...over,
+    decl: { description: 'd' }, createdBy: uid, year: thisYear, createdAt: fsdk.serverTimestamp(), ...over,
   });
   const col = (u) => fsdk.collection(u.db, 'assessments');
 
@@ -46,6 +50,11 @@ async function connect(key, email, role) {
   await denied('extra key is denied', fsdk.setDoc(fsdk.doc(user.db, 'assessments', 'r4'), rec(user.uid, { sneaky: true })));
   await denied('bad stage is denied', fsdk.setDoc(fsdk.doc(user.db, 'assessments', 'r5'), rec(user.uid, { stage: 'x' })));
   await denied('client createdAt in the past is denied', fsdk.setDoc(fsdk.doc(user.db, 'assessments', 'r6'), rec(user.uid, { createdAt: fsdk.Timestamp.fromDate(new Date('2020-01-01')) })));
+  await denied('record for an agent that does not exist is denied', fsdk.setDoc(fsdk.doc(user.db, 'assessments', 'r7'), rec(user.uid, { agentId: 'ghost' })));
+  await denied('record for ANOTHER creator\'s agent is denied', fsdk.setDoc(fsdk.doc(user.db, 'assessments', 'r8'), rec(user.uid, { agentId: 'a2' })));
+  await denied('forged past year (escapes the archive guard) is denied', fsdk.setDoc(fsdk.doc(user.db, 'assessments', 'r9'), rec(user.uid, { year: 2020 })));
+  await denied('oversized answers map is denied', fsdk.setDoc(fsdk.doc(user.db, 'assessments', 'r10'), rec(user.uid, { answers: Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`q${i}`, 'o'])) })));
+  await allowed('admin may record for any agent', fsdk.setDoc(fsdk.doc(admin_.db, 'assessments', 'r11'), rec(admin_.uid, { agentId: 'a2' })));
   await denied('creator cannot update', fsdk.updateDoc(fsdk.doc(user.db, 'assessments', 'r1'), { year: 2025 }));
   await denied('creator cannot delete', fsdk.deleteDoc(fsdk.doc(user.db, 'assessments', 'r1')));
   await denied('admin cannot update either (immutable)', fsdk.updateDoc(fsdk.doc(admin_.db, 'assessments', 'r1'), { year: 2025 }));

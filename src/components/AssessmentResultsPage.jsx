@@ -135,6 +135,7 @@ function ArchivedPanel({ liveRecords, onChanged }) {
             <div className="usage-count">Archived {data.year} — {data.items.length} รายการ</div>
             <button className="btn btn-secondary" onClick={() => exportRecordsCsv(data.configSnapshot, data.items, `assessment-archive-${data.year}`)} disabled={!data.items.length}>↓ Download CSV</button>
           </div>
+          {data.truncated && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />แสดงเพียง {data.items.length} จากทั้งหมด {data.total} รายการ — ข้อมูลปีนี้มากกว่าที่แสดงได้ในครั้งเดียว</div>}
           <RecordsTable config={data.configSnapshot} records={data.items} groupOwner />
         </>
       )}
