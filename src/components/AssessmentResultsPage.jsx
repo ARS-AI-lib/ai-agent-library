@@ -6,7 +6,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { AREA_ORDER } from '../lib/approveAreas';
 import { downloadCsv } from '../lib/csv';
-import { filterRecords, groupByOwner, recordCsv, recordResult, answerText, bangkokDay } from '../lib/assessments';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { filterRecords, groupByOwner, recordCsv, recordResult, answerText, bangkokDay, bangkokYear } from '../lib/assessments';
 import { DECL_FIELDS } from '../lib/declaration';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';
@@ -77,6 +78,70 @@ export function RecordsTable({ config, records, groupOwner }) {
   );
 }
 
+
+// Admin-only: archive past years (current year is refused by the callable too) and browse what was
+// archived. Archived rows never appear in the normal Results view; they are read through the
+// listArchivedAssessments callable and evaluated with the config frozen at archive time.
+function ArchivedPanel({ liveRecords, onChanged }) {
+  const [years, setYears] = useState(null);
+  const [data, setData] = useState(null);     // { year, configSnapshot, items }
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const call = (name, payload) => httpsCallable(getFunctions(undefined, 'asia-southeast1'), name)(payload).then((r) => r.data);
+  const refresh = async () => { try { setYears((await call('listArchivedAssessments', {})).years); } catch (e) { setError(failMsg('โหลดรายการ archive', e)); } };
+  useEffect(() => { refresh(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const nowYear = bangkokYear(new Date());
+  const ready = Object.entries((liveRecords || []).reduce((m, r) => { if (r.year < nowYear) m[r.year] = (m[r.year] || 0) + 1; return m; }, {})).sort((a, b) => b[0] - a[0]);
+
+  async function archive(y, n) {
+    if (!window.confirm(`ย้ายผล assessment ปี ${y} (${n} รายการ) ไปเก็บถาวร? จะไม่แสดงในหน้า Results ปกติอีก`)) return;
+    setBusy(String(y)); setError('');
+    try { await call('archiveAssessmentYear', { year: Number(y) }); await refresh(); await onChanged(); }
+    catch (e) { setError(failMsg('archive', e)); } finally { setBusy(''); }
+  }
+  async function open(y) {
+    setBusy(`open${y}`); setError('');
+    try { setData({ year: y, ...(await call('listArchivedAssessments', { year: y })) }); }
+    catch (e) { setError(failMsg('โหลดข้อมูล archive', e)); } finally { setBusy(''); }
+  }
+
+  return (
+    <div>
+      {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
+      <div className="usage-count">Ready to archive (past years with results still in Results)</div>
+      {ready.length === 0 ? <div className="empty-state">ไม่มีปีที่ผ่านมาแล้วที่ยังรอ archive (ปีปัจจุบัน({nowYear}) archive ไม่ได้)</div> : (
+        <div className="usage-filters">
+          {ready.map(([y, n]) => (
+            <button key={y} type="button" className="usage-toggle" disabled={!!busy} onClick={() => archive(y, n)}>
+              {busy === y ? 'Archiving…' : `Archive ${y} · ${n}`}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="usage-count" style={{ marginTop: 16 }}>Archived years</div>
+      {years === null ? <div className="tl-center"><div className="spin" /></div> : years.length === 0 ? <div className="empty-state">ยังไม่มีข้อมูลที่ archive</div> : (
+        <div className="usage-filters">
+          {years.map((y) => (
+            <button key={y.year} type="button" className={`usage-toggle${data?.year === y.year ? ' on' : ''}`} disabled={!!busy} onClick={() => open(y.year)}>
+              {y.year} · {y.count}
+            </button>
+          ))}
+        </div>
+      )}
+      {data && (
+        <>
+          <div className="usage-head">
+            <div className="usage-count">Archived {data.year} — {data.items.length} รายการ</div>
+            <button className="btn btn-secondary" onClick={() => exportRecordsCsv(data.configSnapshot, data.items, `assessment-archive-${data.year}`)} disabled={!data.items.length}>↓ Download CSV</button>
+          </div>
+          <RecordsTable config={data.configSnapshot} records={data.items} groupOwner />
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AssessmentResultsPage() {
   const { user, role, approveAreas, loading, roleReady } = useAuth();
   const config = useScreeningConfig();
@@ -88,20 +153,18 @@ export default function AssessmentResultsPage() {
   const [owner, setOwner] = useState('');
   const [area, setArea] = useState('');
   const [groupOwner, setGroupOwner] = useState(true);
+  const [tab, setTab] = useState('results');
   const canView = !!user && VIEW_ROLES.includes(role);
   const isApprover = role === 'approver';
+  const isAdmin = role === 'admin';
 
-  useEffect(() => {
-    if (!canView) return;
-    let alive = true;
-    (async () => {
-      try {
-        const snap = await getDocs(query(collection(db, 'assessments'), orderBy('createdAt', 'desc'), limit(3000)));
-        if (alive) setRecords(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      } catch (e) { if (alive) setError(failMsg('โหลดข้อมูล', e)); }
-    })();
-    return () => { alive = false; };
-  }, [canView]);
+  const load = async () => {
+    try {
+      const snap = await getDocs(query(collection(db, 'assessments'), orderBy('createdAt', 'desc'), limit(3000)));
+      setRecords(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) { setError(failMsg('โหลดข้อมูล', e)); }
+  };
+  useEffect(() => { if (canView) load(); }, [canView]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Approver: only records overlapping their own Approve Areas (UI-side scoping).
   const visible = useMemo(() => {
@@ -129,8 +192,17 @@ export default function AssessmentResultsPage() {
             <h2>Assessment Results</h2>
             {isApprover && <p>Your approve areas only</p>}
           </div>
-          <button className="btn btn-secondary" onClick={() => exportRecordsCsv(config, filtered, 'assessment-results')} disabled={!filtered.length}>↓ Download CSV</button>
+          {tab === 'results' && <button className="btn btn-secondary" onClick={() => exportRecordsCsv(config, filtered, 'assessment-results')} disabled={!filtered.length}>↓ Download CSV</button>}
         </div>
+
+        {isAdmin && (
+          <div className="usage-filters" role="tablist" aria-label="Assessment views">
+            <button type="button" role="tab" aria-selected={tab === 'results'} className={`usage-toggle${tab === 'results' ? ' on' : ''}`} onClick={() => setTab('results')}>Results</button>
+            <button type="button" role="tab" aria-selected={tab === 'archived'} className={`usage-toggle${tab === 'archived' ? ' on' : ''}`} onClick={() => setTab('archived')}>Archived</button>
+          </div>
+        )}
+
+        {tab === 'archived' && isAdmin ? <ArchivedPanel liveRecords={records} onChanged={load} /> : (<>
 
         <div className="usage-filters">
           <label>Year
@@ -172,6 +244,7 @@ export default function AssessmentResultsPage() {
               : <RecordsTable config={config} records={filtered} groupOwner={groupOwner} />}
           </>
         )}
+        </>)}
       </div>
     </div>
   );

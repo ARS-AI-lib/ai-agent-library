@@ -656,6 +656,8 @@ const RATE_LIMITS = {
   classifyRoleGroup: 30,
   manageRoleGroups: 60,
   manageScreeningConfig: 60,
+  archiveAssessmentYear: 30,
+  listArchivedAssessments: 60,
 };
 
 async function enforceRateLimit(uid, fnName) {
@@ -2160,6 +2162,45 @@ exports.manageScreeningConfig = onCall(
       history: FieldValue.arrayUnion({ by, at: new Date().toISOString(), version, summary: `${clean.questions.length} questions` }),
     }, { merge: true });
     return { ok: true, version };
+  },
+);
+
+// ── Assessment archive (2026-11-26) ──────────────────────────────────
+// Admin moves a PAST year's /assessments into /assessmentArchive/{year}/items together with the
+// questionnaire config of that moment (so the archived view evaluates exactly as it did). Clients
+// cannot read the archive at all (firestore.rules) — they go through these callables.
+const { checkArchiveYear } = require('./assessmentArchiveRules');
+const { archiveYear, listArchivedYears, loadArchivedYear } = require('./assessmentArchive');
+
+exports.archiveAssessmentYear = onCall(
+  { cors: true, timeoutSeconds: 300 },
+  async (request) => {
+    requireCompanyUser(request);
+    await roleGroupCaller(request, ['admin']);
+    await enforceRateLimit(request.auth.uid, 'archiveAssessmentYear');
+    const year = (request.data || {}).year;
+    const err = checkArchiveYear(year);
+    if (err) throw new HttpsError('invalid-argument', err);
+    const cfgSnap = await db.doc('config/screening').get();
+    if (!cfgSnap.exists) throw new HttpsError('failed-precondition', 'ยังไม่ได้ seed /config/screening');
+    const by = request.auth.token?.email || request.auth.uid;
+    const res = await archiveYear({ db, FieldValue, year, by, cfg: cfgSnap.data() });
+    return { ok: true, ...res };
+  },
+);
+
+exports.listArchivedAssessments = onCall(
+  { cors: true, timeoutSeconds: 120 },
+  async (request) => {
+    requireCompanyUser(request);
+    await roleGroupCaller(request, ['admin']);
+    await enforceRateLimit(request.auth.uid, 'listArchivedAssessments');
+    const year = (request.data || {}).year;
+    if (year === undefined || year === null) return { years: await listArchivedYears(db) };
+    if (!Number.isInteger(year)) throw new HttpsError('invalid-argument', 'ปีไม่ถูกต้อง');
+    const data = await loadArchivedYear(db, year);
+    if (!data) throw new HttpsError('not-found', 'ไม่พบข้อมูลที่ archive ของปีนี้');
+    return data;
   },
 );
 
