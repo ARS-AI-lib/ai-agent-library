@@ -57,6 +57,9 @@ eq('deployGate all pass', S.deployGate({ ...PASS }), { complete: true, blocked: 
 eq('deployGate: C10 partial → blocked', S.deployGate({ ...PASS, C10: 1 }).blocked, true);
 eq('deployGate: C4 web + C11 untested → blocked', S.deployGate({ ...PASS, C4: 3, C11: 2 }).blocked, true);
 eq('deployGate: C4 none + C11 untested → NOT blocked (should only)', S.deployGate({ ...PASS, C4: 0, C11: 2 }).blocked, false);
+eq('deployGate: C7 "มี" blocks (legacy items answer C7 at deploy)', S.deployGate({ ...PASS, C7: 1 }).blocked, true);
+eq('deployGate: C7 not checked blocks', S.deployGate({ ...PASS, C7: 2 }).blocked, true);
+eq('RECO text has no stale D-numbers', Object.values(S.RECO).some((t) => /\bD[1-6]\b/.test(t)), false);
 eq('deployGate: unrelated C6 fail does not block', S.deployGate({ ...PASS, C6: 1 }).blocked, false);
 
 const b = S.buildScreening({ ...PASS, C4: 3, C11: 2 });

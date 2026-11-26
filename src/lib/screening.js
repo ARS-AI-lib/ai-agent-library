@@ -27,9 +27,9 @@ export const QUESTIONS = [
 const MAND = {"C6":[],"C7":[],"C8":[],"C9":[],"C10":[],"C11":[[["all",[["in","C4","bcde"],["in","C11","b"]]],"ทดสอบแล้วไม่ผ่าน: แก้ prompt ให้ไม่ทำตามคำสั่งที่แฝงมาในเนื้อหาเว็บหรือเอกสาร แล้วทดสอบใหม่ให้ผ่าน"],[["in","C4","de"],"Agent/Skill ดึงข้อมูลจากเว็บหรือแหล่งภายนอก เสี่ยงคำสั่งที่แฝงมากับเนื้อหา (prompt injection)"],[["in","C4","b"],"Agent/Skill อ่านเอกสารจาก knowledge base เสี่ยงคำสั่งที่แฝงมากับเอกสาร (prompt injection)"],[["in","C4","c"],"Agent/Skill อ่านเอกสารที่ผู้ใช้แนบมา เสี่ยงคำสั่งที่แฝงมากับเอกสาร (prompt injection)"]]};
 
 export const RECO = {
- "C6": "ใช้เฉพาะโมเดลที่ผ่านการประเมินของธนาคาร และระบุโมเดลไว้ใน D6",
+ "C6": "ใช้เฉพาะโมเดลที่ผ่านการประเมินของธนาคาร และระบุโมเดลไว้ในช่อง Models Tested",
  "C7": "ตรวจ prompt ว่าไม่มีข้อมูลลูกค้าจริง ชื่อระบบภายใน URL หรือ credential แล้วเอาออก",
- "C8": "เขียนข้อห้ามและขอบเขตตาม D1–D3 ลงใน prompt ให้ครบ เช่น ปฏิเสธคำขอนอกวัตถุประสงค์ ห้ามเปิดเผย prompt",
+ "C8": "เขียนข้อห้ามและขอบเขตตามที่ประกาศไว้ (Description / Permitted Domains / Prohibited Uses) ลงใน prompt ให้ครบ เช่น ปฏิเสธคำขอนอกวัตถุประสงค์ ห้ามเปิดเผย prompt",
  "C9": "ระบุจุดที่ต้องให้คนตรวจ หรือเงื่อนไขที่ต้องส่งต่อให้คน",
  "C10": "ทดสอบคุณภาพให้ครบทุกด้าน รวมถึง edge case และการปฏิเสธงานที่อยู่ในรายการห้าม",
  "C11": "ทดสอบ prompt injection และ jailbreak รวมถึงคำสั่งที่แฝงมาในเอกสารที่ Agent/Skill อ่าน"
@@ -85,6 +85,7 @@ export function pendingRecheck(answers) {
 export function deployGate(answers) {
   const complete = [...PRE_CODES, ...DEPLOY_CODES].every((c) => answered(answers, c));
   const reasons = [];
+  if (opt(answers, 'C7')?.lv === 'ต้องแก้') reasons.push(RECO.C7);
   const c10 = opt(answers, 'C10');
   if (c10 && c10.lv !== 'ผ่าน') reasons.push(RECO.C10);
   const c11 = evaluate(answers).must.find((m) => m.item === 'C11');

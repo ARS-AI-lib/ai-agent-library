@@ -17,3 +17,9 @@ const filled = (v) => String(v ?? '').trim() !== '';
 export function missingDeclaration(agent) {
   return DECL_FIELDS.filter((f) => !filled(agent?.[f.key])).map((f) => f.key);
 }
+
+// Patch that fills ONLY the declaration fields an agent doc still lacks, from `values`.
+// Never overwrites a field the doc already has (a paired sub-skill keeps its own tool/llm).
+export function declarationPatch(agent, values) {
+  return Object.fromEntries(missingDeclaration(agent).map((k) => [k, String(values?.[k] ?? '').trim()]));
+}

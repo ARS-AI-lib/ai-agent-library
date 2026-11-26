@@ -5,7 +5,7 @@ import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { checklistFor, checklistGate, buildDeployChecklist } from '../lib/deployChecklist';
 import { PRE_CODES, DEPLOY_CODES, deployGate, pendingRecheck, buildScreening } from '../lib/screening';
-import { DECL_FIELDS, missingDeclaration } from '../lib/declaration';
+import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
@@ -492,13 +492,12 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         // Package checklist + assessment answered in the Request-deploy dialog.
         deployChecklist: { ...buildDeployChecklist(getTier(agent), deployChecked), at: serverTimestamp() },
         screening: { ...buildScreening(deployAnswers), preAt: agent.screening?.preAt ?? serverTimestamp(), deployAt: serverTimestamp() },
-        // Older items predate the declaration fields — fill whatever is still empty.
-        ...Object.fromEntries(missingDeclaration(agent).map((k) => [k, String(deployDecl[k] ?? '').trim()])),
         progressUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
       const withPhase = (d) => (phaseChanged(d.devProgress, 95) ? { ...patch, phaseSince: serverTimestamp() } : patch);
-      await updateDoc(doc(db, 'agents', agent.id), withPhase(agent));
+      // Older items predate the declaration fields — fill whatever is still empty (per doc).
+      await updateDoc(doc(db, 'agents', agent.id), { ...withPhase(agent), ...declarationPatch(agent, deployDecl) });
       // Parent only: the cascade below writes one doc per sub-skill, and a
       // 7-child parent would otherwise produce 8 emails for one request.
       notifyEvent('deploy.requested', { agentId: agent.id });
@@ -510,8 +509,16 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // cascadeTargets, not pairedSubSkills: a child that is further along
       // than its parent (its own 100%, its own deploy approval) must not be
       // dragged backwards — 18 standalone skills sit at 100% today.
+      // A child that already has its own request/approval is rejected by the rules and
+      // would leave the cascade half-done, so only idle children are written. Each child
+      // keeps its own tier checklist and own declaration fields (never the parent's values).
       for (const sk of cascadeTargets(agent, allAgents || [])) {
-        await updateDoc(doc(db, 'agents', sk.id), withPhase(sk));
+        if (!['none', 'rejected'].includes(sk.deploymentStatus || 'none')) continue;
+        await updateDoc(doc(db, 'agents', sk.id), {
+          ...withPhase(sk),
+          deployChecklist: { ...buildDeployChecklist(getTier(sk), deployChecked), at: serverTimestamp() },
+          ...declarationPatch(sk, deployDecl),
+        });
       }
     } catch (e) {
       setSaveError(failMsg('ขออนุมัติ', e));
