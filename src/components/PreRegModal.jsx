@@ -8,7 +8,7 @@ import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
 import { questionsFor, preGate, buildScreening } from '../lib/screening';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { assessmentRecord } from '../lib/assessments';
-import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills } from '../lib/registrationType';
+import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills, requiredFieldStatus } from '../lib/registrationType';
 import { DECL_FIELDS } from '../lib/declaration';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
@@ -854,6 +854,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const reasonMissing = needsReason && overlapReason.trim().length < MIN_JUSTIFICATION;
   const maxAiConfidence = aiStats?.max ?? 0;
   const preAssess = preGate(screeningConfig, screeningAnswers);
+  const reqStatus = requiredFieldStatus({ ...form, requiredSkills: requiredSkillsValue }, isWf);
   // "Kitchen-sink" breadth flag — deterministic, doesn't depend on the AI
   // getting overall_risk right. Warns and is stamped on the stored analysis so
   // the approver sees it in the pending queue.
@@ -872,7 +873,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
 
   return (
     <div className="mov open">
-      <div className="mbox wide" style={{ padding: 0 }} onPointerDownCapture={arm} onKeyDownCapture={arm}>
+      <div className="mbox wide mform" style={{ padding: 0 }} onPointerDownCapture={arm} onKeyDownCapture={arm}>
         <button className="mclose" onClick={requestClose} style={{ zIndex: 1 }}>✕</button>
 
         {/* V7: the same two tabs, presented as a 2-step header. Step 2 stays
@@ -927,31 +928,27 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{validationMsg}</div>
             )}
 
-            <div className="fg">
-              <label>Type <span className="req">*</span></label>
-              <div className="toggle2" role="radiogroup" aria-label="Type">
-                {['Agent', 'Skill', 'Agent+Skill', WORKFLOW].map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    role="radio"
-                    aria-checked={form.type === t}
-                    className={form.type === t ? 'sel' : ''}
-                    onClick={() => setForm((f) => ({
-                      ...f,
-                      type: t,
-                      // Default the first skill row in immediately — it's
-                      // the only one that can't be deleted, so it should
-                      // always exist the moment the type is selected.
-                      skills: (t === 'Agent+Skill' || t === WORKFLOW) && f.skills.length === 0 ? [emptySkill()]
-        : f.skills,
-                    }))}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
+            <div className="fsec"><div className="fsec-h"><h4>What are you registering?</h4></div></div>
+            <div className="ftype" role="radiogroup" aria-label="Type">
+              {[['Agent', 'ทำงานเองหลายขั้นตอน'], ['Skill', 'ความสามารถเดี่ยว'], ['Agent+Skill', 'Agent ที่เรียก skill'], [WORKFLOW, 'Starter + skill ต่อกัน']].map(([t, hint]) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.type === t}
+                  className={`ftype-card${form.type === t ? ' on' : ''}`}
+                  onClick={() => setForm((f) => ({
+                    ...f,
+                    type: t,
+                    // The first skill row exists the moment a paired type is selected.
+                    skills: (t === 'Agent+Skill' || t === WORKFLOW) && f.skills.length === 0 ? [emptySkill()] : f.skills,
+                  }))}
+                >
+                  <b>{t}</b><small>{hint}</small>
+                </button>
+              ))}
             </div>
+            <div style={{ height: 14 }} />
 
             {isWf && (
               <div className="fg">
@@ -1005,8 +1002,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             )}
 
+            <div className="fsec"><div className="fsec-h"><h4>What it does</h4><span>ใช้ตรวจความซ้ำและแสดงในไลบรารี</span></div></div>
             <div className="fg">
-              <label>Description <span className="req">*</span></label>
+              <label>Description <span className="req">*</span><span className="fcount">{form.description.trim().length} / {MIN_DETAIL_LEN}+</span></label>
               <textarea rows={3} value={form.description} onChange={(e) => setField('description', e.target.value)} placeholder="อธิบายว่า Agent/Skill นี้ทำอะไร" />
             </div>
 
@@ -1032,14 +1030,17 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             </div>
 
+            <div className="fsec"><div className="fsec-h"><h4>Scope of use</h4><span>ประกาศขอบเขตตามแบบคัดกรองของธนาคาร</span></div></div>
             <div className="grid2">
               <div className="fg">
-                <label>Permitted Domains<Hint text={DECL_FIELDS[0].hint} /></label>
+                <label>Permitted Domains <span className="fopt">Optional</span></label>
                 <input value={form.permittedDomains} onChange={(e) => setField('permittedDomains', e.target.value)} placeholder={DECL_FIELDS[0].placeholder} />
+                <div className="fhelp">{DECL_FIELDS[0].hint}</div>
               </div>
               <div className="fg">
-                <label>Prohibited Uses<Hint text={DECL_FIELDS[1].hint} /></label>
+                <label>Prohibited Uses <span className="fopt">Optional</span></label>
                 <input value={form.prohibitedUses} onChange={(e) => setField('prohibitedUses', e.target.value)} placeholder={DECL_FIELDS[1].placeholder} />
+                <div className="fhelp">{DECL_FIELDS[1].hint}</div>
               </div>
             </div>
 
@@ -1049,6 +1050,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             </div>
 
             {/* Owner + Creator/Team member — half width each */}
+            <div className="fsec"><div className="fsec-h"><h4>Ownership & reuse</h4></div></div>
             <div className="grid2">
               <div className="fg">
                 <label>Owner team <span className="req">*</span></label>
@@ -1129,24 +1131,28 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             </>
 
             {/* Declaration (bank screening D1–D6): purpose = Description above; Domains + Prohibited Uses sit before Business Value; the rest below */}
+            <div className="fsec"><div className="fsec-h"><h4>Tools & dependencies</h4></div></div>
             <div className="grid2">
               <div className="fg">
-                <label>Permitted Tools *<Hint text={DECL_FIELDS[2].hint} /></label>
+                <label>Permitted Tools</label>
                 <input value={form.tool} onChange={(e) => setField('tool', e.target.value)} placeholder={DECL_FIELDS[2].placeholder} />
+                <div className="fhelp">{DECL_FIELDS[2].hint}</div>
               </div>
               <div className="fg">
-                <label>Models Tested<Hint text={DECL_FIELDS[4].hint} /></label>
+                <label>Models Tested <span className="fopt">Optional</span></label>
                 <input value={form.llm} onChange={(e) => setField('llm', e.target.value)} placeholder={DECL_FIELDS[4].placeholder} />
+                <div className="fhelp">{DECL_FIELDS[4].hint}</div>
               </div>
             </div>
             <div className="fg">
-              <label>Required Skills *<Hint text={DECL_FIELDS[3].hint} /></label>
+              <label>Required Skills</label>
               <input
                 value={requiredSkillsValue}
                 onChange={(e) => setField('requiredSkills', e.target.value)}
                 placeholder={isWf ? 'เติมอัตโนมัติจาก skill ใน workflow' : DECL_FIELDS[3].placeholder}
                 readOnly={isWf}
               />
+              <div className="fhelp">{isWf ? 'เติมอัตโนมัติจาก Starter skill และ skill ที่เพิ่ม' : DECL_FIELDS[3].hint}</div>
             </div>
 
             <div className="fg">
@@ -1185,9 +1191,12 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             )}
 
-            <div className="btn-group">
-              <button className="btn btn-primary" onClick={goAssess}>Next: Assessment →</button>
-              <button className="btn btn-secondary" onClick={() => { setForm(EMPTY_FORM); setScreeningAnswers({}); setAssessOpen(false); analysisCacheRef.current.clear(); }}>Clear</button>
+            <div className="fsticky">
+              <span className="fmeta">Required fields: {reqStatus.done} of {reqStatus.total}</span>
+              <div className="fbtns">
+                <button className="btn btn-secondary" onClick={() => { setForm(EMPTY_FORM); setScreeningAnswers({}); setAssessOpen(false); analysisCacheRef.current.clear(); }}>Clear</button>
+                <button className="btn btn-primary" onClick={goAssess}>Next: Assessment →</button>
+              </div>
             </div>
           </div>
         )}

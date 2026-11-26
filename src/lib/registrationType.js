@@ -30,3 +30,20 @@ export function buildWorkflowDoc(mainDoc, workflowName, starterId, memberIds, ex
 export function workflowRequiredSkills(starterName, memberNames) {
   return [starterName, ...memberNames].map((n) => String(n || '').trim()).filter(Boolean).join(', ');
 }
+
+// "Required fields: n of N" in the registration footer. Counts only the always-required keys;
+// Workflow skills derives Required Skills from its member rows and adds Workflow Name.
+const REQUIRED_TEXT = ['agentName', 'description', 'input', 'output', 'businessValue', 'owner', 'reusable', 'tool'];
+const filled = (v) => String(v ?? '').trim() !== '';
+const nonEmpty = (v) => (v instanceof Set ? v.size > 0 : Array.isArray(v) ? v.length > 0 : false);
+
+export function requiredFieldStatus(form, isWorkflow) {
+  const checks = [
+    ...REQUIRED_TEXT.map((k) => filled(form[k])),
+    nonEmpty(form.coreAbility),
+    nonEmpty(form.relatedRole),
+    isWorkflow ? (form.skills || []).length >= 1 : filled(form.requiredSkills),
+  ];
+  if (isWorkflow) checks.push(filled(form.workflowName));
+  return { done: checks.filter(Boolean).length, total: checks.length };
+}
