@@ -796,11 +796,6 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   {canEdit && (
                     <button type="button" className="v7-btn-primary-sm" onClick={startEdit}>Update Progress</button>
                   )}
-                  {mayEditThisAgent && !lockedSubSkill && deploymentStatus !== 'none' && (
-                    <span className="deploy-badge" style={{ color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `color-mix(in srgb, ${DEPLOY_STATUS_COLOR[deploymentStatus]} 9%, transparent)` }}>
-                      {DEPLOY_STATUS_LABEL[deploymentStatus]}
-                    </span>
-                  )}
                   {mayEditThisAgent && !lockedSubSkill && canRequestDeploy && (
                     <button
                       className="v7-btn-outline"
@@ -809,6 +804,11 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                     >
                       {requesting ? 'Sending…' : 'Request deploy'}
                     </button>
+                  )}
+                  {mayEditThisAgent && !lockedSubSkill && deploymentStatus !== 'none' && (
+                    <span className="deploy-badge" style={{ color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `color-mix(in srgb, ${DEPLOY_STATUS_COLOR[deploymentStatus]} 9%, transparent)` }}>
+                      {DEPLOY_STATUS_LABEL[deploymentStatus]}
+                    </span>
                   )}
                 </div>
               )}
