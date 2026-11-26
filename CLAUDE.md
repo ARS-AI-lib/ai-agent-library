@@ -1668,3 +1668,19 @@ Spec `docs/superpowers/specs/2026-11-26-workflow-skills-design.md` · plan `docs
 - **Not done:** editing members/order from the Edit form, drag-to-reorder, converting existing items, nested workflows. KPI/Dashboard count workflows as Skills (via `getType`).
 - Verify: `node functions/verify-workflow.cjs` (19). No `firestore.rules` change.
 
+---
+
+## 39. Assessment menu — settings, results, archive (2026-11-26)
+
+Spec `docs/superpowers/specs/2026-11-26-assessment-menu-design.md` · plan `docs/superpowers/plans/2026-11-26-assessment-menu.md`. ☰ **Assessment** (admin/committee/approver) → **Assessment Results** (everyone allowed) and **Assessment Settings** (admin/committee).
+
+- **Questionnaire = config, not code.** `src/lib/screening.js` is an engine over a config object; `DEFAULT_CONFIG` (the bank's questionnaire) is the seed and the fallback. Live config = Firestore `/config/screening` (`useScreeningConfig()`); edit it in Assessment Settings → callable `manageScreeningConfig` (admin/committee, validated by `functions/screeningConfigRules.js`). Clients cannot write `/config` directly.
+- **Answers are `{questionId: optionId}`** (stable ids, never reused); v1 records stored option *indexes* — `normalizeAnswers()` converts. A deleted option shows "(removed option)" and scores 0.
+- **Gates are per option:** `blocksPre` (blocks registration) / `blocksDeploy` (blocks the deploy request), `fix` = none/should/must. Seed: C7 b/c block both; C10 b/c/d and C11 b/c block deploy. ⚠ The old "C11 only blocks when C4 reads documents/web" rule is gone.
+- **Records:** one immutable `/assessments` doc per registration (`pre`) and per deploy request (`deploy`) — answers + a snapshot of the declaration fields + `approveArea` + `year` (Asia/Bangkok). Results are re-evaluated from the **live** config, so editing the questionnaire changes every non-archived result (never re-blocks/un-approves an item). `agent.screening` (v2) stays as the latest answers for the gates and the approval queue.
+- **Results page `/assessments`** (same classes as `/usage`): grouped by owner, newest first, filters Year / Period (start–end date, inclusive, Bangkok day) / Owner / Area, expandable row = D + C answers, CSV. Approver is limited to own Approve Areas **UI-side** (rules let approver-or-above read all — Firestore cannot prove an `array-contains-any` query satisfies a `hasAny` rule).
+- **Archive (admin, Archived tab):** past years only (`checkArchiveYear`); callable `archiveAssessmentYear` moves the year into `/assessmentArchive/{year}/items` with the config of that moment (stored once); `listArchivedAssessments` reads it back (clients cannot read the archive). Archived rows disappear from Results; the Archived tab evaluates them with the frozen config and exports CSV.
+- **Release order:** user publishes `firestore.rules` (Console, named DB `ai-agent-lib`) → scoped functions deploy `manageScreeningConfig,archiveAssessmentYear,listArchivedAssessments` → `node functions/seed-screening-config.cjs --apply` (writes `/config/screening` only if missing; archive refuses until it exists) → hosting.
+- Verify: `verify-screening.cjs` · `verify-screening-config.cjs` · `verify-assessments.cjs` · `verify-assessment-archive.cjs` · emulator: `verify-assessment-rules.cjs`, `verify-assessment-archive-run.cjs`.
+- Not done: edit-history UI for the questionnaire; the three callables and the Archived-tab buttons were not clicked end-to-end before release (no functions emulator) — check after deploy.
+
