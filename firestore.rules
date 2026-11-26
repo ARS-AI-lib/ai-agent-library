@@ -165,7 +165,7 @@ service cloud.firestore {
         // 95 AND files the request, no separate "save to 95 first" step
         // required. Only while no request is already in flight (re-request
         // allowed after a rejection).
-        || (affectedKeys().hasOnly(['devProgress', 'deploymentStatus', 'deployRequestedBy', 'deployRequestedAt', 'phaseSince', 'progressUpdatedAt', 'updatedAt'])
+        || (affectedKeys().hasOnly(['devProgress', 'deploymentStatus', 'deployRequestedBy', 'deployRequestedAt', 'deployChecklist', 'screening', 'permittedDomains', 'prohibitedUses', 'requiredSkills', 'tool', 'llm', 'phaseSince', 'progressUpdatedAt', 'updatedAt'])
             && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid || resource.data.approvedBy == request.auth.uid)
             && resource.data.get('devProgress', 0) < 100
             && resource.data.get('deploymentStatus', 'none') in ['none', 'rejected', null]

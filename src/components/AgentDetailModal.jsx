@@ -3,6 +3,10 @@ import { toast } from '../lib/toast';
 import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
+import { checklistFor, checklistGate, buildDeployChecklist } from '../lib/deployChecklist';
+import { PRE_CODES, DEPLOY_CODES, deployGate, pendingRecheck, buildScreening } from '../lib/screening';
+import { DECL_FIELDS, missingDeclaration } from '../lib/declaration';
+import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
@@ -37,6 +41,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [saveError, setSaveError] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
+  const [deployStep, setDeployStep] = useState(1);
+  const [deployChecked, setDeployChecked] = useState([]);
+  const [deployAnswers, setDeployAnswers] = useState({});
+  const [deployDecl, setDeployDecl] = useState({});
   const [editEndpoint, setEditEndpoint] = useState('');
   const [editFile, setEditFile] = useState(null);
   // Which linked sub-skills this progress update should be shared with
@@ -463,6 +471,14 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
     }
   }
 
+  function openDeployDialog() {
+    setDeployStep(1);
+    setDeployChecked([]);
+    setDeployAnswers({ ...(agent.screening?.answers || {}) });
+    setDeployDecl({});
+    setConfirmingDeploy(true);
+  }
+
   async function handleRequestDeploy() {
     setConfirmingDeploy(false);
     setRequesting(true);
@@ -473,6 +489,11 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         deploymentStatus: 'requested',
         deployRequestedBy: user?.uid || '',
         deployRequestedAt: serverTimestamp(),
+        // Package checklist + assessment answered in the Request-deploy dialog.
+        deployChecklist: { ...buildDeployChecklist(getTier(agent), deployChecked), at: serverTimestamp() },
+        screening: { ...buildScreening(deployAnswers), preAt: agent.screening?.preAt ?? serverTimestamp(), deployAt: serverTimestamp() },
+        // Older items predate the declaration fields — fill whatever is still empty.
+        ...Object.fromEntries(missingDeclaration(agent).map((k) => [k, String(deployDecl[k] ?? '').trim()])),
         progressUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -777,7 +798,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                     <button
                       className="v7-btn-outline"
                       disabled={requesting}
-                      onClick={() => setConfirmingDeploy(true)}
+                      onClick={openDeployDialog}
                     >
                       {requesting ? 'Sending…' : 'Request deploy'}
                     </button>
@@ -1014,22 +1035,98 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         </div>
       )}
 
-      {confirmingDeploy && (
-        <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setConfirmingDeploy(false)}>
-          <div className="mbox" style={{ padding: 18, maxWidth: 380 }}>
-            <button className="mclose" onClick={() => setConfirmingDeploy(false)}>✕</button>
-            <h2 className="mtitle">Request deploy</h2>
-            <div className="msub">Confirm</div>
-            <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 16 }}>
-              ยืนยันว่าผ่านการทดสอบและพร้อมเปิดใช้งาน โปรดแนบหลักฐานการทดสอบให้ Approver พิจารณา
-            </p>
-            <div className="btn-row">
-              <button className="btn btn-secondary" onClick={() => setConfirmingDeploy(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleRequestDeploy}>Request deploy</button>
+      {confirmingDeploy && (() => {
+        const prev = agent.screening?.answers || {};
+        const missingDecl = missingDeclaration(agent);
+        const declDone = missingDecl.every((k) => String(deployDecl[k] ?? '').trim() !== '');
+        const items = checklistFor(tier);
+        const cGate = checklistGate(tier, deployChecked);
+        const codes = agent.screening ? [...pendingRecheck(prev), ...DEPLOY_CODES] : [...PRE_CODES, ...DEPLOY_CODES];
+        const dGate = deployGate(deployAnswers);
+        const close = () => setConfirmingDeploy(false);
+        return (
+          <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && close()}>
+            <div className="mbox" style={{ padding: 0, maxWidth: 640 }}>
+              <button className="mclose" onClick={close} style={{ zIndex: 1 }}>✕</button>
+              <div className="v7-steps" aria-label="Deploy request steps">
+                <span className={`v7-step ${deployStep === 1 ? 'active' : ''} ${deployStep === 2 ? 'done' : ''}`}>
+                  <span className="v7-step-n">{deployStep === 2 ? '✓' : '1'}</span>Package
+                </span>
+                <span className="v7-step-line" aria-hidden="true" />
+                <span className={`v7-step ${deployStep === 2 ? 'active' : 'locked'}`}>
+                  <span className="v7-step-n">2</span>Assessment
+                </span>
+              </div>
+              <div style={{ padding: 18 }}>
+                <h2 className="mtitle">Request deploy</h2>
+                <div className="msub">{tier} · {type === 'skill' ? 'Skill' : 'Agent'} · {isInternalOrExternal(agent)}</div>
+                {deployStep === 1 ? (
+                  <>
+                    <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, margin: '0 0 12px' }}>
+                      เลือกสิ่งที่มีอยู่ใน package นี้ — ข้อที่มี <strong>*</strong> จำเป็นต้องมี
+                    </p>
+                    <div style={{ border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-sm)', padding: '4px 2px' }}>
+                      {items.map((it) => (
+                        <label key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: 12.5, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={deployChecked.includes(it.id)}
+                            onChange={(e) => setDeployChecked((prevIds) => (e.target.checked ? [...prevIds, it.id] : prevIds.filter((x) => x !== it.id)))}
+                          />
+                          <span>{it.label}{it.required && <span style={{ color: 'var(--late)' }}> *</span>}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="btn-row" style={{ marginTop: 16 }}>
+                      <button className="btn btn-secondary" onClick={close}>Cancel</button>
+                      <button className="btn btn-primary" disabled={!cGate.complete} onClick={() => setDeployStep(2)}>Next →</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, margin: '0 0 12px' }}>
+                      {agent.screening
+                        ? 'ตอบแบบประเมินการทดสอบ (และข้อที่ยังไม่ผ่านตอนลงทะเบียน) ก่อนขออนุมัติ'
+                        : 'รายการนี้ยังไม่เคยตอบแบบประเมิน — ตอบให้ครบก่อนขออนุมัติ'}
+                    </p>
+                    <div style={{ maxHeight: '50vh', overflowY: 'auto', paddingRight: 4 }}>
+                      {missingDecl.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div className="scr-grp">Declaration</div>
+                          {missingDecl.map((k) => {
+                            const f = DECL_FIELDS.find((x) => x.key === k);
+                            return (
+                              <div className="fg" key={k}>
+                                <label>{f.label} *</label>
+                                <input value={deployDecl[k] ?? ''} placeholder={f.placeholder} onChange={(e) => setDeployDecl((p) => ({ ...p, [k]: e.target.value }))} />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <ScreeningQuestions
+                        codes={codes}
+                        answers={deployAnswers}
+                        onChange={(code, v) => setDeployAnswers((p) => ({ ...p, [code]: v }))}
+                      />
+                      <div style={{ marginTop: 12 }}><ScreeningResult answers={deployAnswers} /></div>
+                    </div>
+                    {dGate.blocked && (
+                      <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
+                        ยังขอ Deploy ไม่ได้ — {dGate.reasons[0]}
+                      </div>
+                    )}
+                    <div className="btn-row" style={{ marginTop: 16 }}>
+                      <button className="btn btn-secondary" onClick={() => setDeployStep(1)}>← Back</button>
+                      <button className="btn btn-primary" disabled={!dGate.complete || dGate.blocked || !declDone} onClick={handleRequestDeploy}>Request deploy</button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {archiveOpen && (
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setArchiveOpen(false)}>

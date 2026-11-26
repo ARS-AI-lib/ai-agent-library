@@ -17,12 +17,11 @@ const eq = (name, got, want) => {
   ok ? pass++ : fail++;
   console.log(`${ok ? '✓' : '✗'} ${name}${ok ? '' : `\n    got  ${JSON.stringify(got)}\n    want ${JSON.stringify(want)}`}`);
 };
-const DECL_OK = { D1: 'a', D2: 'b', D3: 'c', D4: 'd', D5: 'e', D6: 'f' };
-const PASS = { ...DECL_OK, C1: 0, C2: 0, C3: 0, C4: 0, C5: 0, C6: 0, C7: 0, C8: 0, C9: 0, C10: 0, C11: 0 };
+const PASS = { C1: 0, C2: 0, C3: 0, C4: 0, C5: 0, C6: 0, C7: 0, C8: 0, C9: 0, C10: 0, C11: 0 };
 const ev = (over) => S.evaluate({ ...PASS, ...over });
 const codes = (r, k) => r[k].map((x) => x.item);
 
-eq('question counts', [S.QUESTIONS.filter((q) => q.type === 'decl').length, S.QUESTIONS.filter((q) => q.opts).length], [6, 11]);
+eq('question count (C1–C11 only; D1–D6 live in the form)', [S.QUESTIONS.length, S.QUESTIONS.filter((q) => q.opts).length], [11, 11]);
 eq('all-pass → Low, nothing to fix', (({ level, must, should }) => [level, must.length, should.length])(ev({})), ['Low', 0, 0]);
 eq('HTML example → Medium total 11', (({ level, total }) => [level, total])(S.evaluate({ ...PASS, C1: 2, C2: 1, C3: 0, C4: 3 })), ['Medium', 11]);
 eq('High at 14', S.evaluate({ ...PASS, C2: 3 }).level, 'High');
@@ -46,9 +45,7 @@ eq('hits: C1 e + C2 d', ev({ C1: 4, C2: 3 }).hits.length, 2);
 eq('hits: C1 c (score 2) is not a main factor', ev({ C1: 2 }).hits.length, 0);
 
 // gates
-eq('preGate complete when D1-D6 + C1-C9 answered', S.preGate({ ...PASS }), { complete: true, blocked: false, reasons: [] });
-eq('preGate: missing D3 → incomplete', S.preGate({ ...PASS, D3: '' }).complete, false);
-eq('preGate: whitespace D3 → incomplete', S.preGate({ ...PASS, D3: '   ' }).complete, false);
+eq('preGate complete when C1-C9 answered', S.preGate({ ...PASS }), { complete: true, blocked: false, reasons: [] });
 eq('preGate: unanswered C5 → incomplete', S.preGate({ ...PASS, C5: undefined }).complete, false);
 eq('preGate: C7 "มี" blocks', S.preGate({ ...PASS, C7: 1 }).blocked, true);
 eq('preGate: C7 "ยังไม่ได้ตรวจ" blocks', S.preGate({ ...PASS, C7: 2 }).blocked, true);
@@ -63,7 +60,7 @@ eq('deployGate: C4 none + C11 untested → NOT blocked (should only)', S.deployG
 eq('deployGate: unrelated C6 fail does not block', S.deployGate({ ...PASS, C6: 1 }).blocked, false);
 
 const b = S.buildScreening({ ...PASS, C4: 3, C11: 2 });
-eq('buildScreening shape', [b.v, b.level, b.must, Object.keys(b.decl).length, Object.keys(b.answers).length, Object.values(b).includes(undefined)], [1, 'High', ['C11'], 6, 11, false]);
+eq('buildScreening shape', [b.v, b.level, b.must, 'decl' in b, Object.keys(b.answers).length, Object.values(b).includes(undefined)], [1, 'High', ['C11'], false, 11, false]);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

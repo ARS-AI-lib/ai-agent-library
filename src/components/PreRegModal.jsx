@@ -5,7 +5,8 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
-import { DECL, PRE_CODES, preGate, buildScreening } from '../lib/screening';
+import { PRE_CODES, preGate, buildScreening } from '../lib/screening';
+import { DECL_FIELDS } from '../lib/declaration';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
@@ -83,6 +84,9 @@ const EMPTY_FORM = {
   humanJob: '',
   tool: '',
   llm: '',
+  permittedDomains: '',
+  prohibitedUses: '',
+  requiredSkills: '',
   dataPrivacy: '',
   sdlcStage: new Set(),
   sdlcProcessMapping: new Set(),
@@ -273,6 +277,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     if (form.businessValue.trim().length < MIN_DETAIL_LEN) {
       return `Business Value สั้นเกินไป — ช่วยอธิบายคุณค่าทางธุรกิจให้ชัด (อย่างน้อย ${MIN_DETAIL_LEN} ตัวอักษร, ตอนนี้ ${form.businessValue.trim().length})`;
     }
+    if (!form.permittedDomains.trim()) return 'ใส่ Permitted Domains (Domain ที่ใช้ได้)';
+    if (!form.prohibitedUses.trim()) return 'ใส่ Prohibited Uses (ข้อห้ามการใช้งาน)';
+    if (!form.tool.trim()) return 'ใส่ Permitted Tools (ประเภท tool ที่อนุญาต)';
+    if (!form.requiredSkills.trim()) return 'ใส่ Required Skills (ถ้าไม่ต้องใช้ร่วมกับ skill อื่น ให้พิมพ์ "ไม่ต้อง")';
+    if (!form.llm.trim()) return 'ใส่ Models Tested (โมเดลที่ทดสอบแล้ว)';
     if (!form.owner.trim()) return 'ใส่ Owner team';
     if (!isValidTeamName(form.owner)) return 'ชื่อ Owner team ต้องมีอย่างน้อย 2 ตัวอักษร';
     if (!form.reusable) return 'เลือก Reusable';
@@ -479,6 +488,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         owner: form.owner.trim(),
         tool: form.tool.trim(),
         llm: form.llm.trim(),
+        permittedDomains: form.permittedDomains.trim(),
+        prohibitedUses: form.prohibitedUses.trim(),
+        requiredSkills: form.requiredSkills.trim(),
         dataPrivacy: form.dataPrivacy.trim(),
         businessValue: form.businessValue.trim(),
         // Array since 2026-08-17: 1 discipline + optionally 1 product. It used
@@ -535,6 +547,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         externalSource: form.type === 'Skill' && form.externalSource,
         tool: inheritedFromAgent.tool,
         llm: inheritedFromAgent.llm,
+        permittedDomains: inheritedFromAgent.permittedDomains,
+        prohibitedUses: inheritedFromAgent.prohibitedUses,
+        requiredSkills: inheritedFromAgent.requiredSkills,
         dataPrivacy: inheritedFromAgent.dataPrivacy,
         // Sanitised on the way IN as well as at render time — a hostile scheme
         // should never reach Firestore, so no future reader has to remember to
@@ -701,6 +716,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             externalSource: !!s.externalSource,
             tool: inheritedFromAgent.tool,
             llm: inheritedFromAgent.llm,
+            permittedDomains: inheritedFromAgent.permittedDomains,
+            prohibitedUses: inheritedFromAgent.prohibitedUses,
+            requiredSkills: inheritedFromAgent.requiredSkills,
             dataPrivacy: inheritedFromAgent.dataPrivacy,
             // SDLC context inherited from the Agent (blanked when the skill
             // itself is customer-facing, mirroring the Agent rule).
@@ -1064,16 +1082,30 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 </div>
             </>
 
-            {/* Tech */}
+            {/* Declaration (bank screening D1–D6): purpose = Description above; the rest are here */}
             <div className="grid2">
               <div className="fg">
-                <label>Tool</label>
-                <input value={form.tool} onChange={(e) => setField('tool', e.target.value)} placeholder="เช่น JIRA API, n8n" />
+                <label>Permitted Domains *<Hint text={DECL_FIELDS[0].hint} /></label>
+                <input value={form.permittedDomains} onChange={(e) => setField('permittedDomains', e.target.value)} placeholder={DECL_FIELDS[0].placeholder} />
               </div>
               <div className="fg">
-                <label>LLM</label>
-                <input value={form.llm} onChange={(e) => setField('llm', e.target.value)} placeholder="เช่น Gemini 3 Flash" />
+                <label>Prohibited Uses *<Hint text={DECL_FIELDS[1].hint} /></label>
+                <input value={form.prohibitedUses} onChange={(e) => setField('prohibitedUses', e.target.value)} placeholder={DECL_FIELDS[1].placeholder} />
               </div>
+            </div>
+            <div className="grid2">
+              <div className="fg">
+                <label>Permitted Tools *<Hint text={DECL_FIELDS[2].hint} /></label>
+                <input value={form.tool} onChange={(e) => setField('tool', e.target.value)} placeholder={DECL_FIELDS[2].placeholder} />
+              </div>
+              <div className="fg">
+                <label>Models Tested *<Hint text={DECL_FIELDS[4].hint} /></label>
+                <input value={form.llm} onChange={(e) => setField('llm', e.target.value)} placeholder={DECL_FIELDS[4].placeholder} />
+              </div>
+            </div>
+            <div className="fg">
+              <label>Required Skills *<Hint text={DECL_FIELDS[3].hint} /></label>
+              <input value={form.requiredSkills} onChange={(e) => setField('requiredSkills', e.target.value)} placeholder={DECL_FIELDS[3].placeholder} />
             </div>
 
             <div className="fg">
@@ -1119,11 +1151,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             <div className="m-head">
               <div>
                 <h2 className="mtitle">Pre-assessment</h2>
-                <div className="msub">ประกาศขอบเขตของ Agent/Skill และตอบแบบประเมินก่อนตรวจความซ้ำซ้อน</div>
+                <div className="msub">ตอบแบบประเมินก่อนตรวจความซ้ำซ้อน</div>
               </div>
             </div>
             <ScreeningQuestions
-              codes={[...DECL, ...PRE_CODES]}
+              codes={PRE_CODES}
               answers={screeningAnswers}
               onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
             />
@@ -1139,7 +1171,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 className="btn btn-primary"
                 onClick={runCheck}
                 disabled={!preAssess.complete || preAssess.blocked}
-                title={!preAssess.complete ? 'ตอบ D1–D6 และ C1–C9 ให้ครบก่อน' : undefined}
+                title={!preAssess.complete ? 'ตอบ C1–C9 ให้ครบก่อน' : undefined}
               >
                 {!preAssess.complete ? 'ตอบให้ครบก่อน' : preAssess.blocked ? 'ถูกบล็อก (C7)' : 'Continue to Duplicate Check'}
               </button>
