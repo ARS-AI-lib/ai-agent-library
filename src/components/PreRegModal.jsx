@@ -5,7 +5,8 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
-import { PRE_CODES, preGate, buildScreening } from '../lib/screening';
+import { questionsFor, preGate, buildScreening } from '../lib/screening';
+import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills } from '../lib/registrationType';
 import { DECL_FIELDS } from '../lib/declaration';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
@@ -128,6 +129,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const [connections, setConnections] = useState([]);  // rule-based directional connections
   const [aiResult, setAiResult] = useState(null);
   const [overlapReason, setOverlapReason] = useState('');
+  const screeningConfig = useScreeningConfig();
   const [screeningAnswers, setScreeningAnswers] = useState({});
   const [assessOpen, setAssessOpen] = useState(false);
   // Opt-in (default on) to REQUEST the AI-suggested link; a person still confirms it.
@@ -610,7 +612,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               categoryReason: aiResult.category_reason || '',
             }
           : null,
-        screening: { ...buildScreening(screeningAnswers), preAt: serverTimestamp() },
+        screening: { ...buildScreening(screeningConfig, screeningAnswers), preAt: serverTimestamp() },
         developmentPhase: 'To Do',
         devProgress: 0,
         phaseSince: serverTimestamp(),
@@ -745,7 +747,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             businessValue: inheritedFromAgent.businessValue,
             matchingAgent: isWf ? workflowName : agentName,   // ← link to parent Agent / workflow
             analysisResult: null,
-            screening: { ...buildScreening(screeningAnswers), preAt: serverTimestamp() },
+            screening: { ...buildScreening(screeningConfig, screeningAnswers), preAt: serverTimestamp() },
             developmentPhase: 'To Do',
             devProgress: 0,
             phaseSince: serverTimestamp(),
@@ -845,7 +847,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const needsReason = dupBlock.needsJustification;
   const reasonMissing = needsReason && overlapReason.trim().length < MIN_JUSTIFICATION;
   const maxAiConfidence = aiStats?.max ?? 0;
-  const preAssess = preGate(screeningAnswers);
+  const preAssess = preGate(screeningConfig, screeningAnswers);
   // "Kitchen-sink" breadth flag — deterministic, doesn't depend on the AI
   // getting overall_risk right. Warns and is stamped on the stored analysis so
   // the approver sees it in the pending queue.
@@ -1193,11 +1195,12 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             </div>
             <ScreeningQuestions
-              codes={PRE_CODES}
+              config={screeningConfig}
+              questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
               answers={screeningAnswers}
               onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
             />
-            <div style={{ marginTop: 14 }}><ScreeningResult answers={screeningAnswers} /></div>
+            <div style={{ marginTop: 14 }}><ScreeningResult config={screeningConfig} answers={screeningAnswers} /></div>
             {preAssess.blocked && (
               <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
                 ไม่สามารถไปต่อได้ — {preAssess.reasons[0]}

@@ -1,5 +1,6 @@
-// Screening questionnaire (2026-11-26). node functions/verify-screening.cjs
-// Loads the SHIPPED src/lib/screening.js and replays xlsx sheet 3 + the HTML example.
+// Screening engine over a config object (2026-11-26). node functions/verify-screening.cjs
+// Loads the SHIPPED src/lib/screening.js; replays the bank's xlsx sheet 3 on DEFAULT_CONFIG,
+// plus config-edit cases (score change, removed option, per-option blocking, legacy index answers).
 const fs = require('fs');
 const path = require('path');
 const SRC = path.join(__dirname, '..', 'src', 'lib');
@@ -11,69 +12,77 @@ function loadEsm(file, injected = {}) {
   return new Function(...names, `${code}\n;return { ${[...new Set(decls)].join(', ')} };`)(...names.map((n) => injected[n]));
 }
 const S = loadEsm('screening.js');
+const CFG = S.DEFAULT_CONFIG;
 let pass = 0; let fail = 0;
 const eq = (name, got, want) => {
   const ok = JSON.stringify(got) === JSON.stringify(want);
   ok ? pass++ : fail++;
   console.log(`${ok ? '✓' : '✗'} ${name}${ok ? '' : `\n    got  ${JSON.stringify(got)}\n    want ${JSON.stringify(want)}`}`);
 };
-const PASS = { C1: 0, C2: 0, C3: 0, C4: 0, C5: 0, C6: 0, C7: 0, C8: 0, C9: 0, C10: 0, C11: 0 };
-const ev = (over) => S.evaluate({ ...PASS, ...over });
-const codes = (r, k) => r[k].map((x) => x.item);
+// answers by option id; PASS = first (best) option of every question
+const PASS = Object.fromEntries(CFG.questions.map((q) => [q.id, q.options[0].id]));
+const ev = (over, cfg = CFG) => S.evaluate(cfg, { ...PASS, ...over });
+const items = (r, k) => r[k].map((x) => x.item);
+const clone = () => JSON.parse(JSON.stringify(CFG));
 
-eq('question count (C1–C11 only; D1–D6 live in the form)', [S.QUESTIONS.length, S.QUESTIONS.filter((q) => q.opts).length], [11, 11]);
+eq('11 questions, 6 pre-stage-free: C1–C9 pre, C10–C11 deploy', [CFG.questions.length, S.questionsFor(CFG, 'pre').length, S.questionsFor(CFG, 'deploy').length], [11, 9, 2]);
 eq('all-pass → Low, nothing to fix', (({ level, must, should }) => [level, must.length, should.length])(ev({})), ['Low', 0, 0]);
-eq('HTML example → Medium total 11', (({ level, total }) => [level, total])(S.evaluate({ ...PASS, C1: 2, C2: 1, C3: 0, C4: 3 })), ['Medium', 11]);
-eq('High at 14', S.evaluate({ ...PASS, C2: 3 }).level, 'High');
-eq('Medium at 8', S.evaluate({ ...PASS, C4: 3 }).level, 'Medium');
-eq('Low at 6', S.evaluate({ ...PASS, C11: 1 }).level, 'Low');
+eq('HTML example (C1:c C2:b C3:a C4:d) → Medium total 11', (({ level, total }) => [level, total])(ev({ C1: 'C1c', C2: 'C2b', C3: 'C3a', C4: 'C4d' })), ['Medium', 11]);
+eq('High at 14 (C2 d)', ev({ C2: 'C2d' }).level, 'High');
+eq('Medium at 8 (C4 d)', ev({ C4: 'C4d' }).level, 'Medium');
+eq('Low at 6 (C11 b)', ev({ C11: 'C11b' }).level, 'Low');
+eq('level is null until every pre question is answered', S.evaluate(CFG, { ...PASS, C5: undefined }).level, null);
 
-// sheet 3 — C6..C10 (should only)
-eq('C6 b → should C6', codes(ev({ C6: 1 }), 'should'), ['C6']);
-eq('C7 b → should C7 + hit', [codes(ev({ C7: 1 }), 'should'), ev({ C7: 1 }).hits.length], [['C7'], 1]);
-eq('C7 c → should C7', codes(ev({ C7: 2 }), 'should'), ['C7']);
-eq('C8 b/c → should C8', [codes(ev({ C8: 1 }), 'should'), codes(ev({ C8: 2 }), 'should')], [['C8'], ['C8']]);
-eq('C9 b → should C9', codes(ev({ C9: 1 }), 'should'), ['C9']);
-eq('C10 b/c/d → should C10', [1, 2, 3].map((i) => codes(ev({ C10: i }), 'should')), [['C10'], ['C10'], ['C10']]);
-// sheet 3 — C11 by C4 (a none, b KB, c docs, d web, e unknown)
-for (const [name, c11] of [['tested-failed', 1], ['not-tested', 2]]) {
-  const rows = [0, 1, 2, 3, 4].map((c4) => { const r = ev({ C4: c4, C11: c11 }); return [codes(r, 'must'), codes(r, 'should')]; });
-  eq(`C11 ${name}: C4 none → should; C4 KB/docs/web/unknown → must`, rows, [[[], ['C11']], [['C11'], []], [['C11'], []], [['C11'], []], [['C11'], []]]);
-}
-eq('C11 passed never flags', [0, 1, 2, 3, 4].map((c4) => ev({ C4: c4, C11: 0 }).must.length), [0, 0, 0, 0, 0]);
-eq('hits: C1 e + C2 d', ev({ C1: 4, C2: 3 }).hits.length, 2);
-eq('hits: C1 c (score 2) is not a main factor', ev({ C1: 2 }).hits.length, 0);
+// sheet 3 — should / must per question (config: C11 b/c are "must")
+eq('C6 b → should C6', items(ev({ C6: 'C6b' }), 'should'), ['C6']);
+eq('C7 b → should C7 + hit', [items(ev({ C7: 'C7b' }), 'should'), ev({ C7: 'C7b' }).hits.length], [['C7'], 1]);
+eq('C8 b/c, C9 b → should', [items(ev({ C8: 'C8b' }), 'should'), items(ev({ C8: 'C8c' }), 'should'), items(ev({ C9: 'C9b' }), 'should')], [['C8'], ['C8'], ['C9']]);
+eq('C10 b/c/d → should C10', ['C10b', 'C10c', 'C10d'].map((o) => items(ev({ C10: o }), 'should')), [['C10'], ['C10'], ['C10']]);
+eq('C11 b/c (failed / untested) → must C11', [items(ev({ C11: 'C11b' }), 'must'), items(ev({ C11: 'C11c' }), 'must')], [['C11'], ['C11']]);
+eq('C11 passed never flags', ev({ C11: 'C11a' }).must.length, 0);
+eq('hits: C1 e + C2 d', ev({ C1: 'C1e', C2: 'C2d' }).hits.length, 2);
+eq('hits: C1 c (score 2) is not a main factor', ev({ C1: 'C1c' }).hits.length, 0);
 
-// gates
-eq('preGate complete when C1-C9 answered', S.preGate({ ...PASS }), { complete: true, blocked: false, reasons: [] });
-eq('preGate: unanswered C5 → incomplete', S.preGate({ ...PASS, C5: undefined }).complete, false);
-eq('preGate: C7 "มี" blocks', S.preGate({ ...PASS, C7: 1 }).blocked, true);
-eq('preGate: C7 "ยังไม่ได้ตรวจ" blocks', S.preGate({ ...PASS, C7: 2 }).blocked, true);
-eq('preGate: C6 not passed does NOT block', S.preGate({ ...PASS, C6: 1 }).blocked, false);
-eq('pendingRecheck', S.pendingRecheck({ ...PASS, C6: 1, C9: 1 }), ['C6', 'C9']);
-eq('pendingRecheck none', S.pendingRecheck({ ...PASS }), []);
-eq('deployGate on empty answers: incomplete, no throw', (({ complete }) => complete)(S.deployGate({})), false);
-eq('deployGate all pass', S.deployGate({ ...PASS }), { complete: true, blocked: false, reasons: [] });
-eq('deployGate: C10 partial → blocked', S.deployGate({ ...PASS, C10: 1 }).blocked, true);
-eq('deployGate: C4 web + C11 untested → blocked', S.deployGate({ ...PASS, C4: 3, C11: 2 }).blocked, true);
-eq('deployGate: C4 none + C11 untested → NOT blocked (should only)', S.deployGate({ ...PASS, C4: 0, C11: 2 }).blocked, false);
-eq('deployGate: C7 "มี" blocks (legacy items answer C7 at deploy)', S.deployGate({ ...PASS, C7: 1 }).blocked, true);
-eq('deployGate: C7 not checked blocks', S.deployGate({ ...PASS, C7: 2 }).blocked, true);
-eq('RECO text has no stale D-numbers', Object.values(S.RECO).some((t) => /\bD[1-6]\b/.test(t)), false);
-eq('deployGate: unrelated C6 fail does not block', S.deployGate({ ...PASS, C6: 1 }).blocked, false);
+// gates (per option flags)
+eq('preGate complete when all pre questions answered', S.preGate(CFG, { ...PASS }), { complete: true, blocked: false, reasons: [] });
+eq('preGate: unanswered C5 → incomplete', S.preGate(CFG, { ...PASS, C5: undefined }).complete, false);
+eq('preGate: C7 "มี" / "ยังไม่ได้ตรวจ" block', [S.preGate(CFG, { ...PASS, C7: 'C7b' }).blocked, S.preGate(CFG, { ...PASS, C7: 'C7c' }).blocked], [true, true]);
+eq('preGate: C6 not passed does NOT block', S.preGate(CFG, { ...PASS, C6: 'C6b' }).blocked, false);
+eq('pendingRecheck', S.pendingRecheck(CFG, { ...PASS, C6: 'C6b', C9: 'C9b' }), ['C6', 'C9']);
+eq('deployGate on empty answers: incomplete, no throw', S.deployGate(CFG, {}).complete, false);
+eq('deployGate all pass', S.deployGate(CFG, { ...PASS }), { complete: true, blocked: false, reasons: [] });
+eq('deployGate: C10 partial → blocked', S.deployGate(CFG, { ...PASS, C10: 'C10b' }).blocked, true);
+eq('deployGate: C11 untested → blocked', S.deployGate(CFG, { ...PASS, C11: 'C11c' }).blocked, true);
+eq('deployGate: C7 not checked → blocked (legacy items answer C7 at deploy)', S.deployGate(CFG, { ...PASS, C7: 'C7c' }).blocked, true);
+eq('deployGate: unrelated C6 fail does not block', S.deployGate(CFG, { ...PASS, C6: 'C6b' }).blocked, false);
+eq('RECO/advice text has no stale D-numbers', CFG.questions.some((q) => /\bD[1-6]\b/.test(q.advice || '')), false);
 
-const b = S.buildScreening({ ...PASS, C4: 3, C11: 2 });
-eq('buildScreening shape', [b.v, b.level, b.must, 'decl' in b, Object.keys(b.answers).length, Object.values(b).includes(undefined)], [1, 'High', ['C11'], false, 11, false]);
+// config edits
+const c2 = clone(); c2.questions.find((q) => q.id === 'C4').options.find((o) => o.id === 'C4d').score = 2;
+eq('score edit 8→2 lowers total by 6', ev({ C4: 'C4d' }, c2).total, ev({ C4: 'C4d' }).total - 6);
+const c3 = clone(); c3.questions.find((q) => q.id === 'C6').options.find((o) => o.id === 'C6b').blocksPre = true;
+eq('blocksPre flag on C6b makes preGate block', [S.preGate(c3, { ...PASS, C6: 'C6b' }).blocked, S.preGate(CFG, { ...PASS, C6: 'C6b' }).blocked], [true, false]);
+const c4 = clone(); c4.questions.find((q) => q.id === 'C11').options = c4.questions.find((q) => q.id === 'C11').options.filter((o) => o.id !== 'C11b');
+eq('deleted option: optionOf null, scores 0, counts as unanswered', [S.optionOf(c4, 'C11', 'C11b'), S.evaluate(c4, { ...PASS, C11: 'C11b' }).total, S.deployGate(c4, { ...PASS, C11: 'C11b' }).complete], [null, 0, false]);
+const c5 = clone(); c5.thresholds = { md: 3, hi: 8 };
+eq('thresholds are configurable', ev({ C4: 'C4d' }, c5).level, 'High');
 
-// stageResults: what the approver sees (pre-assessment vs deploy assessment)
-const sc0 = S.buildScreening({ ...PASS, C4: 3 });
-const r0 = S.stageResults({ ...sc0, deployAt: null });
-eq('stageResults: before deploy → pre only, level from C1–C9', [r0.pre.level, r0.pre.total, r0.deploy], ['Medium', 8, null]);
-const sc1 = S.buildScreening({ ...PASS, C10: 1, C11: 0, C6: 1 });
-const r1 = S.stageResults({ ...sc1, deployAt: { seconds: 1 } });
+// legacy v1 answers stored as option INDEXES
+eq('normalizeAnswers maps legacy indexes to ids', S.normalizeAnswers(CFG, { C4: 3, C11: 2, C1: 'C1a' }), { C4: 'C4d', C11: 'C11c', C1: 'C1a' });
+eq('legacy index answers evaluate like the ids', S.evaluate(CFG, S.normalizeAnswers(CFG, { ...Object.fromEntries(Object.keys(PASS).map((k) => [k, 0])), C4: 3 })).total, ev({ C4: 'C4d' }).total);
+
+// stored record + stage results
+const b = S.buildScreening(CFG, { ...PASS, C4: 'C4d', C11: 'C11c' });
+eq('buildScreening shape (v2, ids, no undefined)', [b.v, b.level, b.must, Object.keys(b.answers).length, Object.values(b).includes(undefined)], [2, 'High', ['C11'], 11, false]);
+const sc0 = S.buildScreening(CFG, { ...PASS, C4: 'C4d' });
+const r0 = S.stageResults(CFG, { ...sc0, deployAt: null });
+eq('stageResults: before deploy → pre only', [r0.pre.level, r0.pre.total, r0.deploy], ['Medium', 8, null]);
+const sc1 = S.buildScreening(CFG, { ...PASS, C10: 'C10b', C6: 'C6b' });
+const r1 = S.stageResults(CFG, { ...sc1, deployAt: { seconds: 1 } });
 eq('stageResults: deploy rows C10/C11 with pass flag', r1.deploy.rows.map((r) => [r.code, r.ok]), [['C10', false], ['C11', true]]);
-eq('stageResults: pre part ignores C10/C11 (C6 fix is a pre should-fix)', [r1.pre.level, r1.pre.should], ['Low', ['C6']]);
-eq('stageResults: deploy part carries overall level + all must/should', [r1.deploy.level, r1.deploy.should], [sc1.level, sc1.should]);
-eq('stageResults on empty/legacy input is null', [S.stageResults(null), S.stageResults({})], [null, null]);
+eq('stageResults: pre part ignores deploy questions (C6 is a pre should-fix)', [r1.pre.level, r1.pre.should], ['Low', ['C6']]);
+eq('stageResults on empty/legacy input is null', [S.stageResults(CFG, null), S.stageResults(CFG, {})], [null, null]);
+eq('stageResults reads legacy v1 index answers', S.stageResults(CFG, { answers: { C1: 0, C2: 0, C3: 0, C4: 3, C5: 0, C6: 0, C7: 0, C8: 0, C9: 0 }, deployAt: null }).pre.level, 'Medium');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

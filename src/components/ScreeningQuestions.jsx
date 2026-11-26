@@ -1,20 +1,19 @@
-import { QUESTIONS, RECO, evaluate, questionByCode, stageResults } from '../lib/screening';
+import { evaluate, optionOf, questionById, stageResults } from '../lib/screening';
 import { CHECKLIST } from '../lib/deployChecklist';
 import '../styles/Screening.css';
 
-// Renders any subset of the screening questions (decl = free text, others = radio).
-// answers: { D1..D6: string, C1..C11: option index }.
-export function ScreeningQuestions({ codes, answers, onChange }) {
+// Renders the given questions (radio per option). answers: { questionId: optionId }.
+export function ScreeningQuestions({ config, questionIds, answers, onChange }) {
   let lastGroup = null;
   return (
     <div>
-      {QUESTIONS.filter((q) => codes.includes(q.code)).map((q) => {
-        const v = answers[q.code];
-        const done = q.opts ? typeof v === 'number' : String(v ?? '').trim() !== '';
-        const head = q.g !== lastGroup ? <div className="scr-grp">{q.g}</div> : null;
-        lastGroup = q.g;
+      {config.questions.filter((q) => questionIds.includes(q.id)).map((q) => {
+        const v = answers[q.id];
+        const done = !!optionOf(config, q.id, v);
+        const head = q.group !== lastGroup ? <div className="scr-grp">{q.group}</div> : null;
+        lastGroup = q.group;
         return (
-          <div key={q.code}>
+          <div key={q.id}>
             {head}
             <div className={`scr-q ${done ? 'ans' : 'unans'}`}>
               <div className="scr-qh">
@@ -24,18 +23,14 @@ export function ScreeningQuestions({ codes, answers, onChange }) {
                   {q.en && <div className="scr-qe">{q.en}</div>}
                 </div>
               </div>
-              {q.opts ? (
-                <div className="scr-opts" role="radiogroup">
-                  {q.opts.map((o, i) => (
-                    <label key={o.l} className="scr-opt">
-                      <input type="radio" name={`scr-${q.code}`} checked={v === i} onChange={() => onChange(q.code, i)} />
-                      <span>{o.th} <em>({o.en})</em></span>
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <textarea value={v ?? ''} onChange={(e) => onChange(q.code, e.target.value)} placeholder="พิมพ์คำตอบ" />
-              )}
+              <div className="scr-opts" role="radiogroup">
+                {q.options.map((o) => (
+                  <label key={o.id} className="scr-opt">
+                    <input type="radio" name={`scr-${q.id}`} checked={v === o.id} onChange={() => onChange(q.id, o.id)} />
+                    <span>{o.th} <em>({o.en})</em></span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
         );
@@ -44,9 +39,9 @@ export function ScreeningQuestions({ codes, answers, onChange }) {
   );
 }
 
-// Result panel: level, must fix, main factors, should fix (same content as the bank's tool).
-export function ScreeningResult({ answers }) {
-  const r = evaluate(answers);
+// Result panel: level, must fix, main factors, should fix.
+export function ScreeningResult({ config, answers }) {
+  const r = evaluate(config, answers);
   return (
     <div className="scr-res">
       <div><span className={`scr-lvl ${r.level || ''}`}>{r.level || 'Not enough answers'}</span></div>
@@ -54,7 +49,7 @@ export function ScreeningResult({ answers }) {
         <div className="scr-must">
           <h4>Must fix</h4>
           {r.must.map((m) => (
-            <div key={m.item} className="scr-fix"><b>{m.item}</b> {questionByCode(m.item).th.split(' ').slice(0, 9).join(' ')}…
+            <div key={m.id} className="scr-fix"><b>{m.item}</b> {questionById(config, m.id).th.split(' ').slice(0, 9).join(' ')}…
               <div className="scr-now">{m.why.join(' · ')}</div></div>
           ))}
         </div>
@@ -65,10 +60,10 @@ export function ScreeningResult({ answers }) {
         <>
           <h4>Should fix</h4>
           {r.should.map((m) => {
-            const q = questionByCode(m.item);
+            const q = questionById(config, m.id);
             return (
-              <div key={m.item} className="scr-fix"><b>{m.item}</b> {RECO[m.item] || q.th}
-                <div className="scr-now">คำตอบตอนนี้: {q.opts[answers[m.item]]?.th}</div></div>
+              <div key={m.id} className="scr-fix"><b>{m.item}</b> {q.advice || q.th}
+                <div className="scr-now">คำตอบตอนนี้: {optionOf(config, m.id, answers[m.id])?.th}</div></div>
             );
           })}
         </>
@@ -79,15 +74,16 @@ export function ScreeningResult({ answers }) {
 
 // Approver view: pre-assessment result, deploy-assessment result (once a deploy was requested)
 // and the ticked Deployment checklist items.
-export function ScreeningSummary({ agent }) {
-  const r = stageResults(agent?.screening);
+export function ScreeningSummary({ agent, config }) {
+  const r = stageResults(config, agent?.screening);
   const cl = agent?.deployChecklist;
   if (!r && !cl) return null;
+  const code = (id) => questionById(config, id)?.code || id;
   const labels = cl ? (CHECKLIST[cl.tier] || []).filter((i) => (cl.checked || []).includes(i.id)).map((i) => i.label) : [];
   const fixes = (res) => (
     <>
-      {res.must?.length > 0 && <span className="scr-sum-must"> · Must fix {res.must.join(', ')}</span>}
-      {res.should?.length > 0 && <span> · Should fix {res.should.join(', ')}</span>}
+      {res.must?.length > 0 && <span className="scr-sum-must"> · Must fix {res.must.map(code).join(', ')}</span>}
+      {res.should?.length > 0 && <span> · Should fix {res.should.map(code).join(', ')}</span>}
     </>
   );
   return (
@@ -101,7 +97,7 @@ export function ScreeningSummary({ agent }) {
         <div>
           Deploy assessment:{' '}
           {r.deploy.rows.map((row) => (
-            <span key={row.code} className={row.ok ? 'scr-ok' : 'scr-sum-must'} title={row.answer}>{row.code} {row.ok ? '✓' : '✗'} </span>
+            <span key={row.id} className={row.ok ? 'scr-ok' : 'scr-sum-must'} title={row.answer}>{row.code} {row.ok ? '✓' : '✗'} </span>
           ))}
           · Overall <span className={`scr-lvl ${r.deploy.level || ''}`}>{r.deploy.level || '—'}</span>{fixes(r.deploy)}
         </div>

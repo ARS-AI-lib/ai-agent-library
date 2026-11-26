@@ -4,7 +4,8 @@ import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
 import { checklistFor, checklistGate, buildDeployChecklist } from '../lib/deployChecklist';
-import { PRE_CODES, DEPLOY_CODES, deployGate, pendingRecheck, buildScreening } from '../lib/screening';
+import { questionsFor, deployGate, pendingRecheck, buildScreening, normalizeAnswers } from '../lib/screening';
+import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
@@ -43,6 +44,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
   const [deployStep, setDeployStep] = useState(1);
   const [deployChecked, setDeployChecked] = useState([]);
+  const screeningConfig = useScreeningConfig();
   const [deployAnswers, setDeployAnswers] = useState({});
   const [deployDecl, setDeployDecl] = useState({});
   const [editEndpoint, setEditEndpoint] = useState('');
@@ -474,7 +476,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   function openDeployDialog() {
     setDeployStep(1);
     setDeployChecked([]);
-    setDeployAnswers({ ...(agent.screening?.answers || {}) });
+    setDeployAnswers(normalizeAnswers(screeningConfig, agent.screening?.answers));
     setDeployDecl({});
     setConfirmingDeploy(true);
   }
@@ -491,7 +493,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         deployRequestedAt: serverTimestamp(),
         // Package checklist + assessment answered in the Request-deploy dialog.
         deployChecklist: { ...buildDeployChecklist(getTier(agent), deployChecked), at: serverTimestamp() },
-        screening: { ...buildScreening(deployAnswers), preAt: agent.screening?.preAt ?? serverTimestamp(), deployAt: serverTimestamp() },
+        screening: { ...buildScreening(screeningConfig, deployAnswers), preAt: agent.screening?.preAt ?? serverTimestamp(), deployAt: serverTimestamp() },
         progressUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -1060,13 +1062,15 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       )}
 
       {confirmingDeploy && (() => {
-        const prev = agent.screening?.answers || {};
+        const prev = normalizeAnswers(screeningConfig, agent.screening?.answers);
         const missingDecl = missingDeclaration(agent);
         const declDone = missingDecl.every((k) => String(deployDecl[k] ?? '').trim() !== '');
         const items = checklistFor(tier);
         const cGate = checklistGate(tier, deployChecked);
-        const codes = agent.screening ? [...pendingRecheck(prev), ...DEPLOY_CODES] : [...PRE_CODES, ...DEPLOY_CODES];
-        const dGate = deployGate(deployAnswers);
+        const preIds = questionsFor(screeningConfig, 'pre').map((q) => q.id);
+        const deployIds = questionsFor(screeningConfig, 'deploy').map((q) => q.id);
+        const codes = agent.screening ? [...pendingRecheck(screeningConfig, prev), ...deployIds] : [...preIds, ...deployIds];
+        const dGate = deployGate(screeningConfig, deployAnswers);
         const close = () => setConfirmingDeploy(false);
         return (
           <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && close()}>
@@ -1130,11 +1134,12 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                         </div>
                       )}
                       <ScreeningQuestions
-                        codes={codes}
+                        config={screeningConfig}
+                        questionIds={codes}
                         answers={deployAnswers}
                         onChange={(code, v) => setDeployAnswers((p) => ({ ...p, [code]: v }))}
                       />
-                      <div style={{ marginTop: 12 }}><ScreeningResult answers={deployAnswers} /></div>
+                      <div style={{ marginTop: 12 }}><ScreeningResult config={screeningConfig} answers={deployAnswers} /></div>
                     </div>
                     {dGate.blocked && (
                       <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
