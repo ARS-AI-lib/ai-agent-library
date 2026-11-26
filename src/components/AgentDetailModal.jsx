@@ -1089,30 +1089,35 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   <span className="v7-step-n">2</span>Assessment
                 </span>
               </div>
-              <div style={{ padding: 18 }}>
+              <div style={{ padding: '22px 26px' }}>
                 <h2 className="mtitle">Request deploy</h2>
-                <div className="msub">{tier} · {typeBadgeName(agent)} · {isInternalOrExternal(agent)}</div>
+                <div className="msub">{agent.agentName} · {tier} {typeBadgeName(agent)} · {isInternalOrExternal(agent)}</div>
                 {deployStep === 1 ? (
                   <>
-                    <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, margin: '0 0 12px' }}>
-                      <strong style={{ color: 'var(--tx)' }}>Deployment checklist</strong>{' '}
-                      <span style={{ color: 'var(--mu)' }}>— ข้อที่มี * จำเป็นต้องมี</span>
-                    </p>
-                    <div style={{ border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-sm)', padding: '4px 2px' }}>
-                      {items.map((it) => (
-                        <label key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: 12.5, cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={deployChecked.includes(it.id)}
-                            onChange={(e) => setDeployChecked((prevIds) => (e.target.checked ? [...prevIds, it.id] : prevIds.filter((x) => x !== it.id)))}
-                          />
-                          <span>{it.label}{it.required && <span style={{ color: 'var(--late)' }}> *</span>}</span>
-                        </label>
-                      ))}
+                    <div className="fsec"><div className="fsec-h"><h4>Deployment checklist</h4><span>{items.filter((i) => i.required && deployChecked.includes(i.id)).length} of {items.filter((i) => i.required).length} required ticked</span></div></div>
+                    <div className="fcheck">
+                      {items.map((it) => {
+                        const on = deployChecked.includes(it.id);
+                        return (
+                          <label key={it.id} className={`fcheck-item${on ? ' on' : ''}`}>
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={(e) => setDeployChecked((prevIds) => (e.target.checked ? [...prevIds, it.id] : prevIds.filter((x) => x !== it.id)))}
+                            />
+                            <span className="box" aria-hidden="true">{on ? '✓' : ''}</span>
+                            {it.label}
+                            {it.required && <span className="freq">Required</span>}
+                          </label>
+                        );
+                      })}
                     </div>
-                    <div className="btn-row" style={{ marginTop: 16 }}>
-                      <button className="btn btn-secondary" onClick={close}>Cancel</button>
-                      <button className="btn btn-primary" disabled={!cGate.complete} onClick={() => setDeployStep(2)}>Next →</button>
+                    <div className="fsticky">
+                      <span className="fmeta">{cGate.complete ? 'พร้อมไปขั้นถัดไป' : 'ติ๊กข้อที่ Required ให้ครบก่อน'}</span>
+                      <div className="fbtns">
+                        <button className="btn btn-secondary" onClick={close}>Cancel</button>
+                        <button className="btn btn-primary" disabled={!cGate.complete} onClick={() => setDeployStep(2)}>Next →</button>
+                      </div>
                     </div>
                   </>
                 ) : (
@@ -1125,7 +1130,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                     <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: 4 }}>
                       {missingDecl.length > 0 && (
                         <div style={{ marginBottom: 12 }}>
-                          <div className="scr-grp">Declaration</div>
+                          <div className="fsec"><div className="fsec-h"><h4>Declaration</h4><span>ช่องที่ยังว่างในรายการนี้</span></div></div>
                           {missingDecl.map((k) => {
                             const f = DECL_FIELDS.find((x) => x.key === k);
                             return (
@@ -1153,9 +1158,12 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                         ยังขอ Deploy ไม่ได้ — {dGate.reasons[0]}
                       </div>
                     )}
-                    <div className="btn-row" style={{ marginTop: 16 }}>
+                    <div className="fsticky">
+                      <span className="fmeta">{!dGate.complete || !declDone ? 'ตอบให้ครบก่อนขออนุมัติ' : dGate.blocked ? 'ติดเงื่อนไขที่บล็อก' : 'พร้อมขออนุมัติ'}</span>
+                      <div className="fbtns">
                       <button className="btn btn-secondary" onClick={() => setDeployStep(1)}>← Back</button>
                       <button className="btn btn-primary" disabled={!dGate.complete || dGate.blocked || !declDone} onClick={handleRequestDeploy}>Request deploy</button>
+                      </div>
                     </div>
                   </>
                 )}
