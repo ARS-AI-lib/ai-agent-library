@@ -521,6 +521,11 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                     <strong>Output:</strong> {agent.output}
                   </div>
                 )}
+                {agent.analysisResult?.overlapJustification && (
+                  <div style={{ fontSize: 11.5, color: 'var(--warn)', marginTop: 4, maxWidth: 480 }}>
+                    <strong>Overlap reason</strong> (vs {agent.analysisResult.overlapWith} {agent.analysisResult.overlapConfidence}%): {agent.analysisResult.overlapJustification}
+                  </div>
+                )}
                 {agent.analysisResult?.summary && (
                   <div style={{ fontSize: 11, color: 'var(--tx2)', marginTop: 3, maxWidth: 480, fontStyle: 'italic' }}>
                     "{agent.analysisResult.summary}"

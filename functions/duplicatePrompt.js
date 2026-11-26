@@ -1,7 +1,11 @@
 // Prompt for analyzeDuplicate (moved out of index.js 2026-09-29 so the eval
 // script exercises the real shipped prompt — same reasoning as chatPrompt.js).
+// 15 rule-ranked + 12 semantic neighbours from search_library. Was 15, which cut
+// every semantic hit off (rule ranking has no threshold, so it always fills 15).
+const MAX_CANDIDATES = 27;
+
 function buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions, categoryOptions, approveAreaOptions, teamContext = null) {
-  const candidatesShort = candidates.slice(0, 15).map((c, i) => ({
+  const candidatesShort = candidates.slice(0, MAX_CANDIDATES).map((c, i) => ({
     i,
     agentName: c.agentName,
     description: (c.description || '').slice(0, 400),
@@ -9,6 +13,9 @@ function buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions
     useCase: c.useCase,
     reusable: c.reusable || '(ไม่ระบุ)',
     reuseCondition: (c.reuseCondition || '').slice(0, 200),
+    // input/output of the EXISTING item (2026-11-26): the prompt compares them.
+    input: (c.input || '').slice(0, 300),
+    output: (c.output || '').slice(0, 300),
     ruleConfidence: c.ruleConfidence,
     // How the library already files this item (2026-09-29) — lets the model
     // see the team and placement of similar items instead of deciding blind.
@@ -32,6 +39,10 @@ function buildPrompt(draft, candidates, connectionCandidates, coreAbilityOptions
 (token overlap) เชื่อถือไม่ได้ — candidate ที่ ruleConfidence ต่ำอาจซ้ำกันจริงในเชิงความหมาย
 ก็ได้ (เช่น เขียนคนละภาษา ใช้คำต่างกัน แต่ทำงานเดียวกัน) คุณต้องตัดสินจาก "ความหมาย เป้าหมาย
 input/output และคุณค่าทางธุรกิจ" ของมันจริงๆ ไม่ใช่ยึดตาม ruleConfidence
+
+สำคัญมาก (เกณฑ์ตัดสินความซ้ำ): ไล่เทียบ "งานย่อย" ของ Draft กับของเดิมทีละข้อ โดยดู input/output ของของเดิมที่แนบมาด้วย
+ถ้าของเดิมเป็น "Reusable" และทำงานย่อยของ Draft ได้ ≥80% (แม้ชื่อ ถ้อยคำ หรือภาษาต่างกัน) ให้ถือเป็น
+clear_duplicate — อย่าลดเป็น likely_overlap เพียงเพราะชื่อหรือถ้อยคำไม่เหมือน
 
 สำคัญมาก (เรื่อง Reusability): แต่ละ candidate มีสถานะ "reusable" ที่ต้องเอามาชั่งด้วย
 เพราะ "เหมือนกัน" กับ "ควรใช้ของเดิมแทน" ไม่ใช่เรื่องเดียวกัน:

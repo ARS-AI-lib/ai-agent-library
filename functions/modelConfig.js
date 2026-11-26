@@ -12,6 +12,9 @@ const GEN_MODEL = 'gemini-3.5-flash';
 
 // JSON classifiers (duplicate check, role group): speed over reasoning.
 const THINK_OFF = { thinkingLevel: 'MINIMAL' };
+// Duplicate check: let the model reason over sub-task overlap (2026-11-26).
+const DUP_THINK = { thinkingLevel: 'LOW' };
+const DUP_MAX_TOKENS = 8192;
 // ALPHA chat — chosen by regression measurement, see CLAUDE.md §15.
 const CHAT_THINK = { thinkingLevel: 'LOW' };
 
@@ -20,4 +23,4 @@ const CHAT_THINK = { thinkingLevel: 'LOW' };
 // in history with 400; this skips the check for that part only.
 const DUMMY_THOUGHT_SIGNATURE = 'skip_thought_signature_validator';
 
-module.exports = { GEN_MODEL, THINK_OFF, CHAT_THINK, DUMMY_THOUGHT_SIGNATURE };
+module.exports = { GEN_MODEL, THINK_OFF, DUP_THINK, DUP_MAX_TOKENS, CHAT_THINK, DUMMY_THOUGHT_SIGNATURE };

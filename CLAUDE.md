@@ -171,6 +171,11 @@ Tier:
 > - Leave-one-out measurement (`eval-library-context.cjs`, 40 items): Approve Area 68%→90%, Category 63%→70%. The 3 duplicate test cases still come out clear_duplicate at 98.
 > - Tests: `verify-library-context.cjs` (offline).
 
+> **Duplicate check tuned (2026-11-26, model unchanged):**
+> - 🔴 Bug fixed: `buildPrompt` cut candidates to 15, but rule ranking has no threshold so it always filled 15 → the semantic hits appended after them **never reached the AI** (since 2026-08-04). Cap is now `MAX_CANDIDATES = 27` (15 rule + 12 semantic). Candidates also carry the existing item's `input`/`output`. Thinking `LOW` (`DUP_THINK`, 8192 tokens, timeout 90s).
+> - Block rule = `src/lib/dupBlock.js` (single source; ⛔ don't inline in the modal). **Hard block:** `overall_risk = high` or `clear_duplicate >= 70`. **Reason required:** a `likely_overlap >= 80` lets Submit through only with a written reason (>= 20 chars) stored at `analysisResult.overlapJustification` and shown to the approver. Archived candidates never stop Submit.
+> - Why not a flat block at 80: AI confidences cluster at 80/85 and swing between runs, and a blocked user has no way out. Eval: `node functions/eval-duplicate.cjs` (12 reworded originals all blocked; latest 30 items vs library: 3 hard + 8 reason-required).
+
 - Cloud Function → เรียก Vertex AI (Gemini 2.5 Flash, `thinkingBudget: 0`)
 - 3 features: **A + B + D** (รายละเอียด feature C ถูกตัดออก)
 - เป็น batch call, blocking UI, ตอบกลับเป็น structured JSON

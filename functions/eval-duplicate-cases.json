@@ -1,0 +1,159 @@
+[
+  {
+    "originalId": "03NlNPhLhUx1LvwjENMB",
+    "originalName": "Writing & Language Craft (Create and edit)",
+    "owner": "Digital Experience Team",
+    "ability": [
+      "Media Creation"
+    ],
+    "name": "Bilingual Copy Polisher",
+    "description": "บริการปรับแต่งและเกลาตัวอักษรสำหรับ User Interface ทั้งภาษาไทยและภาษาอังกฤษ โดยเน้นการตรวจทานไวยากรณ์และปรับโทนเสียงให้เหมาะสมกับผู้ใช้งาน",
+    "input": "• ข้อความร่างเบื้องต้น (Raw text)\n• รายละเอียดบริบทการใช้งาน (UI Context & Tone of voice)",
+    "output": "• ข้อความที่ผ่านการคัดสรรและปรับปรุงให้กระชับ เข้าใจง่าย (Refined UI copy)",
+    "businessValue": "ช่วยยกระดับภาพลักษณ์ของแบรนด์ผ่านการสื่อสารที่ถูกต้อง ไร้ข้อผิดพลาดทางภาษา และเพิ่ม User Experience ที่ดีขึ้น"
+  },
+  {
+    "originalId": "7HSAKdDklizZbYg6xxRb",
+    "originalName": "api-collection-generator",
+    "owner": "Talent Team",
+    "ability": [
+      "Testing & QA"
+    ],
+    "name": "manual-test-suite-to-postman-converter",
+    "description": "แปลงไฟล์สคริปต์การทดสอบหรือ test steps ต่างๆ ให้กลายเป็น Postman collection แบบอัตโนมัติ เพื่อช่วยให้ QA team สามารถนำไปใช้ทำ manual execution หรือทดสอบระบบในช่วง SIT ได้อย่างสะดวกรวดเร็ว",
+    "input": "ไฟล์เอกสารรายละเอียดการทดสอบ (Test scenario) ในรูปแบบ Excel หรือ spreadsheet อื่นๆ",
+    "output": "JSON file ในฟอร์แมตที่พร้อมสำหรับนำเข้า (import) ไปใช้งานบน Postman application",
+    "businessValue": "ช่วยลดเวลาและลดความผิดพลาดของทีม QA ในการสร้าง request บน Postman ทีละอัน โดยสามารถเปลี่ยนเอกสารทดสอบที่มีอยู่แล้วให้พร้อมรัน regression test ประจำวันได้ทันที"
+  },
+  {
+    "originalId": "GJn58D2sFHXE1n3kGmKx",
+    "originalName": "Daily Scrum Detail",
+    "owner": "Wolfy",
+    "ability": [
+      "Analytical",
+      "Project Management"
+    ],
+    "name": "Sprint Status Snapshot",
+    "description": "ระบบดึงข้อมูลจากบอร์ด Jira แบบ Real-time เพื่อสร้างเป็น Summary Card ส่งตรงไปยัง Microsoft Teams สำหรับใช้ในห้องประชุม Daily Standup โดยจะสรุปภาพรวมของ Sprint ปัจจุบัน, เช็กความคืบหน้าของ Goal, ลิสต์งานที่ Delay พร้อมจัดอันดับความล่าช้า, วิเคราะห์ Workload distribution ของสมาชิกในทีม และแจกแจง Backlog รายบุคคลอย่างละเอียด เพื่อให้ทีมเห็นภาพตรงกันทันทีผ่านการพิมพ์ command สั่งการ",
+    "input": "Jira Software",
+    "output": "Microsoft Teams Channel",
+    "businessValue": "ช่วยประหยัดเวลาในการเตรียมข้อมูลประชุม Daily Sync ลดความซับซ้อนในการเปิดบอร์ด Jira หลายๆ หน้า และช่วยให้ผู้บริหารหรือ Project Manager มองเห็นคอขวด (Bottlenecks) รวมถึงบริหารจัดการภาระงานของทีมได้อย่างมีประสิทธิภาพสูงสุด"
+  },
+  {
+    "originalId": "NCbAb7tCTq8x4rArRE5n",
+    "originalName": "Cross-Product Impact Assessment",
+    "owner": "Digital Experience Team",
+    "ability": [
+      "Analytical"
+    ],
+    "name": "Multi-App Dependency Analyzer",
+    "description": "ช่วยประเมินและสแกนหารายละเอียดผลกระทบก่อนเริ่มขั้นตอน UI design เพื่อดูว่าความต้องการใหม่นี้จะกระทบกับ screen ไหน, component ตัวใด หรือระบบอื่นๆ ที่เชื่อมต่อกันอยู่บ้าง",
+    "input": "• Feature request หรือรายละเอียดความต้องการใหม่",
+    "output": "• เอกสารสรุปผลกระทบและจุดที่ต้องระวัง (Dependency & Risk Report)",
+    "businessValue": "ช่วยลดความผิดพลาดและป้องกันไม่ให้ระบบพังโดยไม่ตั้งใจ ด้วยการมองเห็นจุดเชื่อมโยงทั้งหมดล่วงหน้าก่อนลงมือทำงานจริง"
+  },
+  {
+    "originalId": "SuGJKxUVCDUCX8NOMecw",
+    "originalName": "tm-contract-specialist",
+    "owner": "Digital Core Banking",
+    "ability": [
+      "Code Generation"
+    ],
+    "name": "vault-v4-contract-builder",
+    "description": "เอนจิ้นหลักสำหรับพัฒนาและแก้ไข Smart Contract บนระบบ Thought Machine Vault v4 ครอบคลุมการจัดการ Hooks, Configuration Parameters, Account Balances, Data Fetchers ตลอดจนการเขียน Unit Test เพื่อตรวจสอบความถูกต้องของสัญญาการเงิน",
+    "input": "ตัวอย่าง Input (คำสั่งที่ส่งให้ระบบทำงาน)\n\"ช่วยอัปเดตสัญญาเงินกู้ประเภท Line of Credit (LoC) โดยเพิ่ม Parameter ใหม่ชื่อ late_payment_grace_days เป็นระดับ INSTANCE แล้วเอาไปปรับใช้ในฟังก์ชัน scheduled_code เพื่อให้ระบบหน่วงเวลาการปรับดอกเบี้ยจ่ายล่าช้าตามจำนวนวันที่กำหนด แทนการฟิกซ์ไว้ที่ 3 วันเหมือนเดิม\"",
+    "output": "ตัวอย่าง Output (ผลลัพธ์ที่ระบบสร้างขึ้น)\n\n# 1. นิยามพารามิเตอร์ใหม่ (เพิ่มในส่วน parameters list)\nParameter(\n    name=\"late_payment_grace_days\",\n    shape=NumberShape(min_value=0, max_value=30, step=1),\n    level=ParameterLevel.INSTANCE,\n    description=\"Number of days after due date before late fee is charged.\",\n    display_name=\"Late Payment Grace Period (days)\",\n    default_value=Decimal(\"3\"),\n    update_permission=ParameterUpdatePermission.USER_EDITABLE,\n)\n\n# 2. ดึงค่าพารามิเตอร์ไปคำนวณใน scheduled hook\n@requires(parameters=True)\ndef scheduled_code(event_type: str, effective_datetime: datetime, vault: SmartContractVault):\n    if event_type == LATE_FEE_EVENT:\n        grace_days = vault.get_parameter_timeseries(\n            name=\"late_payment_grace_days\"\n        ).latest()\n\n        grace_period_end = due_datetime + timedelta(days=int(grace_days))\n\n        if effective_datetime >= grace_period_end:\n            _post_late_fee(vault, effective_datetime)",
+    "businessValue": "ช่วยลด Time-to-Market ในการออกผลิตภัณฑ์ทางการเงินใหม่ๆ บน Thought Machine โดยสามารถปรับแต่งเงื่อนไขธุรกิจของโปรดักส์กลุ่มสินเชื่อ เช่น LoC, Instalment, TDR หรือ Term Loan ได้อย่างรวดเร็วและปลอดภัยตามมาตรฐานสากล"
+  },
+  {
+    "originalId": "agent_0020",
+    "originalName": "Timeline Change Detector and Risk Validation",
+    "owner": "Delivery Manager",
+    "ability": [
+      "Project Management"
+    ],
+    "name": "SyncGuard Pro: Conflict Finder & Impact Checker",
+    "description": "ระบบ AI ตรวจสอบความสอดคล้องของแผนงานในโครงการต่างๆ โดยจะสแกนหาจุดที่ตารางเวลาชนกัน (Overlap/Conflict) พร้อมระบุตำแหน่งและสาเหตุของปัญหาอย่างละเอียด เพื่อให้ Project Manager นำไปเคลียร์กับทีมที่เกี่ยวข้องได้อย่างตรงจุด",
+    "input": "ไฟล์แผนงานโครงการ (Project Schedule) ในรูปแบบ Excel Worksheet",
+    "output": "รายงานสรุปจุดขัดแย้งของ Timeline ในรูปแบบข้อความ (Text Report)",
+    "businessValue": "1. ช่วยประหยัดเวลาและลดความซ้ำซ้อนในกระบวนการ Align แผนงานร่วมกัน<br>2. ช่วยป้องกันความเสี่ยงจากการทำงานที่ทับซ้อนกันหรือการส่งมอบงานที่ล่าช้ากว่ากำหนด"
+  },
+  {
+    "originalId": "agent_0037",
+    "originalName": "gitlab-cicd",
+    "owner": "arise-devops",
+    "ability": [
+      "Utility"
+    ],
+    "name": "auto-delivery-pipeline-architect",
+    "description": "ผู้ช่วยออกแบบและสร้างไฟล์คอนฟิกสำหรับทำ Automated Deployment บนระบบของ GitLab โดยรองรับการทำ Workflow ตั้งแต่ Build, Test, ไปจนถึง Deploy ลง k8s รวมถึงการทำ Multi-stage environments และตั้งค่า Pipeline optimization เช่น Caching หรือ Security check",
+    "input": "Source code repository, Environment specifications, Deployment requirements",
+    "output": "YAML configuration files, Workflow orchestration flow",
+    "businessValue": "ช่วยลดเวลาและลดข้อผิดพลาดในการตั้งค่าระบบ DevOps ทำให้ทีมพัฒนาสามารถ Release ฟีเจอร์ใหม่ๆ สู่ผู้ใช้งานได้อย่างรวดเร็วและปลอดภัยยิ่งขึ้น"
+  },
+  {
+    "originalId": "agent_0052",
+    "originalName": "k6-performance",
+    "owner": "arise-perf",
+    "ability": [
+      "Testing & QA"
+    ],
+    "name": "LoadRunner-JS-Optimizer",
+    "description": "ช่วยเขียนและปรับปรุงสคริปต์จำลองโหลดด้วยเครื่องมือ k6 โดยเน้นการทำ Performance Testing ทั้งการตั้งค่า Thresholds, จัดการ Virtual Users และการทำ Data Parameterization เพื่อให้ระบบรองรับ Concurrent Users ได้อย่างมั่นใจ",
+    "input": "System Specifications, Endpoint Details",
+    "output": "Optimized Test Scenarios, Execution Reports",
+    "businessValue": "ช่วยลดความเสี่ยงระบบล่มในช่วง Peak Hours และเพิ่มความมั่นใจในการรองรับผู้ใช้งานจำนวนมาก"
+  },
+  {
+    "originalId": "agent_0116",
+    "originalName": "Starwolf - Personalize แนะนำข่าวที่นักลงทุนสนใจ",
+    "owner": "Starwolfs",
+    "ability": [
+      "Analytical"
+    ],
+    "name": "WealthRadar - Smart Investment Matcher",
+    "description": "ระบบอัจฉริยะที่ช่วยสแกน Portfolio ของลูกค้าในปัจจุบัน เพื่อจับคู่กับ News Update และผลิตภัณฑ์ทางการเงินใหม่ๆ ที่ตรงกับความสนใจเฉพาะบุคคล ช่วยให้นักลงทุนสามารถทำ Asset Allocation และบริหารความเสี่ยงได้อย่างมีประสิทธิภาพยิ่งขึ้น",
+    "input": "Customer portfolio data & investment preferences",
+    "output": "Tailored financial content and product recommendations",
+    "businessValue": "เพิ่มยอด Transaction จากการเสนอขายสินค้าที่ตรงใจลูกค้า (Conversion Rate) และสร้างความพึงพอใจในการใช้งาน Platform อย่างต่อเนื่อง"
+  },
+  {
+    "originalId": "agent_0139",
+    "originalName": "นกรู้ - Strategic View",
+    "owner": "นกลงทุน",
+    "ability": [
+      "Analytical"
+    ],
+    "name": "CIO Intelligence Navigator",
+    "description": "เจาะลึกทิศทางเศรษฐกิจและภาพรวมการลงทุน (Investment Outlook) โดยประมวลผลข้อมูลจากรายงานบทวิเคราะห์ล่าสุดของฝ่ายกลยุทธ์ เพื่อตอบคำถามเชิงลึก เช่น แนวโน้มตลาดต่างประเทศในระยะสั้นและระยะยาว",
+    "input": "Macroeconomic updates and investment reports",
+    "output": "Actionable market outlook and investment recommendations",
+    "businessValue": "ช่วยให้ทีมแนะนำการลงทุน (Relationship Managers) และลูกค้า เข้าถึงมุมมองเชิงกลยุทธ์ที่สดใหม่ได้อย่างรวดเร็ว เพื่อประกอบการตัดสินใจลงทุนได้อย่างแม่นยำและทันท่วงที"
+  },
+  {
+    "originalId": "isk2WK0f0dh6DaiQ8Vqq",
+    "originalName": "uat-requirement-analysis",
+    "owner": "PQA",
+    "ability": [
+      "Testing & QA"
+    ],
+    "name": "spec-gap-analyzer",
+    "description": "ระบบ AI Quality Architect ที่เข้ามาช่วยสแกน User Story และ UI Flow จากดีไซน์ เพื่อค้นหาจุดบกพร่องในเงื่อนไขการทำงาน (Requirement Gaps) และจุดที่อาจจะเกิดคอขวดในการทดสอบระบบ โดยวิเคราะห์ผ่านมิติของระบบงานรวมถึง Edge Cases ต่างๆ พร้อมสรุปข้อสงสัยที่ต้องเคลียร์กับ Product Owner หรือ Developer และประเมิน Risk Score หากมีงานจำนวนมาก ระบบจะกระจายงานประมวลผลแบบขนาน (Parallel Processing) ตามความเกี่ยวข้องกันของ Flow แล้วนำมาผสานผลลัพธ์ในรายงานฉบับเดียว\n\nKey Capabilities\n- Sync ข้อมูลโดยตรงจาก Jira และ Figma link (หรือกรอก Manual)\n- วิเคราะห์ครอบคลุม 4 ด้านหลัก: เส้นทางปกติ (Happy Path), เคสเออร์เรอร์ (Exception Handling), เงื่อนไขก่อน-หลังทำงาน (Pre/Post-conditions) และขอบเขตของระบบ (Integrations)\n- เน้นตรวจสอบ Requirement เฉพาะทางของระบบการเงิน เช่น Transaction Rollback, Double-spending prevention, และ Event-driven message queue\n- Auto-scaling สำหรับโปรเจกต์ขนาดใหญ่: ย่อยสลายงานเป็น Sub-agents เพื่อวิเคราะห์หลายๆ หน้าจอพร้อมกัน และหาจุดขัดแย้งระหว่าง Ticket (Cross-feature conflicts)\n- Output สามารถนำไปใช้ต่อในโปรเซสการออกแบบ Test Scenario ได้ทันที",
+    "input": "ลิงก์หรือรหัสตั๋ว Jira, ไฟล์ออกแบบจาก Figma (หรือระบุ Node ID เฉพาะจุด) หรือจะ Copy-Paste รายละเอียดความต้องการของระบบลงมาตรงๆ รองรับการใส่ข้อมูลพร้อมกันหลายๆ รายการ",
+    "output": "เอกสารสรุปผลการวิเคราะห์ในรูปแบบ Markdown ประกอบด้วย: สิ่งที่เคลียร์แล้ว (Validated Specs), รายการ Gap ที่ต้องอุด, คำถามสำหรับถามในวง Refinement, และระดับความเสี่ยง (Risk Assessment)",
+    "businessValue": "ช่วยลดต้นทุนแฝงจากการแก้ Requirement ที่ผิดพลาด (Defect Prevention) ซึ่งหากหลุดไปถึงช่วง System Integration Test หรือ Production จะเสียค่าใช้จ่ายและเวลาในการแก้สูงขึ้นมหาศาล อีกทั้งยังช่วยลดภาระงานรูทีนของทีม QA ในการนั่งอ่านเอกสารและแกะ Flow ทำให้มีเวลาไปโฟกัสกับ Exploratory Testing และการประกันคุณภาพเชิงรุกได้มากขึ้น"
+  },
+  {
+    "originalId": "os08zXpkADuZtYDKKhmU",
+    "originalName": "Note Taking Guide",
+    "owner": "Digital Experience Team",
+    "ability": [
+      "Documentation"
+    ],
+    "name": "Structured Research Log Blueprint",
+    "description": "คู่มือการบันทึกข้อมูลจากการทำ user research เพื่อให้ทีมงานทุกคนจดสรุปในรูปแบบเดียวกัน ง่ายต่อการนำข้อมูลไปใช้งานต่อในอนาคต",
+    "input": "รูปแบบหรือประเภทของ session การวิจัย",
+    "output": "templates และคำแนะนำในการจดบันทึกข้อมูล",
+    "businessValue": "ช่วยจัดระเบียบข้อมูลดิบให้เป็นระเบียบตั้งแต่เริ่มต้น ทำให้ขั้นตอน data synthesis และการนำไปวิเคราะห์ต่อทำได้รวดเร็วและมีประสิทธิภาพมากขึ้น"
+  }
+]

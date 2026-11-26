@@ -4,6 +4,7 @@ import { addDoc, doc, setDoc, updateDoc, collection, getDocs, serverTimestamp } 
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
+import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
@@ -36,7 +37,6 @@ import Hint from './Hint';
 // one. So only clear_duplicate hard-blocks (that verdict is unambiguous enough
 // to auto-gate); likely_overlap/distinct now WARN and route to the approver via
 // an overlap flag on the stored analysisResult — a human is the real gate.
-const HARD_BLOCK = { clear_duplicate: 70 };   // only verdict that can disable Submit
 // A draft that partially overlaps this many existing agents is a "kitchen-sink"
 // pattern (rebuilding work spread across the specialised library) — surfaced as
 // a warning + approver flag even when each pairwise overlap is individually low.
@@ -126,6 +126,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const [ranked, setRanked] = useState(null);   // rule-based top-N (for fallback display)
   const [connections, setConnections] = useState([]);  // rule-based directional connections
   const [aiResult, setAiResult] = useState(null);
+  const [overlapReason, setOverlapReason] = useState('');
   // Opt-in (default on) to REQUEST the AI-suggested link; a person still confirms it.
   const [requestLink, setRequestLink] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -349,6 +350,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     setRanked(top);
     setConnections(conns);
     setAiResult(null);
+    setOverlapReason('');
     setTab('analysis');
 
     const candidates = top.map((m) => ({
@@ -362,6 +364,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // new build precisely because the existing one can't be adopted as-is.
       reusable: m.existing.reusable || '',
       reuseCondition: m.existing.reuseCondition || '',
+      input: (m.existing.input || '').slice(0, 300),
+      output: (m.existing.output || '').slice(0, 300),
       // Archived matches are a WARNING, never a "use this instead": the AI is
       // told the item is retired (and why) so it can say "this was tried and
       // dropped because X" rather than pointing the user at something gone.
@@ -559,6 +563,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               // signal in the pending queue so a human can gate what the AI only warns on.
               overlapAgents: aiStats?.overlapAgents ?? 0,
               breadthFlag,
+              ...(needsReason ? { overlapJustification: overlapReason.trim(), overlapWith: dupBlock.candidate?.agentName || '', overlapConfidence: dupBlock.candidate?.confidence ?? null } : {}),
               // Why this area/category (esp. when it departs from the team's usual).
               approveAreaReason: aiResult.approve_area_reason || '',
               categoryReason: aiResult.category_reason || '',
@@ -777,13 +782,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     return { count: aiCandidates.length, max, avg, top, dupCount, overlapCount, overlapAgents };
   })();
 
-  // Only a genuine near-duplicate hard-blocks. Everything else warns + routes to
-  // the approver (see HARD_BLOCK above).
-  const blockingCandidate = (aiCandidates || []).find((c) => {
-    const t = HARD_BLOCK[c.verdict];
-    return t != null && c.confidence >= t;
-  }) || null;
-  const blockedByHardLimit = !!blockingCandidate;
+  // Block rule lives in src/lib/dupBlock.js (2026-11-26): high overall risk, or any
+  // candidate >= 80% similar. Archived candidates only warn.
+  const archivedNames = new Map((allAgents || []).map((a) => [String(a.agentName || '').trim().toLowerCase(), a.archived === true]));
+  const dupBlock = duplicateBlock(aiResult, (n) => archivedNames.get(String(n || '').trim().toLowerCase()) === true);
+  const blockingCandidate = dupBlock.candidate;
+  const blockedByHardLimit = dupBlock.blocked;
+  const needsReason = dupBlock.needsJustification;
+  const reasonMissing = needsReason && overlapReason.trim().length < MIN_JUSTIFICATION;
   const maxAiConfidence = aiStats?.max ?? 0;
   // "Kitchen-sink" breadth flag — deterministic, doesn't depend on the AI
   // getting overall_risk right. Warns and is stamped on the stored analysis so
@@ -1114,10 +1120,26 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                   )}
                 </div>
 
-                {blockedByHardLimit && blockingCandidate && (
+                {blockedByHardLimit && (
                   <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />
-                    ไม่สามารถ Submit ได้ — <strong>{blockingCandidate.agentName}</strong> ซ้ำซ้อนถึง {blockingCandidate.confidence}%
-                    {blockingCandidate.verdict === 'clear_duplicate' ? ' (AI ประเมินว่าเป็นรายการเดียวกัน)' : ' (เกือบเหมือนกันทั้งหมด)'} — โปรดปรับให้แตกต่างจากรายการเดิม หรือใช้รายการเดิมแทน
+                    {dupBlock.reason === 'similar' && blockingCandidate
+                      ? <>ไม่สามารถ Submit ได้ — <strong>{blockingCandidate.agentName}</strong> ซ้ำซ้อนถึง {blockingCandidate.confidence}%
+                        {blockingCandidate.verdict === 'clear_duplicate' ? ' (AI ประเมินว่าเป็นรายการเดียวกัน)' : ' (ทำงานทับกันเกือบทั้งหมด)'}</>
+                      : <>ไม่สามารถ Submit ได้ — AI ประเมินความเสี่ยงซ้ำซ้อนโดยรวมระดับ HIGH{blockingCandidate ? <> (ใกล้เคียงที่สุด: <strong>{blockingCandidate.agentName}</strong> {blockingCandidate.confidence}%)</> : null}</>}
+                    {' '}— โปรดปรับให้แตกต่างจากรายการเดิม หรือใช้รายการเดิมแทน
+                  </div>
+                )}
+
+                {needsReason && dupBlock.candidate && (
+                  <div className="msg warn" style={{ display: 'block' }}>
+                    <div><strong>{dupBlock.candidate.agentName}</strong> ทำงานทับกับรายการนี้ถึง {dupBlock.candidate.confidence}% — Submit ได้ แต่ต้องอธิบายว่ารายการใหม่ต่างจากของเดิมอย่างไร (approver จะเห็นเหตุผลนี้)</div>
+                    <textarea
+                      value={overlapReason}
+                      onChange={(e) => setOverlapReason(e.target.value)}
+                      placeholder={`ต่างจาก ${dupBlock.candidate.agentName} อย่างไร (อย่างน้อย ${MIN_JUSTIFICATION} ตัวอักษร)`}
+                      rows={3}
+                      style={{ width: '100%', marginTop: 8, fontFamily: 'inherit', fontSize: 12.5 }}
+                    />
                   </div>
                 )}
 
@@ -1283,10 +1305,10 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               <button
                 className="btn btn-success"
                 onClick={handleSubmit}
-                disabled={submitting || analyzing || blockedByHardLimit}
-                title={blockedByHardLimit && blockingCandidate ? `บล็อก: ซ้ำกับ ${blockingCandidate.agentName} ${blockingCandidate.confidence}%` : undefined}
+                disabled={submitting || analyzing || blockedByHardLimit || reasonMissing}
+                title={blockedByHardLimit ? (blockingCandidate ? `บล็อก: ใกล้เคียง ${blockingCandidate.agentName} ${blockingCandidate.confidence}%` : 'บล็อก: ความเสี่ยงซ้ำซ้อนสูง') : undefined}
               >
-                {submitting ? 'Saving…' : blockedByHardLimit ? 'ถูกบล็อกเนื่องจากความซ้ำซ้อนสูง' : 'Submit for Approval'}
+                {submitting ? 'Saving…' : blockedByHardLimit ? 'ถูกบล็อกเนื่องจากความซ้ำซ้อนสูง' : reasonMissing ? 'กรอกเหตุผลก่อน Submit' : 'Submit for Approval'}
               </button>
             </div>
           </div>

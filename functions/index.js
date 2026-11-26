@@ -142,7 +142,7 @@ async function getApproveAreaOptions() {
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT || 'wolfy-481609';
 const LOCATION = 'asia-southeast1';
-const { GEN_MODEL, THINK_OFF, CHAT_THINK, DUMMY_THOUGHT_SIGNATURE } = require('./modelConfig');
+const { GEN_MODEL, THINK_OFF, DUP_THINK, DUP_MAX_TOKENS, CHAT_THINK, DUMMY_THOUGHT_SIGNATURE } = require('./modelConfig');
 const MODEL = GEN_MODEL;
 
 const ai = new GoogleGenAI({ vertexai: true, project: PROJECT_ID, location: LOCATION });
@@ -151,7 +151,7 @@ const GENERATION_CONFIG = {
   // same each run. Not 0 (a hair of flexibility is fine); true "identical
   // every time" comes from the client-side analysis cache, not from here.
   temperature: 0.1,
-  maxOutputTokens: 4096,
+  maxOutputTokens: DUP_MAX_TOKENS,
   responseMimeType: 'application/json',
   // Gemini 2.5 Flash has "thinking" on by default, which eats into
   // maxOutputTokens BEFORE the actual JSON answer is generated. With a
@@ -160,7 +160,7 @@ const GENERATION_CONFIG = {
   // that fails to parse (the "unparseable output" 500). This isn't a
   // structured-output task that benefits from extended reasoning, so
   // disable it entirely. (Gemini 3: MINIMAL is the lowest level — modelConfig.js.)
-  thinkingConfig: THINK_OFF,
+  thinkingConfig: DUP_THINK,
 };
 
 // buildPrompt lives in duplicatePrompt.js (2026-09-29) so eval-library-context.cjs
@@ -179,7 +179,7 @@ function safeParseJson(s) {
 }
 
 exports.analyzeDuplicate = onCall(
-  { cors: true, timeoutSeconds: 60 },
+  { cors: true, timeoutSeconds: 90 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Sign-in required.');
