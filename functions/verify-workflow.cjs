@@ -10,6 +10,7 @@ function loadEsm(file, injected = {}) {
 }
 const tier = loadEsm('tier.js');
 const U = loadEsm('agentUtils.js', { getType: tier.getType, getTier: tier.getTier });
+const R = loadEsm('registrationType.js');
 let pass = 0; let fail = 0;
 const eq = (name, got, want) => { const ok = JSON.stringify(got) === JSON.stringify(want); ok ? pass++ : fail++; console.log(`${ok ? '✓' : '✗'} ${name}${ok ? '' : `\n    got ${JSON.stringify(got)} want ${JSON.stringify(want)}`}`); };
 const SK = { aiAgent: false, skillMd: true };
@@ -43,5 +44,10 @@ eq('filter skill excludes workflows', [f('skill')(W), f('skill')(s1)], [false, t
 eq('filter workflow only matches workflows', [f('workflow')(W), f('workflow')(s1), f('workflow')(agent)], [true, false, false]);
 eq('filter agent unchanged', [f('agent')(agent), f('agent')(W)], [true, false]);
 eq('cascadeTargets skips a member ahead of the workflow', names(U.cascadeTargets({ ...W, devProgress: 15 }, all)), ['Second']);
+// What the registration form writes for each Type (this is where isWorkflow is actually set).
+eq('typeFlags: Workflow skills writes isWorkflow + skill flags', R.typeFlags('Workflow skills'), { aiAgent: false, skillMd: true, isWorkflow: true });
+eq('typeFlags: Skill / Agent / Agent+Skill never set isWorkflow', ['Skill', 'Agent', 'Agent+Skill'].map((t) => 'isWorkflow' in R.typeFlags(t)), [false, false, false]);
+eq('typeFlags: Skill = skill flags, Agent+Skill main doc = pure Agent', [R.typeFlags('Skill'), R.typeFlags('Agent+Skill')], [{ aiAgent: false, skillMd: true }, { aiAgent: true, skillMd: false }]);
+eq('a doc written from typeFlags(Workflow skills) is a workflow', U.isWorkflow({ ...R.typeFlags('Workflow skills') }), true);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

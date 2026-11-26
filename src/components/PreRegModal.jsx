@@ -6,6 +6,7 @@ import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
 import { PRE_CODES, preGate, buildScreening } from '../lib/screening';
+import { WORKFLOW, typeFlags } from '../lib/registrationType';
 import { DECL_FIELDS } from '../lib/declaration';
 import { ScreeningQuestions, ScreeningResult } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
@@ -104,16 +105,6 @@ function emptySkill() {
   // Shape and validation live in SkillRow.jsx so the New form and the Edit
   // form cannot drift apart (2026-08-20).
   return emptySkillRow(`sk-${skillSeq}`);
-}
-
-// Workflow skills is a Skill-class item (tier T1/T3) with paired member skills.
-const WORKFLOW = 'Workflow skills';
-
-function typeToFlags(t) {
-  if (t === 'Skill' || t === WORKFLOW) return { aiAgent: false, skillMd: true };
-  // Agent+Skill: the MAIN doc is a pure Agent — each paired skill becomes its
-  // own separate Skill doc (linked via matchingAgent), so the main is not both.
-  return { aiAgent: true, skillMd: false };
 }
 
 const REUSABLE_OPTIONS = ['Reusable', 'Reusable with Conditions', 'Non-reusable'];
@@ -290,6 +281,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     if (form.businessValue.trim().length < MIN_DETAIL_LEN) {
       return `Business Value สั้นเกินไป — ช่วยอธิบายคุณค่าทางธุรกิจให้ชัด (อย่างน้อย ${MIN_DETAIL_LEN} ตัวอักษร, ตอนนี้ ${form.businessValue.trim().length})`;
     }
+    if (isWf && form.skills.length < 2) return 'Workflow ต้องมี Starter skill และอีกอย่างน้อย 1 skill';
+    if (hasPairedSkills) {
+      const skErr = validateSkillRows(form.skills, allAgents);
+      if (skErr) return skErr;
+    }
     if (!form.permittedDomains.trim()) return 'ใส่ Permitted Domains (Domain ที่ใช้ได้)';
     if (!form.prohibitedUses.trim()) return 'ใส่ Prohibited Uses (ข้อห้ามการใช้งาน)';
     if (!form.tool.trim()) return 'ใส่ Permitted Tools (ประเภท tool ที่อนุญาต)';
@@ -302,11 +298,6 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       return 'ใส่ Reuse Conditions';
     }
     if (form.hml && !form.humanJob.trim()) return 'ใส่ Human Job (เมื่อเปิด HML)';
-    if (isWf && form.skills.length < 2) return 'Workflow ต้องมี Starter skill และอีกอย่างน้อย 1 skill';
-    if (hasPairedSkills) {
-      const skErr = validateSkillRows(form.skills, allAgents);
-      if (skErr) return skErr;
-    }
     return '';
   }
 
@@ -469,7 +460,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     setSubmitting(true);
     setSubmitError('');
     try {
-      const { aiAgent, skillMd } = typeToFlags(form.type);
+      const { aiAgent, skillMd, isWorkflow: workflowFlag } = typeFlags(form.type);
       const isExternal = form.scope === 'External';
       const agentName = form.agentName.trim();
       const createdBy = user?.uid || '';
@@ -543,6 +534,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         description: form.description.trim(),
         aiAgent,
         skillMd,
+        ...(workflowFlag ? { isWorkflow: true } : {}),
         owner: inheritedFromAgent.owner,
         coreAbility: [...form.coreAbility],
         relatedRole: [...form.relatedRole],
