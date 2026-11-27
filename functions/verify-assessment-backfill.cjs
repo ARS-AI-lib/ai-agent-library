@@ -290,6 +290,12 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   eq('filterRows all three', B.filterRows(FR, { q: 'alpha', status: 'not_done', phase: 'Pilot' }).map((r) => r.id), ['a']);
   eq('filterRows phase only', B.filterRows(FR, { q: '', status: 'all', phase: 'Ready to Use' }).map((r) => r.id), ['b']);
   eq('filterRows search creator + status', B.filterRows(FR, { q: 'x@a', status: 'not_done', phase: 'all' }).map((r) => r.id), ['a', 'b']);
+  const FO = [{ id: 'o1', name: 'A', phase: 'Pilot', status: 'not_done', creators: [], owner: 'Team B' }, { id: 'o2', name: 'B', phase: 'Pilot', status: 'not_done', creators: [], owner: ' Team A ' }, { id: 'o3', name: 'C', phase: 'Ready to Use', status: 'pass', creators: [], owner: '' }, { id: 'o4', name: 'D', phase: 'Pilot', status: 'fail', creators: [] }];
+  eq('ownerOptions sorted, trimmed, hasNone', B.ownerOptions(FO), { owners: ['Team A', 'Team B'], hasNone: true });
+  eq('owner filter exact (trimmed)', B.filterRows(FO, { owner: 'Team A' }).map((r) => r.id), ['o2']);
+  eq('owner filter none matches empty and missing', B.filterRows(FO, { owner: B.NO_OWNER }).map((r) => r.id), ['o3', 'o4']);
+  eq('owner combined with phase + status', B.filterRows(FO, { owner: 'Team B', phase: 'Pilot', status: 'not_done' }).map((r) => r.id), ['o1']);
+  eq('owner all keeps everything', B.filterRows(FO, { owner: 'all' }).length, 4);
   eq('filter-out selection retained', [...B.selectAllFiltered(new Set(['b']), B.filterRows(FR, { q: '', status: 'all', phase: 'Pilot' }), true)].sort(), ['a', 'b']);
   // review round 1
   const TXT = (l) => (typeof l === 'string' ? l : l.text);

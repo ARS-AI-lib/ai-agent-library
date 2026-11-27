@@ -76,8 +76,18 @@ export const pruneSelection = (set, rows) => new Set([...set].filter((id) => (ro
 
 // Phase filter ('all' | 'Pilot' | 'Ready to Use') and the combined Search + Status + Phase filter.
 export const matchesPhase = (phase, filter) => filter === 'all' || phase === filter;
-export function filterRows(rows, { q = '', status = 'all', phase = 'all' } = {}) {
+// Owner filter: 'all' | an owner name | NO_OWNER (items whose owner is empty).
+export const NO_OWNER = '__none__';
+export const matchesOwner = (owner, filter) => filter === 'all' || (filter === NO_OWNER ? !String(owner || '').trim() : String(owner || '').trim() === filter);
+// Distinct owners of the rows (sorted, case-insensitive) + whether some rows have none, for the dropdown.
+export function ownerOptions(rows) {
+  const set = new Set();
+  let none = false;
+  (rows || []).forEach((r) => { const o = String(r.owner || '').trim(); if (o) set.add(o); else none = true; });
+  return { owners: [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })), hasNone: none };
+}
+export function filterRows(rows, { q = '', status = 'all', phase = 'all', owner = 'all' } = {}) {
   const t = String(q).trim().toLowerCase();
-  return (rows || []).filter((r) => matchesStatus(r.status, status) && matchesPhase(r.phase, phase)
+  return (rows || []).filter((r) => matchesStatus(r.status, status) && matchesPhase(r.phase, phase) && matchesOwner(r.owner, owner)
     && (!t || r.name.toLowerCase().includes(t) || (r.creators || []).some((c) => c.toLowerCase().includes(t))));
 }

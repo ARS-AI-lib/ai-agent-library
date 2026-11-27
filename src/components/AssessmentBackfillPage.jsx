@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { getFunctions, httpsCallable } from '../lib/callable';
 import { splitLinks } from '../lib/inbox';
 import { goToField } from '../lib/formFocus';
-import { estimateSendMinutes, backfillCsv, summarize, filterRows, defaultSelection, toggleId, selectAllFiltered, selectionState, selectionCounts, pruneSelection, STATUS_LABEL } from '../lib/assessmentBackfill';
+import { NO_OWNER, ownerOptions, estimateSendMinutes, backfillCsv, summarize, filterRows, defaultSelection, toggleId, selectAllFiltered, selectionState, selectionCounts, pruneSelection, STATUS_LABEL } from '../lib/assessmentBackfill';
 import { bangkokDay } from '../lib/assessments';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';
@@ -51,6 +51,7 @@ export default function AssessmentBackfillPage() {
   const [q, setQ] = useState('');
   const [statusF, setStatusF] = useState('all');
   const [phaseF, setPhaseF] = useState('all');
+  const [ownerF, setOwnerF] = useState('all');
   const [selected, setSelected] = useState(null);   // Set of row ids (not_done only); null until first load
   const [msg, setMsg] = useState(msg0);
   const [defaults, setDefaults] = useState(null);   // server default copy
@@ -75,8 +76,9 @@ export default function AssessmentBackfillPage() {
   }, [data]);
   const sel = selected || new Set();
   const { items: selItems, creators: targets } = useMemo(() => selectionCounts(rows, sel), [rows, selected]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const shown = useMemo(() => filterRows(rows, { q, status: statusF, phase: phaseF })
-    .sort((a, b) => (a.status === 'not_done' ? 0 : 1) - (b.status === 'not_done' ? 0 : 1) || a.name.localeCompare(b.name)), [rows, q, statusF, phaseF]);
+  const shown = useMemo(() => filterRows(rows, { q, status: statusF, phase: phaseF, owner: ownerF })
+    .sort((a, b) => (a.status === 'not_done' ? 0 : 1) - (b.status === 'not_done' ? 0 : 1) || a.name.localeCompare(b.name)), [rows, q, statusF, phaseF, ownerF]);
+  const ownerOpts = useMemo(() => ownerOptions(rows), [rows]);
   const headState = selectionState(sel, shown);
   useEffect(() => { if (allSel.current) allSel.current.indeterminate = headState === 'some'; }, [headState]);
 
@@ -240,6 +242,13 @@ export default function AssessmentBackfillPage() {
 
             <div className="usage-filters">
               <label>Search<input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Item or creator" /></label>
+              <label>Owner
+                <select value={ownerF} onChange={(e) => setOwnerF(e.target.value)}>
+                  <option value="all">All</option>
+                  {ownerOpts.owners.map((o) => <option key={o} value={o}>{o}</option>)}
+                  {ownerOpts.hasNone && <option value={NO_OWNER}>(no owner)</option>}
+                </select>
+              </label>
               <label>Phase
                 <select value={phaseF} onChange={(e) => setPhaseF(e.target.value)}>
                   <option value="all">All</option>
