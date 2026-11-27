@@ -7,9 +7,10 @@ import { useConfigSchema } from './hooks/useConfigSchema';
 import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from './lib/agentUtils';
 import { getType, getTier } from './lib/tier';
 import { queueViewer } from './lib/pendingQueue';
-import { activeAnnouncements, unreadAnnouncements, inboxQueueCount, inboxBadgeCount, canPostAnnouncements } from './lib/inbox';
+import { activeAnnouncements, unreadAnnouncements, inboxQueueCount, inboxBadgeCount, canPostAnnouncements, unreadMessages as unreadMessagesOf, msgReadId } from './lib/inbox';
 import useAnnouncements from './hooks/useAnnouncements';
 import useInboxState from './hooks/useInboxState';
+import useInboxMessages from './hooks/useInboxMessages';
 import { recordSearchHits } from './lib/agentEvents';
 import { canAttachFileTo } from './lib/endpointFiles';
 import { useAgentStats } from './hooks/useAgentStats';
@@ -317,7 +318,14 @@ export default function App() {
   const { announcements } = useAnnouncements(role, roleReady);
   const { readIds, markRead, markAllRead } = useInboxState(user?.uid, roleReady);
   const activeAnns = useMemo(() => activeAnnouncements(announcements), [announcements]);
-  const activeAnnIds = useMemo(() => activeAnns.map((a) => a.id), [activeAnns]);
+  const { messages: inboxMessages } = useInboxMessages(roleReady ? user?.email : null);
+  // Known ids for pruning: announcements + messages (`msg:` ids), so reading a
+  // message is never pruned away.
+  const activeAnnIds = useMemo(
+    () => [...activeAnns.map((a) => a.id), ...inboxMessages.map((m) => msgReadId(m.id))],
+    [activeAnns, inboxMessages],
+  );
+  const unreadMsgCount = useMemo(() => unreadMessagesOf(inboxMessages, readIds).length, [inboxMessages, readIds]);
   const unreadCount = useMemo(() => unreadAnnouncements(activeAnns, readIds).length, [activeAnns, readIds]);
   // Badge = unread announcements + the approval queue WITHOUT the base-user
   // own-items fallback (own items are listed under My requests, never counted).
@@ -326,7 +334,7 @@ export default function App() {
     () => inboxQueueCount(pending, parentDeployRequests, renameReqs, agents, queueViewerCtx),
     [pending, parentDeployRequests, renameReqs, agents, queueViewerCtx]
   );
-  const inboxCount = inboxBadgeCount({ unreadCount, queueCount });
+  const inboxCount = inboxBadgeCount({ unreadCount, queueCount, unreadMessages: unreadMsgCount });
 
   const filtered = useMemo(() => {
     let pred = buildAgentFilter({ type, owner, role: role_, tier, reusable, hasEndpoint, category, stage, platformTools, externalSkills, search });
@@ -684,6 +692,7 @@ export default function App() {
           isAdmin={isAdmin}
           isCommittee={isCommittee}
           announcements={announcements}
+          messages={inboxMessages}
           readIds={readIds}
           onMarkRead={(id) => markRead(id, activeAnnIds)}
           onMarkAllRead={() => markAllRead(activeAnnIds)}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { toJsDate, fmtDate } from '../lib/agentUtils';
 import {
-  activeAnnouncements, splitLinks, myRequestItems, inboxQueueCount, showToApprove, AUDIENCE_LABEL,
+  activeAnnouncements, splitLinks, msgReadId, myRequestItems, inboxQueueCount, showToApprove, AUDIENCE_LABEL,
 } from '../lib/inbox';
 import useEscapeKey from '../hooks/useEscapeKey';
 import useMyRejected from '../hooks/useMyRejected';
@@ -72,6 +72,25 @@ function AnnouncementRow({ a, unread, open, onToggle, onEdit }) {
   );
 }
 
+function MessageRow({ m, unread, open, onToggle }) {
+  return (
+    <div className={`v7-ann-row ${unread ? 'unread' : ''} ${open ? 'open' : ''}`}>
+      <button type="button" className="v7-ann-head" aria-expanded={open} onClick={onToggle}>
+        <span className="v7-ann-dot" aria-hidden="true" />
+        <span className="v7-ann-title">{m.title}</span>
+        {unread && <span className="v7-ann-sr">(unread)</span>}
+        <span className="v7-ann-meta">{m.createdAt && <span>{fmtDate(m.createdAt)}</span>}</span>
+      </button>
+      {open && <AnnouncementBody text={m.body} />}
+      {open && m.link && (
+        <div className="v7-ann-rowact">
+          <a className="v7-sub-btn pri" href={m.link} target="_blank" rel="noopener noreferrer">Open</a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RequestRow({ agent, step, now, onOpenAgent }) {
   const rejected = agent.approvalStatus === 'rejected';
   const pill = (
@@ -101,6 +120,7 @@ function RequestRow({ agent, step, now, onOpenAgent }) {
 export default function InboxModal({
   user,
   announcements = [],
+  messages = [],
   readIds,
   onMarkRead,
   onMarkAllRead,
@@ -129,6 +149,9 @@ export default function InboxModal({
   const active = useMemo(() => activeAnnouncements(announcements), [announcements]);
   const isUnread = (a) => !(readIds && readIds.has(a.id));
   const unreadList = active.filter(isUnread);
+  const isMsgUnread = (m) => !(readIds && readIds.has(msgReadId(m.id)));
+  const unreadMsgs = messages.filter(isMsgUnread);
+  const shownMsgs = messages.filter((m) => isMsgUnread(m) || openedHere.has(msgReadId(m.id)));
   const allAnnList = active.filter((a) => isUnread(a) || openedHere.has(a.id));
   const mine = useMemo(
     () => myRequestItems({ pending, allAgents, rejected, user }),
@@ -142,8 +165,9 @@ export default function InboxModal({
   const canApprove = !!queueViewerCtx && showToApprove(queueViewerCtx, queueCount);
 
   const tabs = [
-    ['all', 'All', unreadList.length + mine.length + (canApprove ? queueCount : 0)],
+    ['all', 'All', unreadMsgs.length + unreadList.length + mine.length + (canApprove ? queueCount : 0)],
     ['ann', 'Announcements', unreadList.length],
+    ['msg', 'Messages', unreadMsgs.length],
     ['mine', 'My requests', mine.length],
     ...(canApprove ? [['approve', 'To approve', queueCount]] : []),
   ];
@@ -154,6 +178,23 @@ export default function InboxModal({
     setOpenedHere((prev) => (prev.has(a.id) ? prev : new Set(prev).add(a.id)));
     if (isUnread(a)) onMarkRead?.(a.id);
   };
+
+  const toggleMsg = (m) => {
+    const rid = msgReadId(m.id);
+    setOpenId((id) => (id === rid ? null : rid));
+    setOpenedHere((prev) => (prev.has(rid) ? prev : new Set(prev).add(rid)));
+    if (isMsgUnread(m)) onMarkRead?.(rid);
+  };
+
+  const msgList = (list, emptyText) => (list.length === 0
+    ? <div className="v7-inbox-empty">{emptyText}</div>
+    : (
+      <div className="v7-ann-list">
+        {list.map((m) => (
+          <MessageRow key={m.id} m={m} unread={isMsgUnread(m)} open={openId === msgReadId(m.id)} onToggle={() => toggleMsg(m)} />
+        ))}
+      </div>
+    ));
 
   const annList = (list, emptyText) => (list.length === 0
     ? <div className="v7-inbox-empty">{emptyText}</div>
@@ -186,7 +227,7 @@ export default function InboxModal({
     </div>
   );
 
-  const showMarkAll = (current === 'all' || current === 'ann') && unreadList.length > 0;
+  const showMarkAll = (current === 'all' || current === 'ann' || current === 'msg') && (unreadList.length + unreadMsgs.length) > 0;
 
   return (
     <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
@@ -209,10 +250,16 @@ export default function InboxModal({
         </div>
 
         {current === 'all' && (
-          allAnnList.length === 0 && mine.length === 0 && !canApprove
+          allAnnList.length === 0 && shownMsgs.length === 0 && mine.length === 0 && !canApprove
             ? <div className="v7-inbox-empty">ไม่มีรายการใหม่ — ประกาศที่อ่านแล้วดูได้ในแท็บ Announcements</div>
             : (
               <>
+                {shownMsgs.length > 0 && (
+                  <>
+                    <h3 className="v7-inbox-sec">Messages</h3>
+                    {msgList(shownMsgs, '')}
+                  </>
+                )}
                 {allAnnList.length > 0 && annList(allAnnList, '')}
                 {mine.length > 0 && (
                   <>
@@ -224,6 +271,7 @@ export default function InboxModal({
               </>
             )
         )}
+        {current === 'msg' && msgList(messages, 'ยังไม่มีข้อความถึงคุณในขณะนี้')}
         {current === 'ann' && annList(active, 'ยังไม่มีประกาศสำหรับคุณในขณะนี้')}
         {current === 'mine' && mineList('ไม่มีคำขอของคุณที่รอการพิจารณา — รายการที่ถูกปฏิเสธจะแสดงที่นี่ 14 วัน')}
         {current === 'approve' && queueLine}

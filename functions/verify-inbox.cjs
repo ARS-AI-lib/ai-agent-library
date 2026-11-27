@@ -167,5 +167,14 @@ eq(I.inboxQueueCount([{ ...inB('y'), createdBy: 'ap' }, inB('z')], [], [], [], v
 eq([I.showToApprove(vFull, 0), I.showToApprove(v0, 0), I.showToApprove(v0, 2)], [true, false, true], 'showToApprove');
 eq([I.inboxBadgeCount({ unreadCount: 2, queueCount: 3 }), I.inboxBadgeCount({ unreadCount: 0, queueCount: 0 })], [5, 0], 'inboxBadgeCount');
 
+// per-person messages (read ids are `msg:{id}`)
+const msgs = [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }];
+eq(I.unreadMessages(msgs, new Set(['msg:m1', 'm2'])).map((m) => m.id), ['m2', 'm3'], 'unreadMessages honours msg: prefix, ignores bare/announcement ids');
+eq(I.unreadMessages(msgs, ['msg:m1', 'msg:m2', 'msg:m3']).length, 0, 'unreadMessages accepts array, all read -> 0');
+eq(I.unreadMessages(null, null), [], 'unreadMessages null-safe');
+eq(I.inboxBadgeCount({ unreadCount: 2, queueCount: 3, unreadMessages: 4 }), 9, 'badge = announcements + messages + queue');
+eq(I.inboxBadgeCount({ unreadCount: 1, queueCount: 1 }), 2, 'badge old two-arg callers unchanged');
+eq(I.pruneReadIds(['a1', 'msg:m1', 'msg:gone'], ['a1', 'msg:m1']), ['a1', 'msg:m1'], 'pruneReadIds keeps known msg ids, drops unknown');
+
 if (fails) { console.error(`\n✗ ${fails} case(s) failed`); process.exit(1); }
 console.log('\n✓ all inbox cases pass');

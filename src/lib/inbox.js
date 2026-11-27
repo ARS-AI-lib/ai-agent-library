@@ -124,6 +124,15 @@ export function showToApprove(v, queueCount) {
   return !!v.fullAccess || queueCount > 0;
 }
 
-export function inboxBadgeCount({ unreadCount, queueCount }) {
-  return (unreadCount || 0) + (queueCount || 0);
+// Per-person messages share the announcements' read-state doc; their ids are
+// stored as `msg:{id}` so they cannot collide with an announcement id.
+export const msgReadId = (id) => `msg:${id}`;
+
+export function unreadMessages(messages, readIds) {
+  const read = new Set(readIds || []);
+  return (messages || []).filter((m) => !read.has(msgReadId(m.id)));
+}
+
+export function inboxBadgeCount({ unreadCount, queueCount, unreadMessages: unreadMsgs }) {
+  return (unreadCount || 0) + (queueCount || 0) + (unreadMsgs || 0);
 }
