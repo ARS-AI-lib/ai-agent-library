@@ -516,7 +516,7 @@ service cloud.firestore {
     }
     match /assessmentReviews/{id} {
       allow read: if isApproverOrAbove()
-        || (isSignedIn() && resource.data.get('requestedBy', '') == request.auth.uid);
+        || (isSignedIn() && resource.data.get('requestedByUid', '') == request.auth.uid);
       allow write: if false;
     }
     // Frozen yearly archive — callables (Admin SDK) only.

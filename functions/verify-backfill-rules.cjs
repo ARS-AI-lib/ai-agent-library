@@ -68,7 +68,7 @@ const ts = () => fsdk.serverTimestamp();
   await adb.doc('inboxMessages/m-u').set({ toEmail: 'u@arise.tech', title: 't', body: 'b', link: '', kind: 'assessment-backfill', createdAt: now });
   await adb.doc('inboxMessages/m-ap').set({ toEmail: 'ap@arise.tech', title: 't', body: 'b', link: '', kind: 'assessment-backfill', createdAt: now });
   await adb.doc('assessmentCampaigns/current').set({ dueDate: '2026-12-31', channels: [], sends: [] });
-  await adb.doc('assessmentReviews/r1').set({ agentId: 'a1', agentName: 'A', approveArea: 'QA', answers: {}, decl: {}, verdict: null, previous: null, requestedBy: c.user.uid, createdAt: now, status: 'pending' });
+  await adb.doc('assessmentReviews/r1').set({ agentId: 'a1', agentName: 'A', approveArea: 'QA', answers: {}, decl: {}, verdict: null, previous: null, requestedBy: 'u@arise.tech', requestedByUid: c.user.uid, createdAt: now, status: 'pending' });
   // agent owned by the user (creator) with approved-free status
   await adb.doc('agents/a1').set({ agentName: 'A', approvalStatus: 'approved', createdBy: c.user.uid, creatorEmails: ['u@arise.tech'], deploymentStatus: 'none', devProgress: 50 });
 
@@ -102,6 +102,8 @@ const ts = () => fsdk.serverTimestamp();
     await (ok ? allowed : denied)(`review read ${k} ${ok ? 'allowed' : 'denied'}`, fsdk.getDoc(d(k, 'assessmentReviews', 'r1')));
   }
   await denied('review read other user denied', fsdk.getDoc(d('staff', 'assessmentReviews', 'r1')));
+  await adb.doc('assessmentReviews/r2').set({ agentId: 'a1', requestedBy: 'x@arise.tech', requestedByUid: 'someone-else', status: 'pending' });
+  await denied('review read with different requestedByUid denied', fsdk.getDoc(d('user', 'assessmentReviews', 'r2')));
   await denied('review create denied', fsdk.setDoc(d('user', 'assessmentReviews', 'n'), { requestedBy: c.user.uid }));
   await denied('review admin create denied', fsdk.setDoc(d('admin', 'assessmentReviews', 'n'), { requestedBy: c.admin.uid }));
   await denied('review update denied', fsdk.updateDoc(d('approver', 'assessmentReviews', 'r1'), { status: 'approved' }));
