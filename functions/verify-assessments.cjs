@@ -89,5 +89,15 @@ eq('clipText: empty/undefined/null', [A.clipText(''), A.clipText(undefined), A.c
 const longDesc = 'd'.repeat(300);
 const lcsv = A.agentCsv(CFG, A.combineByAgent(CFG, [{ ...legacy, decl: { description: longDesc } }]));
 eq('agentCsv keeps the full description', lcsv.rows[0][lcsv.headers.indexOf('Description')], longDesc);
+eq('preAnswered: removed option id -> false', A.combineByAgent(CFG, [{ ...legacy, answers: { C1: 'C1x' } }])[0].preAnswered, false);
+eq('preAnswered: one valid pre answer -> true', A.combineByAgent(CFG, [{ ...legacy, answers: { C1: 'C1a' } }])[0].preAnswered, true);
+eq('agentCsv: pre score blank when not answered', A.agentCsv(CFG, A.combineByAgent(CFG, [noPre])).rows[0][4], '');
+const E250 = '😀'.repeat(250);
+eq('clipText: 250 emoji unchanged', A.clipText(E250), E250);
+const ce = A.clipText('😀'.repeat(251));
+eq('clipText: 251 emoji -> 250 + ellipsis, no lone surrogate', [ce === E250 + '…', !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(ce)], [true, true]);
+const th = 'กี่'.repeat(200);
+const ct = A.clipText(th);
+eq('clipText: Thai cluster not split', [ct.endsWith('…'), /[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]$/.test(ct.slice(0, -1)), ct.slice(0, -1).length % 3], [true, true, 0]);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
