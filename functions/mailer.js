@@ -168,6 +168,8 @@ function buildTeamsCard({ subject, title, cardLines = [], link, endpoint, ctaLab
       { type: 'TextBlock', text: title || String(subject || '').replace(/^\[AI Library\]\s*/, ''), weight: 'Bolder', size: 'Medium', wrap: true },
       { type: 'TextBlock', text: `เรียน ${NAME_TOKEN}`, wrap: true, spacing: 'Small' },
       ...cardLines.map((l) => {
+        // { text, spacing } form: only the assessment backfill message uses it (extra gap between blocks).
+        if (l && typeof l === 'object') return { type: 'TextBlock', text: l.text, wrap: true, spacing: l.spacing || 'Small' };
         const h = /^\*\*(.+)\*\*$/.exec(l);
         return h
           ? { type: 'TextBlock', text: h[1], weight: 'Bolder', wrap: true, spacing: 'Medium' }

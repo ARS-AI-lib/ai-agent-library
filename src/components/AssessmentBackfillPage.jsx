@@ -31,6 +31,8 @@ function tally(r) {
   return p.join(' · ');
 }
 
+const msg0 = { subject: '', intro: '', outro: '' };
+
 export default function AssessmentBackfillPage() {
   const { user, role, loading, roleReady, signIn, domainError } = useAuth();
   const busyRef = useRef(false);
@@ -40,13 +42,17 @@ export default function AssessmentBackfillPage() {
   const [busy, setBusy] = useState(false);
   const [dueDate, setDueDate] = useState(() => plusDays(14));
   const [channels, setChannels] = useState(['inbox', 'teams', 'email']);
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState(null);   // { preview, count, defaults } — last good one is kept
+  const [previewErr, setPreviewErr] = useState('');
+  const [editing, setEditing] = useState(false);
+  const msgRef = useRef(msg0);
+  const reqRef = useRef(0);
   const [confirming, setConfirming] = useState(false);
   const [q, setQ] = useState('');
   const [statusF, setStatusF] = useState('all');
   const [phaseF, setPhaseF] = useState('all');
   const [selected, setSelected] = useState(null);   // Set of row ids (not_done only); null until first load
-  const [msg, setMsg] = useState({ subject: '', intro: '', outro: '' });
+  const [msg, setMsg] = useState(msg0);
   const [defaults, setDefaults] = useState(null);   // server default copy
   const allSel = useRef(null);
   const touchedRef = useRef({});
@@ -60,7 +66,6 @@ export default function AssessmentBackfillPage() {
     catch (e) { if (aliveRef.current) setError(failMsg('โหลดรายการ', e)); return false; }
   };
   useEffect(() => { if (canView) load(); }, [canView]);   // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setPreview(null); }, [dueDate, channels, msg, selected]);
 
   const rows = data?.rows || [];
   const sum = useMemo(() => summarize(rows), [rows]);
@@ -75,22 +80,38 @@ export default function AssessmentBackfillPage() {
   const headState = selectionState(sel, shown);
   useEffect(() => { if (allSel.current) allSel.current.indeterminate = headState === 'some'; }, [headState]);
 
-  // Default copy comes from the server (it depends on the due date); untouched parts follow it.
+  // One preview call (also the source of the default copy). Never per keystroke: it runs debounced when
+  // Due date / Channels / Selection change, and immediately when the editor is closed with Done.
+  const refreshPreview = (extra = {}) => {
+    if (!canView || !data || !dueDate || dueDate < bangkokDay(new Date())) return;
+    const id = ++reqRef.current;
+    call('backfillSend', { dueDate, channels, agentIds: [...sel], message: msgRef.current, preview: true, ...extra }).then((r) => {
+      if (id !== reqRef.current || !aliveRef.current) return;
+      setPreview(r); setPreviewErr('');
+      if (r.defaults) {
+        setDefaults(r.defaults); setDefaultsFailed(false);
+        // evaluated when the response lands: never overwrite a part the admin has edited
+        setMsg((m) => { const n = { subject: touchedRef.current.subject ? m.subject : r.defaults.subject, intro: touchedRef.current.intro ? m.intro : r.defaults.intro, outro: touchedRef.current.outro ? m.outro : r.defaults.outro }; msgRef.current = n; return n; });
+      }
+    }).catch((e) => {
+      if (id !== reqRef.current || !aliveRef.current) return;
+      setPreviewErr(`ดูตัวอย่างไม่สำเร็จ (${e?.code === 'functions/resource-exhausted' ? 'เรียกถี่เกินไป รอสักครู่แล้วลองใหม่' : 'ลองใหม่อีกครั้ง'}) — แสดงตัวอย่างล่าสุด`);
+      if (!defaults) setDefaultsFailed(true);
+    });
+  };
+  const sKey = [...sel].sort().join(',');
   useEffect(() => {
-    if (!canView || !data || !dueDate || !channels.length) return undefined;
-    let dead = false;
-    // debounced: backfillSend is rate limited, so a date being edited must not fire a call per keystroke
-    const timer = setTimeout(() => call('backfillSend', { dueDate, channels: ['inbox'], preview: true }).then((r) => {
-      if (dead || !r.defaults) return;
-      setDefaults(r.defaults); setDefaultsFailed(false);
-      // evaluated when the response lands: never overwrite a part the admin has edited
-      setMsg((m) => ({ subject: touchedRef.current.subject ? m.subject : r.defaults.subject, intro: touchedRef.current.intro ? m.intro : r.defaults.intro, outro: touchedRef.current.outro ? m.outro : r.defaults.outro }));
-    }).catch(() => { if (!dead) setDefaultsFailed(true); }), 700);
-    return () => { dead = true; clearTimeout(timer); };
-  }, [canView, !!data, dueDate]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const editMsg = (k, v) => { setMsg((m) => ({ ...m, [k]: v })); touchedRef.current = { ...touchedRef.current, [k]: true }; };
-  const resetMsg = () => { if (defaults) setMsg(defaults); touchedRef.current = {}; };
-  const payloadExtra = () => ({ message: msg, agentIds: [...sel] });
+    if (!canView || !data) return undefined;
+    const timer = setTimeout(() => refreshPreview(), 700);
+    return () => clearTimeout(timer);
+  }, [canView, !!data, dueDate, channels.join(','), sKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const editMsg = (k, v) => { setMsg((m) => { const n = { ...m, [k]: v }; msgRef.current = n; return n; }); touchedRef.current = { ...touchedRef.current, [k]: true }; };
+  const resetMsg = () => { if (defaults) { setMsg(defaults); msgRef.current = defaults; } touchedRef.current = {}; };
+  const doneEditing = () => {
+    if (defaults && !msgRef.current.subject.trim()) { const m = 'Subject: ใส่หัวข้อข้อความ'; setError(m); goToField('.abf-wrap', m, FIELDS); return; }
+    setError(''); setEditing(false); refreshPreview();
+  };
+  const payloadExtra = () => ({ message: msgRef.current, agentIds: [...sel] });
 
   function validate() {
     let m = '';
@@ -110,7 +131,6 @@ export default function AssessmentBackfillPage() {
     catch (e) { setError(failMsg(label, e)); }
     finally { busyRef.current = false; setBusy(false); }
   }
-  const doPreview = () => run('ดูตัวอย่างข้อความ', { preview: true }, (r) => setPreview(r));
   const doTest = () => run('ส่งทดสอบ', { testOnly: true }, (r) => setNotice(`Test to you: ${tally(r)}`));
   const doSend = () => { setConfirming(false); return run('ส่งข้อความ', {}, async (r) => { setNotice(`Sent: ${tally(r)}`); await load(); }); };
   const toggleCh = (c) => setChannels((l) => (l.includes(c) ? l.filter((x) => x !== c) : [...l, c]));
@@ -169,19 +189,40 @@ export default function AssessmentBackfillPage() {
               <div className="fg abf-msg">
                 <label>Message</label>
                 <div className="fhelp">Teams และอีเมลใช้ข้อความเดียวกัน; คำขึ้นต้น รายการงาน ลิงก์ และวันครบกำหนดระบบใส่ให้อัตโนมัติ</div>
-                {(defaultsFailed || (!defaults && !busy)) && <div className="fhelp abf-hint">โหลดข้อความตั้งต้นไม่สำเร็จ — ช่องที่เว้นว่างจะใช้ข้อความมาตรฐาน</div>}
-                <label className="abf-sub">Subject <span className="req">*</span></label>
-                <input value={msg.subject} maxLength={200} onChange={(e) => editMsg('subject', e.target.value)} />
-                <label className="abf-sub">Intro</label>
-                <textarea rows={4} value={msg.intro} maxLength={2000} onChange={(e) => editMsg('intro', e.target.value)} />
-                <label className="abf-sub">Closing</label>
-                <textarea rows={4} value={msg.outro} maxLength={2000} onChange={(e) => editMsg('outro', e.target.value)} />
-                <div><button type="button" className="btn" disabled={!defaults} onClick={resetMsg}>Reset to default</button></div>
+                {defaultsFailed && <div className="fhelp abf-hint">โหลดข้อความตั้งต้นไม่สำเร็จ — ช่องที่เว้นว่างจะใช้ข้อความมาตรฐาน</div>}
+                {previewErr && <div className="fhelp abf-hint">{previewErr}</div>}
+                {editing ? (
+                  <>
+                    <label className="abf-sub">Subject <span className="req">*</span></label>
+                    <input value={msg.subject} maxLength={200} onChange={(e) => editMsg('subject', e.target.value)} />
+                    <label className="abf-sub">Intro</label>
+                    <textarea rows={4} value={msg.intro} maxLength={2000} onChange={(e) => editMsg('intro', e.target.value)} />
+                    <label className="abf-sub">Closing</label>
+                    <textarea rows={4} value={msg.outro} maxLength={2000} onChange={(e) => editMsg('outro', e.target.value)} />
+                    <div className="abf-actions">
+                      <button type="button" className="btn btn-primary" onClick={doneEditing}>Done</button>
+                      <button type="button" className="btn" disabled={!defaults} onClick={resetMsg}>Reset to default</button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="abf-preview">
+                    {preview?.preview ? (
+                      <>
+                        <b>{preview.preview.subject}</b>
+                        <pre>{splitLinks(preview.preview.text).map((seg, i) => (seg.href ? <a key={i} href={seg.href} target="_blank" rel="noopener noreferrer">{seg.text}</a> : <span key={i}>{seg.text}</span>))}</pre>
+                        <div className="abf-meta">Preview · would reach {preview.count} creators · nothing is sent until you confirm</div>
+                      </>
+                    ) : <div className="abf-meta">{preview ? 'No items selected — nothing to preview' : 'Loading preview…'}</div>}
+                    <div className="abf-actions">
+                      <button type="button" className="btn" disabled={busy} onClick={() => setEditing(true)}>Edit</button>
+                      <button type="button" className="btn" disabled={busy} onClick={() => refreshPreview()}>Refresh preview</button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="abf-actions">
-                <button className="btn" disabled={busy} onClick={doPreview}>Preview message</button>
-                <button className="btn" disabled={busy} onClick={doTest}>Send test to me</button>
-                <button className="btn btn-primary" disabled={busy || !selItems} onClick={() => { if (validate()) setConfirming(true); }}>Send to {targets} creators ({selItems} items)</button>
+                <button className="btn" disabled={busy || editing} onClick={doTest}>Send test to me</button>
+                <button className="btn btn-primary" disabled={busy || editing || !selItems} onClick={() => { if (validate()) setConfirming(true); }}>Send to {targets} creators ({selItems} items)</button>
                 {!selItems && <span className="abf-meta">Items: เลือกรายการที่ยังไม่ทำอย่างน้อย 1 รายการในตารางด้านล่าง</span>}
               </div>
               {confirming && (
@@ -193,14 +234,6 @@ export default function AssessmentBackfillPage() {
                     <button className="btn btn-primary" disabled={busy} onClick={doSend}>Confirm send</button>
                     <button className="btn" onClick={() => setConfirming(false)}>Cancel</button>
                   </div>
-                </div>
-              )}
-              {preview && (
-                <div className="abf-preview">
-                  <b>{preview.preview?.subject}</b>
-                  <pre>{splitLinks(preview.preview?.text).map((seg, i) => (seg.href ? <a key={i} href={seg.href} target="_blank" rel="noopener noreferrer">{seg.text}</a> : <span key={i}>{seg.text}</span>))}</pre>
-                  <div className="abf-meta">Would reach {preview.count} creators · nothing was sent</div>
-                  <button className="btn" onClick={() => setPreview(null)}>Close preview</button>
                 </div>
               )}
             </section>

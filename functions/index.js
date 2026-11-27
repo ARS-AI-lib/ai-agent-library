@@ -2425,7 +2425,7 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 3600, secrets: [TEAM
   const render = (d) => BF.renderBackfillMessage({ displayName: (dir.get(d.email)?.displayName || '').split(' ')[0], items: d.items, dueDate: dueLabel, appUrl: BF_APP_URL, overrides: msgOv });
   if (!preview && pickIds && !digests.length) throw new HttpsError('invalid-argument', 'ไม่ได้เลือกรายการที่ต้องส่ง');
   if (preview) {
-    if (!digests.length) throw new HttpsError('failed-precondition', 'ไม่มีรายการที่ต้องส่ง');
+    if (!digests.length) return { preview: null, count: 0, defaults: BF.defaultMessageParts(dueLabel) };
     const m = render(digests[0]);
     return { preview: { subject: m.subject, text: m.inboxText, html: m.html }, count: digests.length, defaults: BF.defaultMessageParts(dueLabel) };
   }

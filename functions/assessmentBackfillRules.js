@@ -111,7 +111,14 @@ function validateAgentIds(ids) {
 }
 const selectRows = (rows, ids) => (ids ? rows.filter((r) => ids.includes(r.agent.id)) : rows);
 
-const paras = (t) => String(t).split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px">${esc(p).replace(/\n/g, '<br/>')}</p>`).join('');
+const paras = (t) => String(t).split(/\n{2,}/).map((p) => `<p style="margin:0 0 16px">${esc(p).replace(/\n/g, '<br/>')}</p>`).join('');
+
+// Teams: first item line and first closing line get a larger gap above (object form is used only here).
+const cardBlocks = (intro, items, outro) => [
+  ...intro,
+  ...items.map((t, i) => (i === 0 ? { text: t, spacing: 'Large' } : t)),
+  ...outro.map((t, i) => (i === 0 ? { text: t, spacing: 'Large' } : t)),
+];
 
 function renderBackfillMessage({ displayName, items, dueDate, appUrl, overrides }) {
   const o = overrides || {};
@@ -123,15 +130,14 @@ function renderBackfillMessage({ displayName, items, dueDate, appUrl, overrides 
   const lines = items.map((i, n) => `${n + 1}. ${i.name} · ${i.phase} → ${url(i)}`);
   // Hidden-link forms: Teams card text and the inbox body support [label](url); email html uses <a>.
   const mdLines = items.map((i, n) => `${n + 1}. ${i.name} · ${i.phase} → [Assessment](${url(i)})`);
-  const dur = `ใช้เวลาประมาณ 5 นาทีต่อรายการ (11 ข้อ แบบเลือกตอบ) กรุณาทำให้เสร็จภายใน ${dueDate}`;
   const first = String(displayName || '').trim();
-  const text = [`เรียน ${salutation(first)}`, intro, ...lines, dur, outro].join('\n');
-  const inboxText = [`เรียน ${salutation(first)}`, intro, ...mdLines, dur, outro].join('\n');
+  const text = [`เรียน ${salutation(first)}`, intro, lines.join('\n'), outro].join('\n\n');
+  const inboxText = [`เรียน ${salutation(first)}`, intro, mdLines.join('\n'), outro].join('\n\n');
   const list = items.map((i, n) => `<li>${esc(i.name)} · ${esc(i.phase)} → <a href="${esc(url(i))}">Assessment</a></li>`).join('');
-  const html = frameHtml(`${paras(intro)}<ol>${list}</ol><p>${esc(dur)}</p>${paras(outro)}`).replace('{{name}}', esc(salutation(first)));
+  const html = frameHtml(`${paras(intro)}<ol style="margin:0 0 16px;padding-left:22px">${list}</ol>${paras(outro)}`).replace('{{name}}', esc(salutation(first)));
   const para = (t) => String(t).split(/\n{2,}/).flatMap((p) => p.split('\n')).map((x) => x.trim()).filter(Boolean);
   // Teams card shows only cardLines, so it carries the same (edited) intro/closing as the email.
-  return { subject, text, inboxText, html, cardLines: [...para(intro), ...mdLines, ...para(outro)], link: `${appUrl}/assess?agent=${items[0]?.id || ''}` };
+  return { subject, text, inboxText, html, cardLines: cardBlocks(para(intro), mdLines, para(outro)), link: `${appUrl}/assess?agent=${items[0]?.id || ''}` };
 }
 
 const bkkYear = (d) => new Date(d.getTime() + 7 * 3600 * 1000).getUTCFullYear();

@@ -93,7 +93,7 @@ eq('non-approved → out of scope', R.inBackfillScope({ ...base, approvalStatus:
 const m = R.renderBackfillMessage({ displayName: 'บ๊อบ', dueDate: '15 Dec 2026', appUrl: 'https://x', items: [{ id: '1', name: 'A', phase: 'Pilot' }, { id: '2', name: 'B', phase: 'Ready to Use' }] });
 eq('subject has date', m.subject, 'ขอความร่วมมือทำ Assessment ของ Agent/Skill ภายใน 15 Dec 2026');
 eq('links once each', [m.text.split('/assess?agent=1').length - 1, m.text.split('/assess?agent=2').length - 1], [1, 1]);
-eq('html greeting/links/date', [m.html.includes('เรียน คุณบ๊อบ'), m.html.split('/assess?agent=1').length - 1 >= 1, m.html.includes('15 Dec 2026'), m.html.includes('{{name}}')], [true, true, true, false]);
+eq('html greeting/links/date', [m.html.includes('เรียน คุณบ๊อบ'), m.html.split('/assess?agent=1').length - 1 >= 1, m.html.includes('15 Dec 2026'), m.html.includes('{{name}}')], [true, true, false, false]);
 eq('dueDate format', R.formatDueDate(new Date('2026-12-15T05:00:00Z')), '15 Dec 2026');
 
 // applySubmit
@@ -247,7 +247,7 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   eq('override subject', ov.subject, 'S1');
   eq('override intro escaped in html', ov.html.includes('Hi &lt;b&gt;x&lt;/b&gt;') && !ov.html.includes('<b>x</b>'), true);
   eq('items + link kept', ov.text.includes('https://x/assess?agent=1') && ov.html.includes('https://x/assess?agent=1'), true);
-  eq('due sentence kept', ov.text.includes('15 Dec 2026'), true);
+  eq('due sentence removed (date only in subject)', [ov.text.includes('ใช้เวลาประมาณ 5 นาที'), ov.text.includes('15 Dec 2026'), ov.html.includes('15 Dec 2026'), ov.inboxText.includes('15 Dec 2026'), ov.cardLines.some((l) => String(l.text ?? l).includes('15 Dec 2026'))], [false, false, false, false, false]);
   eq('empty override -> default', R.renderBackfillMessage({ ...base, overrides: { subject: '  ', intro: '', outro: '' } }).subject, dm.subject);
   eq('control chars stripped', R.validateMessage({ subject: 'a\u0000b\u0007c' }).subject, 'abc');
   eq('validateMessage undefined', R.validateMessage(undefined), {});
@@ -288,12 +288,13 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   eq('filterRows search creator + status', B.filterRows(FR, { q: 'x@a', status: 'not_done', phase: 'all' }).map((r) => r.id), ['a', 'b']);
   eq('filter-out selection retained', [...B.selectAllFiltered(new Set(['b']), B.filterRows(FR, { q: '', status: 'all', phase: 'Pilot' }), true)].sort(), ['a', 'b']);
   // review round 1
-  const cl = R.renderBackfillMessage({ ...base, overrides: { intro: 'P1\n\nP2', outro: 'C1\n\nC2' } }).cardLines;
+  const TXT = (l) => (typeof l === 'string' ? l : l.text);
+  const cl = R.renderBackfillMessage({ ...base, overrides: { intro: 'P1\n\nP2', outro: 'C1\n\nC2' } }).cardLines.map(TXT);
   eq('cardLines intro first, items middle, closing last', [cl[0], cl[1], cl[2].startsWith('1. A'), cl[3], cl[4]], ['P1', 'P2', true, 'C1', 'C2']);
-  const cd = R.renderBackfillMessage(base).cardLines;
+  const cd = R.renderBackfillMessage(base).cardLines.map(TXT);
   eq('default cardLines include intro/closing', [cd[0] === dm.intro, cd[cd.length - 1]], [true, 'ทีม AI Agent Library']);
   eq('cardLines default has reply + thanks', cd.includes('ขอบคุณครับ'), true);
-  eq('cardLines strip control chars', R.renderBackfillMessage({ ...base, overrides: { intro: 'a\u0007b' } }).cardLines[0], 'ab');
+  eq('cardLines strip control chars', R.renderBackfillMessage({ ...base, overrides: { intro: 'a\u0007b' } }).cardLines.map(TXT)[0], 'ab');
   eq('subject newlines collapsed', R.validateMessage({ subject: 'a\n b\t\tc' }).subject, 'a b c');
   eq('intro keeps paragraphs', R.validateMessage({ intro: 'a\n\nb' }).intro, 'a\n\nb');
   const SR = [{ id: 'a', status: 'not_done', creators: [] }, { id: 'b', status: 'not_done', creators: ['x'] }];
@@ -302,8 +303,16 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   const hl = R.renderBackfillMessage(base);
   eq('html link label, bare URL not visible', [hl.html.includes('>Assessment</a>'), hl.html.includes('href="https://x/assess?agent=1"'), hl.html.includes('>https://x/assess?agent=1<')], [true, true, false]);
   eq('text keeps raw URL', hl.text.includes('1. A · Pilot → https://x/assess?agent=1'), true);
-  eq('card line markdown link', hl.cardLines.some((l) => l === '1. A · Pilot → [Assessment](https://x/assess?agent=1)'), true);
+  eq('card line markdown link', hl.cardLines.map(TXT).some((l) => l === '1. A · Pilot → [Assessment](https://x/assess?agent=1)'), true);
   eq('inbox body markdown link', hl.inboxText.includes('1. A · Pilot → [Assessment](https://x/assess?agent=1)') && !hl.inboxText.includes('→ https://'), true);
+  // block spacing
+  const sp = R.renderBackfillMessage({ ...base, overrides: { intro: 'INTRO', outro: 'OUTRO' } });
+  eq('text blank line between blocks', sp.text.split('\n\n').length, 4);
+  eq('text block order', sp.text.split('\n\n').slice(1).map((b) => b.split('\n')[0].replace(/^1\. .*/, 'LIST')), ['INTRO', 'LIST', 'OUTRO']);
+  eq('inbox blank line between blocks', sp.inboxText.split('\n\n').length, 4);
+  eq('html separate blocks with margins', [sp.html.includes('<p style="margin:0 0 16px">INTRO</p>'), sp.html.includes('<ol style="margin:0 0 16px'), sp.html.includes('<p style="margin:0 0 16px">OUTRO</p>')], [true, true, true]);
+  const spc = sp.cardLines;
+  eq('card gap before first item and first closing', [spc[0], spc[1].spacing, spc[2].spacing], ['INTRO', 'Large', 'Large']);
   // F2 wording
   const T = { sent: 0, held: 0, skipped: 0, dryRun: 0, disabled: 0, failed: 0 };
   eq('summary inbox + dry run', R.summarizeSend({ inbox: 12, ...T, dryRun: 12 }), 'ส่ง Inbox แล้ว 12 ข้อความ · Teams/Email: ไม่ได้ส่งจริง (dry run 12)');
