@@ -10,6 +10,7 @@ import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { assessmentRecord } from '../lib/assessments';
 import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills, requiredFieldStatus } from '../lib/registrationType';
 import { DECL_FIELDS } from '../lib/declaration';
+import DeclField from './DeclField';
 import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
@@ -297,8 +298,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       const skErr = validateSkillRows(form.skills, allAgents);
       if (skErr) return skErr;
     }
-    if (!form.tool.trim()) return 'ใส่ Permitted Tools (ประเภท tool ที่อนุญาต)';
-    if (!requiredSkillsValue.trim()) return 'ใส่ Required Skills (ถ้าไม่ต้องใช้ร่วมกับ skill อื่น ให้พิมพ์ "ไม่ต้อง")';
+    const dv = { permittedDomains: form.permittedDomains, prohibitedUses: form.prohibitedUses, tool: form.tool, requiredSkills: requiredSkillsValue, llm: form.llm };
+    for (const f of DECL_FIELDS) if (!String(dv[f.key] ?? '').trim()) return `ใส่ ${f.label} (หรือติ๊ก "${f.none}")`;
     if (!form.owner.trim()) return 'ใส่ Owner team';
     if (!isValidTeamName(form.owner)) return 'ชื่อ Owner team ต้องมีอย่างน้อย 2 ตัวอักษร';
     if (!form.reusable) return 'เลือก Reusable';
@@ -320,13 +321,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     ['Input', /^ใส่ Input/],
     ['Output', /^ใส่ Output/],
     ['Business Value', /Business Value/],
-    ['Permitted Tools', /Permitted Tools/],
-    ['Required Skills', /Required Skills/],
+    ...DECL_FIELDS.map((f) => [f.label, new RegExp(`^ใส่ ${f.label} `)]),
     ['Owner team', /Owner team/],
     ['Reuse Conditions', /Reuse Conditions/],
     ['Reusable', /^เลือก Reusable/],
     ['Human Job', /Human Job/],
   ];
+  // Which declaration field the current validation message is about (drives the red border).
+  const declErr = DECL_FIELDS.find((f) => validationMsg.startsWith(`ใส่ ${f.label} `))?.key || '';
   function goToError(err) {
     if (goToSkillRowError('.mbox.mform', err)) return;
     goToField('.mbox.mform', err, ERROR_FIELDS);
@@ -1056,16 +1058,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
 
             <div className="fsec"><div className="fsec-h"><h4>Scope of use</h4><span>ประกาศขอบเขตตามแบบคัดกรองของธนาคาร</span></div></div>
             <div className="grid2">
-              <div className="fg">
-                <label>Permitted Domains</label>
-                <input value={form.permittedDomains} onChange={(e) => setField('permittedDomains', e.target.value)} placeholder={DECL_FIELDS[0].placeholder} />
-                <div className="fhelp">{DECL_FIELDS[0].hint}</div>
-              </div>
-              <div className="fg">
-                <label>Prohibited Uses</label>
-                <input value={form.prohibitedUses} onChange={(e) => setField('prohibitedUses', e.target.value)} placeholder={DECL_FIELDS[1].placeholder} />
-                <div className="fhelp">{DECL_FIELDS[1].hint}</div>
-              </div>
+              <DeclField field={DECL_FIELDS[0]} value={form.permittedDomains} onChange={(v) => setField('permittedDomains', v)} error={declErr === 'permittedDomains'} />
+              <DeclField field={DECL_FIELDS[1]} value={form.prohibitedUses} onChange={(v) => setField('prohibitedUses', v)} error={declErr === 'prohibitedUses'} />
             </div>
 
             <div className="fg">
@@ -1157,27 +1151,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             {/* Declaration (bank screening D1–D6): purpose = Description above; Domains + Prohibited Uses sit before Business Value; the rest below */}
             <div className="fsec"><div className="fsec-h"><h4>Tools & dependencies</h4></div></div>
             <div className="grid2">
-              <div className="fg">
-                <label>Permitted Tools <span className="req">*</span></label>
-                <input value={form.tool} onChange={(e) => setField('tool', e.target.value)} placeholder={DECL_FIELDS[2].placeholder} />
-                <div className="fhelp">{DECL_FIELDS[2].hint}</div>
-              </div>
-              <div className="fg">
-                <label>Models Tested</label>
-                <input value={form.llm} onChange={(e) => setField('llm', e.target.value)} placeholder={DECL_FIELDS[4].placeholder} />
-                <div className="fhelp">{DECL_FIELDS[4].hint}</div>
-              </div>
+              <DeclField field={DECL_FIELDS[2]} value={form.tool} onChange={(v) => setField('tool', v)} error={declErr === 'tool'} />
+              <DeclField field={DECL_FIELDS[4]} value={form.llm} onChange={(v) => setField('llm', v)} error={declErr === 'llm'} />
             </div>
-            <div className="fg">
-              <label>Required Skills <span className="req">*</span></label>
-              <input
-                value={requiredSkillsValue}
-                onChange={(e) => setField('requiredSkills', e.target.value)}
-                placeholder={isWf ? 'เติมอัตโนมัติจาก skill ใน workflow' : DECL_FIELDS[3].placeholder}
-                readOnly={isWf}
-              />
-              <div className="fhelp">{isWf ? 'เติมอัตโนมัติจาก Starter skill และ skill ที่เพิ่ม' : DECL_FIELDS[3].hint}</div>
-            </div>
+            {isWf ? (
+              <DeclField field={DECL_FIELDS[3]} value={requiredSkillsValue} onChange={() => {}} readOnly hint="เติมอัตโนมัติจาก Starter skill และ skill ที่เพิ่ม" placeholder="เติมอัตโนมัติจาก skill ใน workflow" />
+            ) : (
+              <DeclField field={DECL_FIELDS[3]} value={form.requiredSkills} onChange={(v) => setField('requiredSkills', v)} error={declErr === 'requiredSkills'} />
+            )}
 
             <div className="fg">
               <label>Data Privacy</label>

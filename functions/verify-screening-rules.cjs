@@ -44,7 +44,11 @@ async function connect(key, email) {
     agentName: id, approvalStatus: 'approved', createdBy: creator.uid, creatorEmails: ['cr@arise.tech'],
     devProgress: 40, deploymentStatus: 'none', aiAgent: true, skillMd: false,
   });
-  await Promise.all(['a1', 'a2', 'a3'].map(mk));
+  const staff = await connect('staff', 'st@arise.tech');
+  const committee = await connect('committee', 'cm@arise.tech');
+  await adb.collection('users').doc(staff.uid).set({ role: 'staff', email: 'st@arise.tech' });
+  await adb.collection('users').doc(committee.uid).set({ role: 'committee', email: 'cm@arise.tech' });
+  await Promise.all(['a1', 'a2', 'a3', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6'].map(mk));
 
   const base = (n) => ({
     devProgress: 95, deploymentStatus: 'requested', deployRequestedBy: creator.uid,
@@ -61,6 +65,19 @@ async function connect(key, email) {
   await denied('creator deploy request with an extra unknown key', fsdk.updateDoc(ref(creator, 'a2'), base({ ...extras, sneaky: true })));
   await denied('non-creator cannot file the request', fsdk.updateDoc(ref(other, 'a3'), base(extras)));
   await denied('screening alone (no deploy fields) is not a creator edit', fsdk.updateDoc(ref(creator, 'a3'), { screening: extras.screening, updatedAt: fsdk.serverTimestamp() }));
+
+  // Declaration fields in detail edit (Task 10, 2026-11-27)
+  const five = { permittedDomains: 'DGL', prohibitedUses: 'ไม่มีข้อห้าม', tool: 'ไม่ใช้ tool', requiredSkills: 'ไม่ต้อง', llm: 'ยังไม่ได้ทดสอบ' };
+  const up = () => ({ updatedAt: fsdk.serverTimestamp() });
+  await allowed('creator Tier B edit of all five declaration fields', fsdk.updateDoc(ref(creator, 'd1'), { ...five, ...up() }));
+  await allowed('creator Tier B edit of tool alone', fsdk.updateDoc(ref(creator, 'd2'), { tool: 'n8n', ...up() }));
+  await allowed('creator Tier B edit of five + description', fsdk.updateDoc(ref(creator, 'd2'), { ...five, description: 'x', ...up() }));
+  await denied('five + a non-listed field is denied', fsdk.updateDoc(ref(creator, 'd3'), { ...five, approveArea: ['QA'], ...up() }));
+  await denied('non-owner cannot edit the five', fsdk.updateDoc(ref(other, 'd3'), { ...five, ...up() }));
+  await allowed('staff Tier A edit of the five', fsdk.updateDoc(ref(staff, 'd4'), { ...five, ...up() }));
+  await allowed('committee Tier A edit of the five', fsdk.updateDoc(ref(committee, 'd5'), { ...five, ...up() }));
+  await adb.collection('agents').doc('d6').update({ deploymentStatus: 'requested' });
+  await denied('creator cannot edit the five once a deploy request is in flight', fsdk.updateDoc(ref(creator, 'd6'), { ...five, ...up() }));
 
   // Workflow registration (2026-11-26): the doc the form builds must pass the create rule.
   const starter = { agentName: 'Starter', aiAgent: false, skillMd: true, approvalStatus: 'pending', createdBy: creator.uid, creatorEmails: ['cr@arise.tech'], matchingAgent: 'Flow', devProgress: 0, deploymentStatus: 'none', createdAt: fsdk.serverTimestamp(), updatedAt: fsdk.serverTimestamp() };

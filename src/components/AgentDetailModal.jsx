@@ -8,6 +8,7 @@ import { checklistFor, checklistGate, buildDeployChecklist } from '../lib/deploy
 import { questionsToAsk, deployGate, buildScreening, normalizeAnswers } from '../lib/screening';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
+import DeclField from './DeclField';
 import { assessmentRecord } from '../lib/assessments';
 import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
@@ -1136,10 +1137,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                           {missingDecl.map((k) => {
                             const f = DECL_FIELDS.find((x) => x.key === k);
                             return (
-                              <div className="fg" key={k}>
-                                <label>{f.label} *</label>
-                                <input value={deployDecl[k] ?? ''} placeholder={f.placeholder} onChange={(e) => setDeployDecl((p) => ({ ...p, [k]: e.target.value }))} />
-                              </div>
+                              <DeclField key={k} field={f} value={deployDecl[k] ?? ''} onChange={(v) => setDeployDecl((p) => ({ ...p, [k]: v }))} />
                             );
                           })}
                         </div>
