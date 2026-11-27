@@ -7,3 +7,6 @@ export function nextItem(items, currentId, mode) {
   const ordered = [...items.slice(i + 1), ...items.slice(0, Math.max(i, 0))];
   return ordered.find((x) => x.id !== currentId && isAssessable(x, mode))?.id ?? null;
 }
+
+// Escape text for use inside a RegExp (labels may contain regex characters).
+export const escapeRe = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

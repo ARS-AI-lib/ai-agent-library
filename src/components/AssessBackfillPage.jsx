@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import PageHeader from './PageHeader';
 import DeclField from './DeclField';
 import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
@@ -7,7 +7,7 @@ import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { getFunctions, httpsCallable } from '../lib/callable';
 import { DECL_FIELDS } from '../lib/declaration';
 import { goToField } from '../lib/formFocus';
-import { nextItem, isAssessable } from '../lib/assessmentBackfill';
+import { nextItem, isAssessable, escapeRe } from '../lib/assessmentBackfill';
 import { optionOf } from '../lib/screening';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';
@@ -25,7 +25,8 @@ const fmtDate = (ms) => (ms ? new Date(ms).toLocaleDateString('th-TH', { day: 'n
 const fmtDue = (d) => { const [y, m, dd] = String(d).split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }); };
 
 export default function AssessBackfillPage() {
-  const { user, loading, roleReady } = useAuth();
+  const { user, loading, roleReady, signIn, domainError } = useAuth();
+  const busyRef = useRef(false);
   const config = useScreeningConfig();
   const qs = useMemo(() => new URLSearchParams(window.location.search), []);
   const review = qs.get('review') === '1';
@@ -44,7 +45,12 @@ export default function AssessBackfillPage() {
     try { const d = await call('backfillMyItems', {}); setData(d); return d; }
     catch (e) { setError(failMsg('โหลดรายการ', e)); return null; }
   };
-  useEffect(() => { if (user) load(); }, [user]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    call('backfillMyItems', {}).then((d) => { if (!cancelled) setData(d); }).catch((e) => { if (!cancelled) setError(failMsg('โหลดรายการ', e)); });
+    return () => { cancelled = true; };
+  }, [user]);
 
   const items = data?.items || [];
   const wanted = qs.get('agent');
@@ -60,46 +66,65 @@ export default function AssessBackfillPage() {
   }, [data]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const cur = items.find((x) => x.id === curId) || null;
-  const select = (id) => { setCurId(id); setAnswers({}); setDecl({}); setError(''); setDeclErr(''); setResult(null); };
+  const sync = (id) => { try { const u = new URL(window.location.href); if (id) u.searchParams.set('agent', id); else u.searchParams.delete('agent'); window.history.replaceState(null, '', u); } catch { /* ignore */ } };
+  const select = (id) => { sync(id); setCurId(id); setAnswers({}); setDecl({}); setError(''); setDeclErr(''); setResult(null); };
   const doneCount = items.filter((x) => x.status !== 'not_done').length;
 
   async function submit() {
+    if (busyRef.current) return;
     setError(''); setDeclErr('');
     const missing = (cur.missingDecl || []).find((k) => !String(decl[k] ?? '').trim());
     if (missing) {
       const label = FIELDS.find(([k]) => k === missing)?.[1] || missing;
       const none = DECL_FIELDS.find((f) => f.key === missing)?.none;
       const msg = none ? `ใส่ ${label} (หรือติ๊ก "${none}")` : `ใส่ ${label}`;
-      setDeclErr(missing); setError(msg); goToField('.abf-wrap', msg, FIELDS.map(([, l]) => [l, new RegExp(l)])); return;
+      setDeclErr(missing); setError(msg); goToField('.abf-wrap', msg, FIELDS.map(([, l]) => [l, new RegExp(`^${escapeRe(l)}`)])); return;
     }
     const unanswered = config.questions.find((q) => !optionOf(config, q.id, answers[q.id]));
-    if (unanswered) { setError(`ตอบคำถามให้ครบ — ยังไม่ได้ตอบ ${unanswered.code}`); goToField('.abf-wrap', '', []); return; }
-    setBusy(true);
+    if (unanswered) {
+      setError(`ตอบคำถามให้ครบ — ยังไม่ได้ตอบ ${unanswered.code}`);
+      setTimeout(() => { const el = document.querySelector(`.abf-wrap [data-q="${unanswered.id}"]`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); el?.querySelector('input[type=radio]')?.focus({ preventScroll: true }); }, 0);
+      return;
+    }
+    busyRef.current = true; setBusy(true);
     try {
       const r = await call('backfillSubmit', { agentId: cur.id, answers, decl, mode });
       setResult({ id: cur.id, status: r.status, level: r.level });
-      await load();
+      const d = await load();
+      if (!d) setError('ส่งผลประเมินแล้ว แต่โหลดรายการใหม่ไม่สำเร็จ — โปรดรีเฟรชหน้า');
     } catch (e) {
       if (/already-exists/.test(e?.code || '') || /ประเมินแล้ว/.test(e?.message || '')) { await load(); setError(''); }
       else setError(failMsg('ส่งผลประเมิน', e));
-    } finally { setBusy(false); }
+    } finally { busyRef.current = false; setBusy(false); }
   }
   function goNext() {
     const id = nextItem(items, result.id, mode);
-    setResult(null); setAnswers({}); setDecl({}); setCurId(id);
+    sync(id); setResult(null); setAnswers({}); setDecl({}); setCurId(id);
   }
 
   if (loading) return <div className="tl-center"><div className="spin" /><span>กำลังโหลด…</span></div>;
-  if (!roleReady) return <div className="tl-center"><div className="spin" /><span>กำลังตรวจสิทธิ์…</span></div>;
-  if (!user) return <div className="tl-center"><h2>Access restricted</h2><p style={{ color: 'var(--mu)', fontSize: 13 }}>กรุณา sign in ที่หน้า Library ก่อน</p></div>;
+  if (!user) {
+    return (
+      <div className="tl-center">
+        <h2>Sign in to assess</h2>
+        <p style={{ color: 'var(--mu)', fontSize: 13 }}>หน้านี้ใช้ได้เฉพาะบัญชีขององค์กร</p>
+        {domainError && <div className="msg error" style={{ marginBottom: 12 }}><span className="dot" style={{ background: '#ea4335' }} />{domainError}</div>}
+        <button className="btn btn-primary" onClick={() => signIn().catch((e) => setError(failMsg('เข้าสู่ระบบ', e)))}>ลงชื่อเข้าใช้ด้วย Google</button>
+        {error && <p style={{ color: 'var(--late)' }}>{error}</p>}
+      </div>
+    );
+  }
+  if (!roleReady) return <div className="tl-center"><div className="spin" /><span>กำลังตรวจสอบสิทธิ์…</span></div>;
 
   const allDone = data && !items.some((x) => isAssessable(x, mode));
-  const doneCard = cur && !isAssessable(cur, mode) && (
+  const doneCard = cur && !isAssessable(cur, mode) && (review && cur.status === 'not_done' ? (
+    <div className="abf-note">รายการนี้ยังไม่ได้ประเมิน — ขอประเมินใหม่ได้เฉพาะรายการที่ไม่ผ่าน</div>
+  ) : (
     <div className="abf-note">
       ประเมินแล้วโดย {cur.doneBy || '—'} เมื่อ {fmtDate(cur.doneAt)}
       <div className="abf-meta">ผลประเมิน: {cur.status === 'pass' ? 'ผ่าน' : cur.status === 'fail' ? 'ไม่ผ่าน' : cur.status === 'pending_review' ? 'รอ Approver ยืนยัน' : cur.status}</div>
     </div>
-  );
+  ));
 
   return (
     <>

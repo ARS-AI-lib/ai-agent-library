@@ -152,5 +152,8 @@ eq('assessable backfill', B.isAssessable(it('x', 'not_done'), 'backfill'), true)
 eq('assessable backfill done', B.isAssessable(it('x', 'pass'), 'backfill'), false);
 eq('assessable review fail', B.isAssessable(it('x', 'fail'), 'review'), true);
 eq('assessable review not_done', B.isAssessable(it('x', 'not_done'), 'review'), false);
+eq('nextItem empty', B.nextItem([], 'a', 'backfill'), null);
+eq('nextItem unknown current', B.nextItem(L, 'zzz', 'backfill'), 'a');
+eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -20,7 +20,7 @@ export function ScreeningQuestions({ config, questionIds, answers, onChange, blo
               const picked = optionOf(config, q.id, answers[q.id]);
               const blocks = !!(picked && blockKey && picked[blockKey]);
               return (
-                <div key={q.id} className="as-q">
+                <div key={q.id} className="as-q" data-q={q.id}>
                   <div className="as-qt">
                     <span className="as-code">{q.code}</span>
                     <div>
