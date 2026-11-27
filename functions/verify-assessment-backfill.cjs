@@ -180,6 +180,12 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   eq('csv bangkok dates', lines([row({ firstAssessedAt: Date.UTC(2026, 10, 26, 18, 0), lastAssessedAt: Date.UTC(2026, 10, 27, 1, 0) })], '2026-12-01')[1].split(',').slice(8), ['2026-11-27', '2026-11-27', '2026-12-01']);
   eq('csv empty dates', lines([row({})], '')[1].split(',').slice(8), ['', '', '']);
   eq('csv reasons', lines([row({ status: 'fail', reasons: ['C7', 'High'] })], 'd')[1].split(',')[7], 'C7; High');
+  eq('csv blank due date (empty)', lines([row({})], '')[1].split(',')[10], '');
+  eq('csv blank due date (undefined)', lines([row({})], undefined)[1].split(',')[10], '');
+  eq('csv due date given', lines([row({})], '2026-12-01')[1].split(',')[10], '2026-12-01');
+  eq('filter fail includes pending_review', ['pass', 'fail', 'pending_review', 'not_done'].map((s) => B.matchesStatus(s, 'fail')), [false, true, true, false]);
+  eq('filter pass excludes pending_review', B.matchesStatus('pending_review', 'pass'), false);
+  eq('filter all', B.matchesStatus('not_done', 'all'), true);
   eq('summarize', B.summarize([row({ status: 'pass', creators: ['a'] }), row({ status: 'fail', creators: ['a'] }), row({ status: 'pending_review' }), row({ creators: ['a'] }), row({})]), { items: 5, done: 3, notDone: 2, noEmail: 2 });
 }
 console.log(`\n${pass} passed, ${fail} failed`);

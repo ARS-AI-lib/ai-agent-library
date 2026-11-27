@@ -37,3 +37,6 @@ export function summarize(rows) {
   const notDone = rows.filter((r) => r.status === 'not_done').length;
   return { items: rows.length, done: rows.length - notDone, notDone, noEmail: rows.filter((r) => !(r.creators || []).length).length };
 }
+
+// Status filter predicate: 'fail' (labelled "Not pass") also covers pending_review rows.
+export const matchesStatus = (status, filter) => filter === 'all' || status === filter || (filter === 'fail' && status === 'pending_review');

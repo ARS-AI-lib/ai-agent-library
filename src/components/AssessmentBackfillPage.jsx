@@ -3,7 +3,7 @@ import PageHeader from './PageHeader';
 import { useAuth } from '../hooks/useAuth';
 import { getFunctions, httpsCallable } from '../lib/callable';
 import { goToField } from '../lib/formFocus';
-import { backfillCsv, summarize, STATUS_LABEL } from '../lib/assessmentBackfill';
+import { backfillCsv, summarize, matchesStatus, STATUS_LABEL } from '../lib/assessmentBackfill';
 import { bangkokDay } from '../lib/assessments';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';
@@ -49,11 +49,14 @@ export default function AssessmentBackfillPage() {
   const [statusF, setStatusF] = useState('all');
 
   const canView = !!user && ROLES.includes(role);
+  const aliveRef = useRef(true);
+  useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; }; }, []);
   const load = async () => {
-    try { setData(await call('backfillList', {})); return true; }
-    catch (e) { setError(failMsg('โหลดรายการ', e)); return false; }
+    try { const d = await call('backfillList', {}); if (aliveRef.current) { setData(d); setError(''); } return true; }
+    catch (e) { if (aliveRef.current) setError(failMsg('โหลดรายการ', e)); return false; }
   };
   useEffect(() => { if (canView) load(); }, [canView]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPreview(null); }, [dueDate, channels]);
 
   const rows = data?.rows || [];
   const sum = useMemo(() => summarize(rows), [rows]);
@@ -61,7 +64,7 @@ export default function AssessmentBackfillPage() {
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
     return rows
-      .filter((r) => (statusF === 'all' || r.status === statusF)
+      .filter((r) => matchesStatus(r.status, statusF)
         && (!t || r.name.toLowerCase().includes(t) || (r.creators || []).some((c) => c.toLowerCase().includes(t))))
       .sort((a, b) => (a.status === 'not_done' ? 0 : 1) - (b.status === 'not_done' ? 0 : 1) || a.name.localeCompare(b.name));
   }, [rows, q, statusF]);
@@ -113,6 +116,7 @@ export default function AssessmentBackfillPage() {
         {error && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{error}</div>}
         {notice && <div className="abf-note ok">{notice}</div>}
         {!data && !error && <div className="tl-center"><div className="spin" /></div>}
+        {!data && error && <div className="abf-actions"><button className="btn" onClick={() => { setError(''); load(); }}>Retry</button></div>}
         {data && (
           <>
             <div className="abf-kpis">
@@ -173,7 +177,7 @@ export default function AssessmentBackfillPage() {
                 </select>
               </label>
               <button className="btn" onClick={() => {
-                const blob = new Blob(['﻿', backfillCsv(rows, dueDate)], { type: 'text/csv;charset=utf-8;' });
+                const blob = new Blob(['﻿', backfillCsv(rows, data?.campaign?.dueDate || '')], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a'); a.href = url; a.download = `assessment-backfill-${bangkokDay(new Date())}.csv`; a.click(); URL.revokeObjectURL(url);
               }}>Download CSV</button>
