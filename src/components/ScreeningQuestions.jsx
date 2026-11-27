@@ -70,8 +70,8 @@ export function ScreeningSide({ config, answers, questionIds, stage, blockKey })
       {(blocking.length > 0 || r.must.length > 0 || r.should.length > 0) && (
         <div className="as-list">
           {blocking.map((q) => <div key={`b${q.id}`} className="as-li"><span className="as-pill must">Blocks</span>{q.code} {q.th.split(' ').slice(0, 6).join(' ')}</div>)}
-          {r.must.filter((m) => !blocking.some((q) => q.id === m.id)).map((m) => <div key={`m${m.id}`} className="as-li"><span className="as-pill must">Must fix</span>{m.item}</div>)}
-          {r.should.map((m) => <div key={`s${m.id}`} className="as-li"><span className="as-pill should">Should fix</span>{m.item} {(questionById(config, m.id).advice || '').slice(0, 60)}</div>)}
+          {r.must.filter((m) => !blocking.some((q) => q.id === m.id)).map((m) => <div key={`m${m.id}`} className="as-li"><span className="as-pill must">Required fix</span>{m.item}</div>)}
+          {r.should.map((m) => <div key={`s${m.id}`} className="as-li"><span className="as-pill should">Recommended</span>{m.item} {(questionById(config, m.id).advice || '').slice(0, 60)}</div>)}
         </div>
       )}
     </aside>
@@ -88,8 +88,8 @@ export function ScreeningSummary({ agent, config }) {
   const labels = cl ? (CHECKLIST[cl.tier] || []).filter((i) => (cl.checked || []).includes(i.id)).map((i) => i.label) : [];
   const fixes = (res) => (
     <>
-      {res.must?.length > 0 && <span className="scr-sum-must"> · Must fix {res.must.map(code).join(', ')}</span>}
-      {res.should?.length > 0 && <span> · Should fix {res.should.map(code).join(', ')}</span>}
+      {res.must?.length > 0 && <span className="scr-sum-must"> · Required fix {res.must.map(code).join(', ')}</span>}
+      {res.should?.length > 0 && <span> · Recommended {res.should.map(code).join(', ')}</span>}
     </>
   );
   return (

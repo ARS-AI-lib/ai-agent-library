@@ -25,7 +25,7 @@ import Hint from './Hint';
  */
 const USAGE_ROLES = ['admin', 'committee', 'staff', 'approver'];
 
-export default function UsageReportPage() {
+export default function UsageReportPage({ embedded = false }) {
   const { user, role, loading, roleReady } = useAuth();
   const [rows, setRows] = useState(null);   // null = not loaded yet
   const [scoped, setScoped] = useState(false);
@@ -129,7 +129,7 @@ export default function UsageReportPage() {
 
   return (
     <div>
-      <PageHeader user={user} />
+      {!embedded && <PageHeader user={user} />}
 
       <div className="usage-page">
         <div className="usage-head">

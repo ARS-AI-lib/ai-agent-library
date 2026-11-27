@@ -12,7 +12,7 @@ import '../styles/Screening.css';
 const uid = (p) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const move = (arr, i, d) => { const j = i + d; if (j < 0 || j >= arr.length) return arr; const a = [...arr]; [a[i], a[j]] = [a[j], a[i]]; return a; };
-const FIXES = [['none', 'No'], ['should', 'Should'], ['must', 'Must']];
+const FIXES = [['none', 'None'], ['should', 'Recommended'], ['must', 'Required']];
 const newOption = () => ({ id: uid('o'), th: '', en: '', score: 0, fix: 'none', blocksPre: false, blocksDeploy: false });
 
 export default function AssessmentSettingsModal({ onClose }) {
@@ -166,8 +166,8 @@ export default function AssessmentSettingsModal({ onClose }) {
                           <button type="button" onClick={() => patchO(oi, { score: Math.min(100, o.score + 1) })} aria-label="Increase score">+</button>
                         </span>
                       </label>
-                      <label>Needs fixing
-                        <span className="ast-fix" role="radiogroup" aria-label="Needs fixing">
+                      <label>Fix level
+                        <span className="ast-fix" role="radiogroup" aria-label="Fix level">
                           {FIXES.map(([v, l]) => <button key={v} type="button" role="radio" aria-checked={o.fix === v} className={o.fix === v ? 'on' : ''} onClick={() => patchO(oi, { fix: v })}>{l}</button>)}
                         </span>
                       </label>

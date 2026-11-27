@@ -39,6 +39,9 @@ import ExportDataModal from './components/ExportDataModal';
 import RoleGroupManagerModal from './components/RoleGroupManagerModal';
 import AssessmentMenuModal from './components/AssessmentMenuModal';
 import AssessmentSettingsModal from './components/AssessmentSettingsModal';
+import ReportModal from './components/ReportModal';
+import UsageReportPage from './components/UsageReportPage';
+import AssessmentResultsPage from './components/AssessmentResultsPage';
 import UploadEndpointFileModal from './components/UploadEndpointFileModal';
 import EditAgentModal from './components/EditAgentModal';
 import SDLCTab from './components/SDLCTab';
@@ -215,6 +218,8 @@ export default function App() {
   const [showRoleGroups, setShowRoleGroups] = useState(false);
   const [showAssessmentMenu, setShowAssessmentMenu] = useState(false);
   const [showAssessmentSettings, setShowAssessmentSettings] = useState(false);
+  const [showUsage, setShowUsage] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
 
   // Deep links from Teams notifications (2026-09-28): ?agent=<id> opens that
@@ -537,6 +542,7 @@ export default function App() {
         onOpenExport={() => setShowExport(true)}
         onOpenRoleGroups={() => setShowRoleGroups(true)}
         onOpenAssessment={() => setShowAssessmentMenu(true)}
+        onOpenUsage={() => setShowUsage(true)}
         canSeeAssessment={isAdmin || isCommittee || role === 'approver'}
         canManageRoleGroups={isAdmin || isCommittee}
         canPostAnnouncement={canPostAnnouncements(role)}
@@ -737,7 +743,14 @@ export default function App() {
           onClose={() => setShowAssessmentMenu(false)}
           canSettings={isAdmin || isCommittee}
           onOpenSettings={() => setShowAssessmentSettings(true)}
+          onOpenResults={() => setShowResults(true)}
         />
+      )}
+      {showUsage && (
+        <ReportModal label="Agent/Skill Usage" onClose={() => setShowUsage(false)}><UsageReportPage embedded /></ReportModal>
+      )}
+      {showResults && (
+        <ReportModal label="Assessment Results" onClose={() => setShowResults(false)}><AssessmentResultsPage embedded /></ReportModal>
       )}
       {showAssessmentSettings && (isAdmin || isCommittee) && (
         <AssessmentSettingsModal onClose={() => setShowAssessmentSettings(false)} />

@@ -29,6 +29,19 @@ export function exportRecordsCsv(config, records, name) {
 }
 
 const STATUS_CLASS = { ok: '', fix: 'fix', unanswered: 'muted', removed: 'muted' };
+// Tooltip for an issue chip: which question and what to do about it.
+const issueTitle = (config, code) => { const q = config.questions.find((x) => x.code === code); return q ? `${q.code} ${q.th}${q.advice ? ` — ${q.advice}` : ''}` : code; };
+
+// Explains the Issues column once, above the table.
+export function IssuesLegend() {
+  return (
+    <div className="asr-legend">
+      <span className="asr-chip req">Required fix</span> ต้องแก้ก่อนนำไปใช้งาน
+      <span className="asr-chip rec">Recommended</span> ควรแก้ แต่ไม่บล็อก
+      <span className="asr-muted">· ชี้ที่ป้ายเพื่อดูคำถามและวิธีแก้</span>
+    </div>
+  );
+}
 
 // Detail of one Agent/Skill: Declaration (D) on top, then the answers (C) per stage with points.
 function AgentDetail({ config, row }) {
@@ -80,10 +93,10 @@ export function RecordsTable({ config, records, groupOwner }) {
           <td className="usage-mono asr-num">{r.hasPre ? r.preScore : '—'}</td>
           <td className="usage-mono asr-num">{r.deployScore ?? '—'}</td>
           <td className="usage-mono asr-num asr-total">{r.total}</td>
-          <td className="usage-dim">
-            {r.must.length > 0 && <span className="scr-sum-must">Must {r.must.join(', ')} </span>}
-            {r.should.length > 0 && <span>Should {r.should.join(', ')}</span>}
-            {!r.must.length && !r.should.length && '—'}
+          <td>
+            {r.must.map((c) => <span key={`m${c}`} className="asr-chip req" title={issueTitle(config, c)}>{c} · Required fix</span>)}
+            {r.should.map((c) => <span key={`s${c}`} className="asr-chip rec" title={issueTitle(config, c)}>{c} · Recommended</span>)}
+            {!r.must.length && !r.should.length && <span className="asr-muted">None</span>}
           </td>
           <td className="usage-dim">{(r.approveArea || []).join(', ') || '—'}</td>
         </tr>
@@ -94,7 +107,7 @@ export function RecordsTable({ config, records, groupOwner }) {
   return (
     <div className="usage-scroll">
       <table className="usage-table">
-        <thead><tr><th>Last update</th><th>Agent/Skill Name</th><th>Level</th><th className="asr-num">Pre-assessment</th><th className="asr-num">Deploy request</th><th className="asr-num">Total</th><th>Fix</th><th>Area</th></tr></thead>
+        <thead><tr><th>Last update</th><th>Agent/Skill Name</th><th>Level</th><th className="asr-num">Pre-assessment</th><th className="asr-num">Deploy request</th><th className="asr-num">Total</th><th>Issues</th><th>Area</th></tr></thead>
         {groups.map((g) => (
           <tbody key={g.owner ?? 'all'}>
             {g.owner !== null && <tr className="usage-group"><td colSpan={COLS}>{g.owner}<span className="usage-badge">{g.rows.length}</span></td></tr>}
@@ -170,7 +183,7 @@ function ArchivedPanel({ liveRecords, onChanged }) {
   );
 }
 
-export default function AssessmentResultsPage() {
+export default function AssessmentResultsPage({ embedded = false }) {
   const { user, role, approveAreas, loading, roleReady } = useAuth();
   const config = useScreeningConfig();
   const [records, setRecords] = useState(null);
@@ -213,7 +226,7 @@ export default function AssessmentResultsPage() {
 
   return (
     <div>
-      <PageHeader user={user} />
+      {!embedded && <PageHeader user={user} />}
       <div className="usage-page">
         <div className="usage-head">
           <div>
@@ -269,7 +282,7 @@ export default function AssessmentResultsPage() {
             <div className="usage-count">{new Set(filtered.map((r) => r.agentId)).size} Agent/Skill · {filtered.length} assessment</div>
             {filtered.length === 0
               ? <div className="empty-state">ยังไม่มีผล assessment ตามเงื่อนไขนี้</div>
-              : <RecordsTable config={config} records={filtered} groupOwner={groupOwner} />}
+              : <><IssuesLegend /><RecordsTable config={config} records={filtered} groupOwner={groupOwner} /></>}
           </>
         )}
         </>)}

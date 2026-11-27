@@ -47,7 +47,7 @@ export default function Nav({
   agentCount, skillCount,
   user, role, onSignOut,
   activeTab, setActiveTab,
-  onOpenExport, onOpenRoleGroups, canManageRoleGroups, onOpenAssessment, canSeeAssessment, onNewAnnouncement, canPostAnnouncement, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
+  onOpenExport, onOpenRoleGroups, canManageRoleGroups, onOpenAssessment, canSeeAssessment, onOpenUsage, onNewAnnouncement, canPostAnnouncement, onOpenUpload, canUploadFiles, canSeeTimeline, canSeeUsage, canSeeWorkshop, canSeeDashboard, isAdmin,
   onOpenMySubmissions, onOpenGlossary, mySubsNeedAction = 0,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -103,7 +103,7 @@ export default function Nav({
 
   const reports = [
     canSeeTimeline && { k: 'timeline', label: 'SDLC Timeline', on: () => go('/timeline') },
-    canSeeUsage && { k: 'usage', label: 'Agent/Skill Usage', on: () => go('/usage') },
+    canSeeUsage && { k: 'usage', label: 'Agent/Skill Usage', on: () => { onOpenUsage?.(); close(); } },
     canSeeWorkshop && { k: 'workshop', label: 'Workshop', on: () => go('/workshop') },
   ].filter(Boolean);
   const admin = [

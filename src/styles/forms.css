@@ -63,3 +63,18 @@
 
 /* the Edit form's .mbox drops to 16px/12px padding on phones — keep the bar flush with the box edge */
 @media (max-width: 480px) { .mbox > .fsticky { margin: 22px -12px -16px; padding: 12px; } }
+
+/* ── Large report popup (Usage, Assessment Results) ── */
+body.v7 .mbox.xl { max-width: min(1360px, 96vw); width: 100%; height: 92vh; max-height: 92vh; padding: 0; overflow: auto; }
+.mbox.xl .usage-page { max-width: none; padding: 22px 26px 40px; }
+.mbox.xl .usage-head { padding-right: 44px; }
+
+/* ── Row states (2026-11-27): hover / selected / expanded rows must never share the header colour
+   (--sf2). Headers stay grey; rows use the tint blue that marks "selected" everywhere in V7. ── */
+:root { --row-hover: color-mix(in srgb, var(--tint) 55%, var(--sf)); --row-sel: var(--tint); }
+body.v7 .usage-table tbody tr:hover td { background: var(--row-hover); }
+body.v7 .usage-table tbody tr.usage-group:hover td { background: var(--sf2); }
+.v7-list-row:not(.v7-list-head):hover { background: var(--row-hover); }
+.dash-tbl tbody tr:hover td { background: var(--row-hover); }
+.asr-row.open td, .asr-row.open:hover td { background: var(--row-sel); }
+.asr-detail-cell { background: color-mix(in srgb, var(--tint) 30%, var(--sf)) !important; }

@@ -67,7 +67,7 @@ export function answerText(config, r, q) {
 const safeCell = (v) => (typeof v === 'string' && /^[=+\-@\t\r]/.test(v) ? `'${v}` : v);
 
 export function recordCsv(config, records) {
-  const headers = ['Date', 'Owner', 'Agent/Skill', 'Stage', 'Level', 'Score', 'Must fix', 'Should fix', ...DECL_COLUMNS.map((c) => c.label), ...config.questions.map((q) => q.code)];
+  const headers = ['Date', 'Owner', 'Agent/Skill', 'Stage', 'Level', 'Score', 'Required fixes', 'Recommended fixes', ...DECL_COLUMNS.map((c) => c.label), ...config.questions.map((q) => q.code)];
   const rows = records.map((r) => {
     const e = recordResult(config, r);
     return [
@@ -134,7 +134,7 @@ export function answerLabel(d) {
 }
 
 export function agentCsv(config, rows) {
-  const headers = ['Date', 'Owner', 'Agent/Skill', 'Level', 'Pre-assessment score', 'Deploy request score', 'Total score', 'Must fix', 'Should fix', ...DECL_COLUMNS.map((c) => c.label), ...config.questions.map((q) => q.code)];
+  const headers = ['Date', 'Owner', 'Agent/Skill', 'Level', 'Pre-assessment score', 'Deploy request score', 'Total score', 'Required fixes', 'Recommended fixes', ...DECL_COLUMNS.map((c) => c.label), ...config.questions.map((q) => q.code)];
   const out = rows.map((r) => [
     bangkokDateTime(r.createdAt), safeCell(r.owner || ''), safeCell(r.agentName || ''), r.level || '',
     r.preScore, r.deployScore ?? '', r.total, r.must.join(' '), r.should.join(' '),
