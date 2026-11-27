@@ -2410,20 +2410,24 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 3600, secrets: [TEAM
   const t0 = Date.now();
   const { uid, email } = await bfPrep(request, 'backfillSend', ['admin', 'committee']);
   const { dueDate, channels, testOnly, preview } = request.data || {};
+  let msgOv; let pickIds;
+  try { msgOv = BF.validateMessage(request.data?.message); pickIds = BF.validateAgentIds(request.data?.agentIds); } catch (e) { throw bfToHttps(e); }
   const dueErr = BF.validateDueDate(dueDate, new Date());
   if (dueErr) throw new HttpsError('invalid-argument', dueErr);
   const chans = (Array.isArray(channels) ? channels : []).filter((c) => ['inbox', 'teams', 'email'].includes(c));
   if (!chans.length && !preview) throw new HttpsError('invalid-argument', 'เลือกช่องทางอย่างน้อย 1 ช่อง');
   const [config, all] = await Promise.all([bfConfig(), bfAgents()]);
-  const rows = all.filter((a) => BF.inBackfillScope(a, all)).map((a) => ({ agent: a, status: BF.backfillStatus(a, config) }));
+  // Scope and status are always re-derived here; agentIds only narrows the not_done set.
+  const rows = BF.selectRows(all.filter((a) => BF.inBackfillScope(a, all)).map((a) => ({ agent: a, status: BF.backfillStatus(a, config) })), pickIds);
   const { digests, noEmail } = BF.creatorDigests(rows);
   const dueLabel = BF.formatDueDate(new Date(`${dueDate}T05:00:00Z`));
   const dir = new Map((await bfUsers()).map((u) => [String(u.email || '').toLowerCase(), u]));
-  const render = (d) => BF.renderBackfillMessage({ displayName: (dir.get(d.email)?.displayName || '').split(' ')[0], items: d.items, dueDate: dueLabel, appUrl: BF_APP_URL });
+  const render = (d) => BF.renderBackfillMessage({ displayName: (dir.get(d.email)?.displayName || '').split(' ')[0], items: d.items, dueDate: dueLabel, appUrl: BF_APP_URL, overrides: msgOv });
+  if (!preview && pickIds && !digests.length) throw new HttpsError('invalid-argument', 'ไม่ได้เลือกรายการที่ต้องส่ง');
   if (preview) {
     if (!digests.length) throw new HttpsError('failed-precondition', 'ไม่มีรายการที่ต้องส่ง');
     const m = render(digests[0]);
-    return { preview: { subject: m.subject, text: m.text, html: m.html }, count: digests.length };
+    return { preview: { subject: m.subject, text: m.text, html: m.html }, count: digests.length, defaults: BF.defaultMessageParts(dueLabel) };
   }
   const allTargets = testOnly ? [digests.find((d) => d.email === email) || digests[0]].filter(Boolean).map((d) => ({ ...d, to: email })) : digests.map((d) => ({ ...d, to: d.email }));
   // 10 s between creators (user order); the 3300 s deadline guard (timeout 3600) truncates first for large batches.

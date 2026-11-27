@@ -279,6 +279,14 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   eq('selectionState none', B.selectionState(new Set(), RR), 'none');
   eq('selectionState no selectable', B.selectionState(new Set(), [RR[2]]), 'none');
   eq('pruneSelection', [...B.pruneSelection(new Set(['a', 'zz', 'c']), RR)], ['a']);
+  eq('phase all', B.matchesPhase('Pilot', 'all'), true);
+  eq('phase pilot', B.matchesPhase('Pilot', 'Pilot'), true);
+  eq('phase mismatch', B.matchesPhase('Ready to Use', 'Pilot'), false);
+  const FR = [{ id: 'a', name: 'Alpha', creators: ['x@a'], status: 'not_done', phase: 'Pilot' }, { id: 'b', name: 'Beta', creators: ['x@a'], status: 'not_done', phase: 'Ready to Use' }, { id: 'c', name: 'Alpha2', creators: [], status: 'pass', phase: 'Pilot' }];
+  eq('filterRows all three', B.filterRows(FR, { q: 'alpha', status: 'not_done', phase: 'Pilot' }).map((r) => r.id), ['a']);
+  eq('filterRows phase only', B.filterRows(FR, { q: '', status: 'all', phase: 'Ready to Use' }).map((r) => r.id), ['b']);
+  eq('filterRows search creator + status', B.filterRows(FR, { q: 'x@a', status: 'not_done', phase: 'all' }).map((r) => r.id), ['a', 'b']);
+  eq('filter-out selection retained', [...B.selectAllFiltered(new Set(['b']), B.filterRows(FR, { q: '', status: 'all', phase: 'Pilot' }), true)].sort(), ['a', 'b']);
   // F2 wording
   const T = { sent: 0, held: 0, skipped: 0, dryRun: 0, disabled: 0, failed: 0 };
   eq('summary inbox + dry run', R.summarizeSend({ inbox: 12, ...T, dryRun: 12 }), 'ส่ง Inbox แล้ว 12 ข้อความ · Teams/Email: ไม่ได้ส่งจริง (dry run 12)');

@@ -72,3 +72,11 @@ export function selectionCounts(rows, set) {
   return { items: chosen.length, creators: new Set(chosen.flatMap((r) => r.creators || [])).size };
 }
 export const pruneSelection = (set, rows) => new Set([...set].filter((id) => (rows || []).some((r) => r.id === id && selectable(r))));
+
+// Phase filter ('all' | 'Pilot' | 'Ready to Use') and the combined Search + Status + Phase filter.
+export const matchesPhase = (phase, filter) => filter === 'all' || phase === filter;
+export function filterRows(rows, { q = '', status = 'all', phase = 'all' } = {}) {
+  const t = String(q).trim().toLowerCase();
+  return (rows || []).filter((r) => matchesStatus(r.status, status) && matchesPhase(r.phase, phase)
+    && (!t || r.name.toLowerCase().includes(t) || (r.creators || []).some((c) => c.toLowerCase().includes(t))));
+}

@@ -24,10 +24,15 @@
 .abf-kpi.bad b { color: var(--late, #ea4335); }
 .abf-chk { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 13.5px; }
 .abf-chk label { display: inline-flex; gap: 6px; align-items: center; }
-.abf-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-.abf-preview { border: 1px solid var(--bd, #e5e7eb); border-radius: 10px; padding: 12px 14px; margin-top: 12px; font-size: 13px; }
+.abf-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0 20px; }
+.abf-preview { border: 1px solid var(--bd, #e5e7eb); border-radius: 10px; padding: 12px 14px; margin: 12px 0 20px; font-size: 13px; }
 .abf-preview pre { white-space: pre-wrap; font: inherit; margin: 6px 0 0; }
 .abf-nomail { color: var(--late, #ea4335); font-weight: 600; }
 .abf-reason { color: var(--mu); font-size: 12px; }
 @media (max-width: 800px) { .abf-kpis { grid-template-columns: 1fr 1fr; } }
-
+.abf-msg { margin-top: 14px; }
+.abf-msg .abf-sub { display: block; margin-top: 10px; font-size: 12.5px; }
+.abf-msg input, .abf-msg textarea { width: 100%; box-sizing: border-box; }
+.abf-msg .btn { margin-top: 10px; }
+.abf-selcol { width: 32px; text-align: center; }
+.abf-wrap .usage-filters { margin-top: 20px; }

@@ -3,7 +3,7 @@ import PageHeader from './PageHeader';
 import { useAuth } from '../hooks/useAuth';
 import { getFunctions, httpsCallable } from '../lib/callable';
 import { goToField } from '../lib/formFocus';
-import { estimateSendMinutes, backfillCsv, summarize, matchesStatus, STATUS_LABEL } from '../lib/assessmentBackfill';
+import { estimateSendMinutes, backfillCsv, summarize, filterRows, defaultSelection, toggleId, selectAllFiltered, selectionState, selectionCounts, pruneSelection, STATUS_LABEL } from '../lib/assessmentBackfill';
 import { bangkokDay } from '../lib/assessments';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';
@@ -18,7 +18,7 @@ import '../styles/AssessBackfill.css';
 const call = (name, payload) => httpsCallable(getFunctions(undefined, 'asia-southeast1'), name, name === 'backfillSend' ? { timeout: 3600000 } : undefined)(payload).then((r) => r.data);
 const ROLES = ['admin', 'committee'];
 const CHANNELS = [['inbox', 'Inbox'], ['teams', 'Teams'], ['email', 'Email']];
-const FIELDS = [['Due date', /^Due date/], ['Channels', /^Channels/]];
+const FIELDS = [['Due date', /^Due date/], ['Channels', /^Channels/], ['Subject', /^Subject/], ['Items', /^Items/]];
 const fmtDate = (ms) => (ms ? bangkokDay(new Date(ms)) : '—');
 const plusDays = (n) => bangkokDay(new Date(Date.now() + n * 86400000));
 
@@ -43,6 +43,12 @@ export default function AssessmentBackfillPage() {
   const [confirming, setConfirming] = useState(false);
   const [q, setQ] = useState('');
   const [statusF, setStatusF] = useState('all');
+  const [phaseF, setPhaseF] = useState('all');
+  const [selected, setSelected] = useState(null);   // Set of row ids (not_done only); null until first load
+  const [msg, setMsg] = useState({ subject: '', intro: '', outro: '' });
+  const [touched, setTouched] = useState({});       // which message parts the admin edited
+  const [defaults, setDefaults] = useState(null);   // server default copy
+  const allSel = useRef(null);
 
   const canView = !!user && ROLES.includes(role);
   const aliveRef = useRef(true);
@@ -52,25 +58,44 @@ export default function AssessmentBackfillPage() {
     catch (e) { if (aliveRef.current) setError(failMsg('โหลดรายการ', e)); return false; }
   };
   useEffect(() => { if (canView) load(); }, [canView]);   // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setPreview(null); }, [dueDate, channels]);
+  useEffect(() => { setPreview(null); }, [dueDate, channels, msg, selected]);
 
   const rows = data?.rows || [];
   const sum = useMemo(() => summarize(rows), [rows]);
-  const targets = useMemo(() => new Set(rows.filter((r) => r.status === 'not_done').flatMap((r) => r.creators || [])).size, [rows]);
-  const shown = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    return rows
-      .filter((r) => matchesStatus(r.status, statusF)
-        && (!t || r.name.toLowerCase().includes(t) || (r.creators || []).some((c) => c.toLowerCase().includes(t))))
-      .sort((a, b) => (a.status === 'not_done' ? 0 : 1) - (b.status === 'not_done' ? 0 : 1) || a.name.localeCompare(b.name));
-  }, [rows, q, statusF]);
+  useEffect(() => {
+    if (!data) return;
+    setSelected((prev) => (prev === null ? defaultSelection(data.rows) : pruneSelection(prev, data.rows)));
+  }, [data]);
+  const sel = selected || new Set();
+  const { items: selItems, creators: targets } = useMemo(() => selectionCounts(rows, sel), [rows, selected]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = useMemo(() => filterRows(rows, { q, status: statusF, phase: phaseF })
+    .sort((a, b) => (a.status === 'not_done' ? 0 : 1) - (b.status === 'not_done' ? 0 : 1) || a.name.localeCompare(b.name)), [rows, q, statusF, phaseF]);
+  const headState = selectionState(sel, shown);
+  useEffect(() => { if (allSel.current) allSel.current.indeterminate = headState === 'some'; }, [headState]);
+
+  // Default copy comes from the server (it depends on the due date); untouched parts follow it.
+  useEffect(() => {
+    if (!canView || !data || !dueDate || !channels.length) return undefined;
+    let dead = false;
+    // debounced: backfillSend is rate limited, so a date being edited must not fire a call per keystroke
+    const timer = setTimeout(() => call('backfillSend', { dueDate, channels: ['inbox'], preview: true }).then((r) => {
+      if (dead || !r.defaults) return;
+      setDefaults(r.defaults);
+      setMsg((m) => ({ subject: touched.subject ? m.subject : r.defaults.subject, intro: touched.intro ? m.intro : r.defaults.intro, outro: touched.outro ? m.outro : r.defaults.outro }));
+    }).catch(() => {}), 700);
+    return () => { dead = true; clearTimeout(timer); };
+  }, [canView, !!data, dueDate]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const editMsg = (k, v) => { setMsg((m) => ({ ...m, [k]: v })); setTouched((t) => ({ ...t, [k]: true })); };
+  const resetMsg = () => { if (defaults) setMsg(defaults); setTouched({}); };
+  const payloadExtra = () => ({ message: msg, agentIds: [...sel] });
 
   function validate() {
-    let msg = '';
-    if (!dueDate) msg = 'Due date: ใส่วันครบกำหนด';
-    else if (dueDate < bangkokDay(new Date())) msg = 'Due date: วันครบกำหนดต้องไม่เป็นวันที่ผ่านมาแล้ว';
-    else if (!channels.length) msg = 'Channels: เลือกอย่างน้อย 1 ช่องทาง';
-    if (msg) { setError(msg); goToField('.abf-wrap', msg, FIELDS); return false; }
+    let m = '';
+    if (!dueDate) m = 'Due date: ใส่วันครบกำหนด';
+    else if (dueDate < bangkokDay(new Date())) m = 'Due date: วันครบกำหนดต้องไม่เป็นวันที่ผ่านมาแล้ว';
+    else if (!channels.length) m = 'Channels: เลือกอย่างน้อย 1 ช่องทาง';
+    else if (defaults && !msg.subject.trim()) m = 'Subject: ใส่หัวข้อข้อความ';
+    if (m) { setError(m); goToField('.abf-wrap', m, FIELDS); return false; }
     return true;
   }
   async function run(label, payload, after) {
@@ -78,7 +103,7 @@ export default function AssessmentBackfillPage() {
     setError(''); setNotice('');
     if (!validate()) return;
     busyRef.current = true; setBusy(true);
-    try { await after(await call('backfillSend', { dueDate, channels, ...payload })); }
+    try { await after(await call('backfillSend', { dueDate, channels, ...payloadExtra(), ...payload })); }
     catch (e) { setError(failMsg(label, e)); }
     finally { busyRef.current = false; setBusy(false); }
   }
@@ -138,14 +163,26 @@ export default function AssessmentBackfillPage() {
                   </div>
                 </div>
               </div>
+              <div className="fg abf-msg">
+                <label>Message</label>
+                <div className="fhelp">คำขึ้นต้น (เรียน คุณ…), รายการพร้อมลิงก์ และประโยควันครบกำหนด ระบบเติมให้อัตโนมัติ — แก้ได้เฉพาะ Subject, Intro และ Closing</div>
+                <label className="abf-sub">Subject <span className="req">*</span></label>
+                <input value={msg.subject} maxLength={200} onChange={(e) => editMsg('subject', e.target.value)} />
+                <label className="abf-sub">Intro</label>
+                <textarea rows={4} value={msg.intro} maxLength={2000} onChange={(e) => editMsg('intro', e.target.value)} />
+                <label className="abf-sub">Closing</label>
+                <textarea rows={4} value={msg.outro} maxLength={2000} onChange={(e) => editMsg('outro', e.target.value)} />
+                <div><button type="button" className="btn" disabled={!defaults} onClick={resetMsg}>Reset to default</button></div>
+              </div>
               <div className="abf-actions">
                 <button className="btn" disabled={busy} onClick={doPreview}>Preview message</button>
                 <button className="btn" disabled={busy} onClick={doTest}>Send test to me</button>
-                <button className="btn btn-primary" disabled={busy || !targets} onClick={() => { if (validate()) setConfirming(true); }}>Send to {targets} creators</button>
+                <button className="btn btn-primary" disabled={busy || !selItems} onClick={() => { if (validate()) setConfirming(true); }}>Send to {targets} creators ({selItems} items)</button>
+                {!selItems && <span className="abf-meta">Items: เลือกรายการที่ยังไม่ทำอย่างน้อย 1 รายการในตารางด้านล่าง</span>}
               </div>
               {confirming && (
                 <div className="abf-note">
-                  Send the assessment request to <b>{targets}</b> creators, due <b>{dueDate}</b>, via {channels.join(', ')}? ส่งแล้วย้อนกลับไม่ได้
+                  Send the assessment request to <b>{targets}</b> creators (<b>{selItems}</b> items), due <b>{dueDate}</b>, via {channels.join(', ')}? ส่งแล้วย้อนกลับไม่ได้
                   <div style={{ marginTop: 6 }}>ระบบจะส่งทีละคนเว้นระยะ 10 วินาที ใช้เวลาประมาณ {estimateSendMinutes(targets)} นาที — กรุณาอย่าปิดหน้านี้จนกว่าจะเสร็จ</div>
                   {busy && <div style={{ marginTop: 6, fontWeight: 600 }}>กำลังส่ง… ประมาณ {estimateSendMinutes(targets)} นาที อย่าปิดหน้านี้</div>}
                   <div className="abf-actions">
@@ -166,6 +203,13 @@ export default function AssessmentBackfillPage() {
 
             <div className="usage-filters">
               <label>Search<input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Item or creator" /></label>
+              <label>Phase
+                <select value={phaseF} onChange={(e) => setPhaseF(e.target.value)}>
+                  <option value="all">All</option>
+                  <option value="Pilot">Pilot</option>
+                  <option value="Ready to Use">Ready to Use</option>
+                </select>
+              </label>
               <label>Status
                 <select value={statusF} onChange={(e) => setStatusF(e.target.value)}>
                   <option value="all">All</option>
@@ -184,10 +228,11 @@ export default function AssessmentBackfillPage() {
             {shown.length === 0 ? <div className="empty-state">No items match</div> : (
               <div className="usage-scroll">
                 <table className="usage-table">
-                  <thead><tr><th>Agent/Skill</th><th>Phase</th><th>Status</th><th>Creators</th><th>Result</th><th>Last assessed</th></tr></thead>
+                  <thead><tr><th className="abf-selcol"><input ref={allSel} type="checkbox" aria-label="Select all filtered not-done items" checked={headState === 'all'} disabled={busy} onChange={(e) => setSelected(selectAllFiltered(sel, shown, e.target.checked))} /></th><th>Agent/Skill</th><th>Phase</th><th>Status</th><th>Creators</th><th>Result</th><th>Last assessed</th></tr></thead>
                   <tbody>
                     {shown.map((r) => (
                       <tr key={r.id}>
+                        <td className="abf-selcol">{r.status === 'not_done' && <input type="checkbox" aria-label={`Select ${r.name}`} checked={sel.has(r.id)} disabled={busy} onChange={() => setSelected(toggleId(sel, r.id))} />}</td>
                         <td className="usage-strong">{r.name}</td>
                         <td className="usage-dim">{r.phase}</td>
                         <td>{STATUS_LABEL[r.status] || r.status}</td>
