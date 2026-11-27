@@ -2427,7 +2427,7 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 3600, secrets: [TEAM
   if (preview) {
     if (!digests.length) throw new HttpsError('failed-precondition', 'ไม่มีรายการที่ต้องส่ง');
     const m = render(digests[0]);
-    return { preview: { subject: m.subject, text: m.text, html: m.html }, count: digests.length, defaults: BF.defaultMessageParts(dueLabel) };
+    return { preview: { subject: m.subject, text: m.inboxText, html: m.html }, count: digests.length, defaults: BF.defaultMessageParts(dueLabel) };
   }
   const allTargets = testOnly ? [digests.find((d) => d.email === email) || digests[0]].filter(Boolean).map((d) => ({ ...d, to: email })) : digests.map((d) => ({ ...d, to: d.email }));
   // 10 s between creators (user order); the 3300 s deadline guard (timeout 3600) truncates first for large batches.
@@ -2450,7 +2450,7 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 3600, secrets: [TEAM
     try {
       const m = render(d);
       if (chans.includes('inbox')) {
-        await db.collection('inboxMessages').add({ toEmail: d.to.toLowerCase(), title: m.subject, body: m.text, link: m.link, kind: 'assessment-backfill', createdAt: FieldValue.serverTimestamp() });
+        await db.collection('inboxMessages').add({ toEmail: d.to.toLowerCase(), title: m.subject, body: m.inboxText, link: m.link, kind: 'assessment-backfill', createdAt: FieldValue.serverTimestamp() });
         inboxCount += 1;
       }
       if (mailChan) {

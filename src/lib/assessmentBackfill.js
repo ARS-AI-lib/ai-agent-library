@@ -68,7 +68,8 @@ export function selectionState(set, shown) {
   return c === 0 ? 'none' : c === sel.length ? 'all' : 'some';
 }
 export function selectionCounts(rows, set) {
-  const chosen = (rows || []).filter((r) => selectable(r) && set.has(r.id));
+  // Same grouping as the server digests: items with no creator email are never sent.
+  const chosen = (rows || []).filter((r) => selectable(r) && set.has(r.id) && (r.creators || []).length > 0);
   return { items: chosen.length, creators: new Set(chosen.flatMap((r) => r.creators || [])).size };
 }
 export const pruneSelection = (set, rows) => new Set([...set].filter((id) => (rows || []).some((r) => r.id === id && selectable(r))));

@@ -115,6 +115,10 @@ eq(typeof I.validateAnnouncement({ ...ok, audience: 'nobody' }), 'string', 'vali
 // splitLinks
 eq(I.splitLinks('see https://a.com/x, ok'),
   [{ text: 'see ' }, { text: 'https://a.com/x', href: 'https://a.com/x' }, { text: ', ok' }], 'splitLinks basic + trailing comma');
+eq(I.splitLinks('1. A → [Assessment](https://x/assess?agent=1) done'),
+  [{ text: '1. A → ' }, { text: 'Assessment', href: 'https://x/assess?agent=1' }, { text: ' done' }], 'splitLinks markdown link');
+eq(I.splitLinks('[x](javascript:alert(1))').some((s) => 'href' in s), false, 'splitLinks rejects javascript: markdown');
+eq(I.splitLinks('[x](data:text/html,y)').some((s) => 'href' in s), false, 'splitLinks rejects data: markdown');
 const evil = I.splitLinks('<script>alert(1)</script> javascript:alert(1) data:text/html,x');
 eq(evil.some((s) => 'href' in s), false, 'splitLinks: no href for script/javascript:/data:');
 eq(evil.map((s) => s.text).join(''), '<script>alert(1)</script> javascript:alert(1) data:text/html,x', 'splitLinks: text preserved');

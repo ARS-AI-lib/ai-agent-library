@@ -287,6 +287,23 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   eq('filterRows phase only', B.filterRows(FR, { q: '', status: 'all', phase: 'Ready to Use' }).map((r) => r.id), ['b']);
   eq('filterRows search creator + status', B.filterRows(FR, { q: 'x@a', status: 'not_done', phase: 'all' }).map((r) => r.id), ['a', 'b']);
   eq('filter-out selection retained', [...B.selectAllFiltered(new Set(['b']), B.filterRows(FR, { q: '', status: 'all', phase: 'Pilot' }), true)].sort(), ['a', 'b']);
+  // review round 1
+  const cl = R.renderBackfillMessage({ ...base, overrides: { intro: 'P1\n\nP2', outro: 'C1\n\nC2' } }).cardLines;
+  eq('cardLines intro first, items middle, closing last', [cl[0], cl[1], cl[2].startsWith('1. A'), cl[3], cl[4]], ['P1', 'P2', true, 'C1', 'C2']);
+  const cd = R.renderBackfillMessage(base).cardLines;
+  eq('default cardLines include intro/closing', [cd[0] === dm.intro, cd[cd.length - 1]], [true, 'ทีม AI Agent Library']);
+  eq('cardLines default has reply + thanks', cd.includes('ขอบคุณครับ'), true);
+  eq('cardLines strip control chars', R.renderBackfillMessage({ ...base, overrides: { intro: 'a\u0007b' } }).cardLines[0], 'ab');
+  eq('subject newlines collapsed', R.validateMessage({ subject: 'a\n b\t\tc' }).subject, 'a b c');
+  eq('intro keeps paragraphs', R.validateMessage({ intro: 'a\n\nb' }).intro, 'a\n\nb');
+  const SR = [{ id: 'a', status: 'not_done', creators: [] }, { id: 'b', status: 'not_done', creators: ['x'] }];
+  eq('selectionCounts excludes no-creator items', B.selectionCounts(SR, new Set(['a', 'b'])), { items: 1, creators: 1 });
+  // hidden links
+  const hl = R.renderBackfillMessage(base);
+  eq('html link label, bare URL not visible', [hl.html.includes('>Assessment</a>'), hl.html.includes('href="https://x/assess?agent=1"'), hl.html.includes('>https://x/assess?agent=1<')], [true, true, false]);
+  eq('text keeps raw URL', hl.text.includes('1. A · Pilot → https://x/assess?agent=1'), true);
+  eq('card line markdown link', hl.cardLines.some((l) => l === '1. A · Pilot → [Assessment](https://x/assess?agent=1)'), true);
+  eq('inbox body markdown link', hl.inboxText.includes('1. A · Pilot → [Assessment](https://x/assess?agent=1)') && !hl.inboxText.includes('→ https://'), true);
   // F2 wording
   const T = { sent: 0, held: 0, skipped: 0, dryRun: 0, disabled: 0, failed: 0 };
   eq('summary inbox + dry run', R.summarizeSend({ inbox: 12, ...T, dryRun: 12 }), 'ส่ง Inbox แล้ว 12 ข้อความ · Teams/Email: ไม่ได้ส่งจริง (dry run 12)');

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import PageHeader from './PageHeader';
 import { useAuth } from '../hooks/useAuth';
 import { getFunctions, httpsCallable } from '../lib/callable';
+import { splitLinks } from '../lib/inbox';
 import { goToField } from '../lib/formFocus';
 import { estimateSendMinutes, backfillCsv, summarize, filterRows, defaultSelection, toggleId, selectAllFiltered, selectionState, selectionCounts, pruneSelection, STATUS_LABEL } from '../lib/assessmentBackfill';
 import { bangkokDay } from '../lib/assessments';
@@ -46,9 +47,10 @@ export default function AssessmentBackfillPage() {
   const [phaseF, setPhaseF] = useState('all');
   const [selected, setSelected] = useState(null);   // Set of row ids (not_done only); null until first load
   const [msg, setMsg] = useState({ subject: '', intro: '', outro: '' });
-  const [touched, setTouched] = useState({});       // which message parts the admin edited
   const [defaults, setDefaults] = useState(null);   // server default copy
   const allSel = useRef(null);
+  const touchedRef = useRef({});
+  const [defaultsFailed, setDefaultsFailed] = useState(false);
 
   const canView = !!user && ROLES.includes(role);
   const aliveRef = useRef(true);
@@ -80,13 +82,14 @@ export default function AssessmentBackfillPage() {
     // debounced: backfillSend is rate limited, so a date being edited must not fire a call per keystroke
     const timer = setTimeout(() => call('backfillSend', { dueDate, channels: ['inbox'], preview: true }).then((r) => {
       if (dead || !r.defaults) return;
-      setDefaults(r.defaults);
-      setMsg((m) => ({ subject: touched.subject ? m.subject : r.defaults.subject, intro: touched.intro ? m.intro : r.defaults.intro, outro: touched.outro ? m.outro : r.defaults.outro }));
-    }).catch(() => {}), 700);
+      setDefaults(r.defaults); setDefaultsFailed(false);
+      // evaluated when the response lands: never overwrite a part the admin has edited
+      setMsg((m) => ({ subject: touchedRef.current.subject ? m.subject : r.defaults.subject, intro: touchedRef.current.intro ? m.intro : r.defaults.intro, outro: touchedRef.current.outro ? m.outro : r.defaults.outro }));
+    }).catch(() => { if (!dead) setDefaultsFailed(true); }), 700);
     return () => { dead = true; clearTimeout(timer); };
   }, [canView, !!data, dueDate]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const editMsg = (k, v) => { setMsg((m) => ({ ...m, [k]: v })); setTouched((t) => ({ ...t, [k]: true })); };
-  const resetMsg = () => { if (defaults) setMsg(defaults); setTouched({}); };
+  const editMsg = (k, v) => { setMsg((m) => ({ ...m, [k]: v })); touchedRef.current = { ...touchedRef.current, [k]: true }; };
+  const resetMsg = () => { if (defaults) setMsg(defaults); touchedRef.current = {}; };
   const payloadExtra = () => ({ message: msg, agentIds: [...sel] });
 
   function validate() {
@@ -165,7 +168,8 @@ export default function AssessmentBackfillPage() {
               </div>
               <div className="fg abf-msg">
                 <label>Message</label>
-                <div className="fhelp">คำขึ้นต้น (เรียน คุณ…), รายการพร้อมลิงก์ และประโยควันครบกำหนด ระบบเติมให้อัตโนมัติ — แก้ได้เฉพาะ Subject, Intro และ Closing</div>
+                <div className="fhelp">Teams และอีเมลใช้ข้อความเดียวกัน; คำขึ้นต้น รายการงาน ลิงก์ และวันครบกำหนดระบบใส่ให้อัตโนมัติ</div>
+                {(defaultsFailed || (!defaults && !busy)) && <div className="fhelp abf-hint">โหลดข้อความตั้งต้นไม่สำเร็จ — ช่องที่เว้นว่างจะใช้ข้อความมาตรฐาน</div>}
                 <label className="abf-sub">Subject <span className="req">*</span></label>
                 <input value={msg.subject} maxLength={200} onChange={(e) => editMsg('subject', e.target.value)} />
                 <label className="abf-sub">Intro</label>
@@ -194,7 +198,7 @@ export default function AssessmentBackfillPage() {
               {preview && (
                 <div className="abf-preview">
                   <b>{preview.preview?.subject}</b>
-                  <pre>{preview.preview?.text}</pre>
+                  <pre>{splitLinks(preview.preview?.text).map((seg, i) => (seg.href ? <a key={i} href={seg.href} target="_blank" rel="noopener noreferrer">{seg.text}</a> : <span key={i}>{seg.text}</span>))}</pre>
                   <div className="abf-meta">Would reach {preview.count} creators · nothing was sent</div>
                   <button className="btn" onClick={() => setPreview(null)}>Close preview</button>
                 </div>

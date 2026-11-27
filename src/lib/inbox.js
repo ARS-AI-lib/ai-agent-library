@@ -70,11 +70,19 @@ export function splitLinks(text) {
   const out = [];
   const push = (seg) => { if (seg.text) out.push(seg); };
   const s = String(text ?? '');
-  const re = /https?:\/\/[^\s<>"']+/g;
+  // [label](https://…) first (label shown, href must be http(s)), then bare http(s) URLs.
+  const re = /\[([^\]\n]{1,80})\]\((https?:\/\/[^\s)<>"']+)\)|https?:\/\/[^\s<>"']+/g;
   let last = 0;
   let m;
   let pendingTail = '';
   while ((m = re.exec(s))) {
+    if (m[1] !== undefined) {
+      push({ text: pendingTail + s.slice(last, m.index) });
+      pendingTail = '';
+      push({ text: m[1], href: m[2] });
+      last = m.index + m[0].length;
+      continue;
+    }
     let url = m[0];
     const tail = url.match(/[.,;:!?)]+$/);
     if (tail) url = url.slice(0, url.length - tail[0].length);

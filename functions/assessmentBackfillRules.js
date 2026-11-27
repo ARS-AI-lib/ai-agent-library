@@ -98,7 +98,7 @@ function validateMessage(m) {
     if (m[k] == null) return;
     if (typeof m[k] !== 'string') throw err('invalid-argument', `message.${k} ไม่ถูกต้อง`);
     if (m[k].length > max) throw err('invalid-argument', `message.${k} ยาวเกิน ${max} ตัวอักษร`);
-    out[k] = stripCtl(m[k]);
+    out[k] = k === 'subject' ? stripCtl(m[k].replace(/[\r\n\t]+/g, ' ')).replace(/ {2,}/g, ' ') : stripCtl(m[k]);
   });
   return out;
 }
@@ -115,17 +115,23 @@ const paras = (t) => String(t).split(/\n{2,}/).map((p) => `<p style="margin:0 0 
 
 function renderBackfillMessage({ displayName, items, dueDate, appUrl, overrides }) {
   const o = overrides || {};
-  const pick = (k, d) => (typeof o[k] === 'string' && o[k].trim() ? o[k].trim() : d);
+  const pick = (k, d) => (typeof o[k] === 'string' && stripCtl(o[k]) ? stripCtl(o[k]) : d);
   const subject = pick('subject', subjectFor(dueDate));
   const intro = pick('intro', DEFAULT_INTRO);
   const outro = pick('outro', DEFAULT_OUTRO);
-  const lines = items.map((i, n) => `${n + 1}. ${i.name} · ${i.phase} → ${appUrl}/assess?agent=${i.id}`);
+  const url = (i) => `${appUrl}/assess?agent=${i.id}`;
+  const lines = items.map((i, n) => `${n + 1}. ${i.name} · ${i.phase} → ${url(i)}`);
+  // Hidden-link forms: Teams card text and the inbox body support [label](url); email html uses <a>.
+  const mdLines = items.map((i, n) => `${n + 1}. ${i.name} · ${i.phase} → [Assessment](${url(i)})`);
   const dur = `ใช้เวลาประมาณ 5 นาทีต่อรายการ (11 ข้อ แบบเลือกตอบ) กรุณาทำให้เสร็จภายใน ${dueDate}`;
   const first = String(displayName || '').trim();
   const text = [`เรียน ${salutation(first)}`, intro, ...lines, dur, outro].join('\n');
-  const list = items.map((i, n) => `<li>${esc(i.name)} · ${esc(i.phase)} → <a href="${esc(`${appUrl}/assess?agent=${i.id}`)}">${esc(`${appUrl}/assess?agent=${i.id}`)}</a></li>`).join('');
+  const inboxText = [`เรียน ${salutation(first)}`, intro, ...mdLines, dur, outro].join('\n');
+  const list = items.map((i, n) => `<li>${esc(i.name)} · ${esc(i.phase)} → <a href="${esc(url(i))}">Assessment</a></li>`).join('');
   const html = frameHtml(`${paras(intro)}<ol>${list}</ol><p>${esc(dur)}</p>${paras(outro)}`).replace('{{name}}', esc(salutation(first)));
-  return { subject, text, html, cardLines: lines, link: `${appUrl}/assess?agent=${items[0]?.id || ''}` };
+  const para = (t) => String(t).split(/\n{2,}/).flatMap((p) => p.split('\n')).map((x) => x.trim()).filter(Boolean);
+  // Teams card shows only cardLines, so it carries the same (edited) intro/closing as the email.
+  return { subject, text, inboxText, html, cardLines: [...para(intro), ...mdLines, ...para(outro)], link: `${appUrl}/assess?agent=${items[0]?.id || ''}` };
 }
 
 const bkkYear = (d) => new Date(d.getTime() + 7 * 3600 * 1000).getUTCFullYear();
