@@ -221,7 +221,9 @@ body.v7 .fg label { font-size: 12px; font-weight: 600; color: var(--tx2); }
 body.v7 .fg input:not([type=checkbox]):not([type=radio]):not([type=file]), body.v7 .fg select { height: 36px; border-radius: 8px; border: 1px solid var(--bd-soft); font-size: 13px; }
 body.v7 .fg textarea { border-radius: 8px; border: 1px solid var(--bd-soft); font-size: 13px; }
 body.v7 .fg input:focus, body.v7 .fg select:focus, body.v7 .fg textarea:focus { border-color: #2f6bff; box-shadow: 0 0 0 3px rgba(47,107,255,.10); }
-body.v7 .fg input[readonly], body.v7 .fg input:disabled, body.v7 .fg textarea:disabled { background: var(--sf2); color: var(--tx2); }
+body.v7 .fg input:disabled, body.v7 .fg textarea:disabled { background: var(--sf2); color: var(--tx2); }
+/* Read-only inputs (Reusable picker, derived Required Skills) look like every other field */
+body.v7 .fg input[readonly] { background: var(--sf); color: var(--tx); }
 body.v7 .fg input[aria-invalid="true"], body.v7 .fg .err input { border-color: #dc2626; }
 body.v7 .fg .ms-btn, body.v7 .fg .tms-box { border-radius: 8px; border-color: var(--bd-soft); }
 body.v7 .fg .tms-tag, body.v7 .tms-tag { background: var(--tint); color: var(--tint-fg); border-radius: 6px; }
