@@ -107,6 +107,7 @@ export function combineByAgent(config, records) {
       decl: latest.decl || {},
       answers,
       hasPre: !!pre,
+      preAnswered: config.questions.some((qq) => qq.stage === 'pre' && answers[qq.id] !== undefined && answers[qq.id] !== null && answers[qq.id] !== ''),
       hasDeploy: !!deploy,
       preScore: evaluate(config, answers, 'pre', { partial: true }).total,
       deployScore: deploy ? evaluate(config, answers, 'deploy', { partial: true }).total : null,
@@ -116,6 +117,12 @@ export function combineByAgent(config, records) {
       should: all.should.map((m) => m.item),
     };
   });
+}
+
+// Long text for the on-screen Declaration block (CSV keeps the full text).
+export function clipText(text, max = 250) {
+  const t = String(text ?? '').trim();
+  return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
 // One answer for display: text, points and whether it still needs attention.

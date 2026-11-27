@@ -76,5 +76,18 @@ eq('answerLabel', [A.answerLabel(A.answerDetail(CFG, a1.answers, q('C4'))), A.an
 const ac = A.agentCsv(CFG, rows);
 eq('agentCsv headers', ac.headers.slice(0, 9), ['Date', 'Owner', 'Agent/Skill', 'Level', 'Pre-assessment score', 'Deploy request score', 'Total score', 'Required fixes', 'Recommended fixes']);
 eq('agentCsv C cell carries the label', ac.rows.find((r) => r[2] === 'Flow')[ac.headers.indexOf('C4')], `${q('C4').options[3].th} (8)`);
+// ── Task 9: preAnswered from answers, clipText, full description in CSV
+eq('preAnswered: pre record with pre answers', [a1.preAnswered, a1.hasPre], [true, true]);
+const legacy = { ...mk('d9', 'Team A', ['QA'], '2026-11-22T05:00:00Z', 'deploy', P), agentId: 'L1', agentName: 'Legacy' };
+const lrow = A.combineByAgent(CFG, [legacy])[0];
+eq('preAnswered: deploy-only record with C1-C9 answers', [lrow.hasPre, lrow.preAnswered, lrow.preScore], [false, true, A.combineByAgent(CFG, [{ ...legacy, stage: 'pre' }])[0].preScore]);
+const noPre = { ...mk('d10', 'Team A', ['QA'], '2026-11-22T05:00:00Z', 'deploy', { C10: 'C10a', C11: 'C11c' }), agentId: 'L2', agentName: 'NoPre' };
+eq('preAnswered: deploy record without pre answers', A.combineByAgent(CFG, [noPre])[0].preAnswered, false);
+eq('clipText: 250 unchanged', A.clipText('x'.repeat(250)), 'x'.repeat(250));
+eq('clipText: 251 -> 250 + ellipsis', A.clipText('x'.repeat(251)), 'x'.repeat(250) + '…');
+eq('clipText: empty/undefined/null', [A.clipText(''), A.clipText(undefined), A.clipText(null)], ['', '', '']);
+const longDesc = 'd'.repeat(300);
+const lcsv = A.agentCsv(CFG, A.combineByAgent(CFG, [{ ...legacy, decl: { description: longDesc } }]));
+eq('agentCsv keeps the full description', lcsv.rows[0][lcsv.headers.indexOf('Description')], longDesc);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
