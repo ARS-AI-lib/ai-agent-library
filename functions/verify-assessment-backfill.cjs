@@ -140,7 +140,10 @@ eq('tally mix keeps sent accurate', R.tallyDeliveries([{ status: 'sent' }, { sta
 eq('tally empty', R.tallyDeliveries([]), Z);
 
 // creator page helpers
-const B = loadEsm('assessmentBackfill.js');
+const CSVL = loadEsm('csv.js');
+const DL = loadEsm('declaration.js');
+const AS = loadEsm('assessments.js', { DECL_FIELDS: DL.DECL_FIELDS, evaluate: S.evaluate, optionOf: S.optionOf, normalizeAnswers: S.normalizeAnswers });
+const B = loadEsm('assessmentBackfill.js', { csvCell: CSVL.csvCell, bangkokDay: AS.bangkokDay });
 const it = (id, status) => ({ id, status });
 const L = [it('a', 'not_done'), it('b', 'pass'), it('c', 'not_done'), it('d', 'not_done')];
 eq('nextItem after a → c', B.nextItem(L, 'a', 'backfill'), 'c');
@@ -163,6 +166,21 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
     const hits = fields.filter(([, re]) => re.test(msgs[l])).map(([x]) => x);
     eq(`declErrorFields matches only ${l}`, hits, [l]);
   });
+}
+{
+  const HEAD = 'Agent/Skill,Tier,Phase,Owner,Creators,Status,Level,Reasons,First assessed,Last assessed,Due date';
+  const row = (o) => ({ id: 'a', name: 'N', tier: 'T1', phase: 'Pilot', owner: 'O', creators: [], status: 'not_done', level: '', reasons: [], firstAssessedAt: null, lastAssessedAt: null, ...o });
+  const lines = (rows, due) => B.backfillCsv(rows, due).split('\r\n');
+  eq('csv header', lines([], '2026-12-01')[0], HEAD);
+  eq('csv status labels', ['pass', 'fail', 'pending_review', 'not_done'].map((s) => lines([row({ status: s })], 'd')[1].split(',')[5]), ['Pass', 'Not pass', 'Not pass (review pending)', 'Not done']);
+  eq('csv creators joined', lines([row({ creators: ['a@x.com', 'b@x.com'] })], 'd')[1].split(',')[4], 'a@x.com; b@x.com');
+  eq('csv escaping', lines([row({ name: 'A, "B"' })], 'd')[1].startsWith('"A, ""B""",'), true);
+  eq('csv newline', B.backfillCsv([row({ name: 'A\nB' })], 'd').includes('"A\nB"'), true);
+  eq('csv formula guard', lines([row({ name: '=cmd' })], 'd')[1].startsWith("'=cmd,"), true);
+  eq('csv bangkok dates', lines([row({ firstAssessedAt: Date.UTC(2026, 10, 26, 18, 0), lastAssessedAt: Date.UTC(2026, 10, 27, 1, 0) })], '2026-12-01')[1].split(',').slice(8), ['2026-11-27', '2026-11-27', '2026-12-01']);
+  eq('csv empty dates', lines([row({})], '')[1].split(',').slice(8), ['', '', '']);
+  eq('csv reasons', lines([row({ status: 'fail', reasons: ['C7', 'High'] })], 'd')[1].split(',')[7], 'C7; High');
+  eq('summarize', B.summarize([row({ status: 'pass', creators: ['a'] }), row({ status: 'fail', creators: ['a'] }), row({ status: 'pending_review' }), row({ creators: ['a'] }), row({})]), { items: 5, done: 3, notDone: 2, noEmail: 2 });
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

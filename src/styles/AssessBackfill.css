@@ -15,3 +15,19 @@
 .abf-note.ok { border-color: #0EB678; }
 .abf-note.bad { border-color: var(--late, #ea4335); }
 @media (max-width: 800px) { .abf-body { grid-template-columns: 1fr; } .abf-body aside { position: static; } }
+
+/* Admin setup page (/assessment-backfill) */
+.abf-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.abf-kpi { border: 1px solid var(--bd, #e5e7eb); border-radius: 10px; padding: 12px 14px; }
+.abf-kpi b { display: block; font-size: 26px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.abf-kpi span { color: var(--mu); font-size: 12px; }
+.abf-kpi.bad b { color: var(--late, #ea4335); }
+.abf-chk { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 13.5px; }
+.abf-chk label { display: inline-flex; gap: 6px; align-items: center; }
+.abf-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.abf-preview { border: 1px solid var(--bd, #e5e7eb); border-radius: 10px; padding: 12px 14px; margin-top: 12px; font-size: 13px; }
+.abf-preview pre { white-space: pre-wrap; font: inherit; margin: 6px 0 0; }
+.abf-nomail { color: var(--late, #ea4335); font-weight: 600; }
+.abf-reason { color: var(--mu); font-size: 12px; }
+@media (max-width: 800px) { .abf-kpis { grid-template-columns: 1fr 1fr; } }
+
