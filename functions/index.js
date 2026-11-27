@@ -662,6 +662,7 @@ const RATE_LIMITS = {
   manageScreeningConfig: 60,
   archiveAssessmentYear: 30,
   listArchivedAssessments: 60,
+  backfillList: 30, backfillSend: 10, backfillMyItems: 60, backfillSubmit: 30, decideReassessment: 30,
 };
 
 async function enforceRateLimit(uid, fnName) {
@@ -2364,6 +2365,183 @@ exports.sendDelayDigest = onTaskDispatched(
 
 // Test copy only: no Portfolio sync, no scheduled/queued digests — those would
 // act on real data (the portfolio DB) or duplicate production's own runs.
+// ── Assessment backfill (2026-11-27) ─────────────────────────────────
+// Creators of already-live Agents/Skills (>=90%) assess them once, retroactively. Callables stay thin:
+// validate → assessmentBackfillRules (pure) → write → notify. Server re-derives verdict/tier/recipients.
+const BF = require('./assessmentBackfillRules');
+const BF_APP_URL = process.env.CANONICAL_ORIGIN || 'https://wolfy-ai-library.web.app';
+
+async function bfPrep(request, name, allowed) {
+  requireCompanyUser(request);
+  const uid = request.auth.uid;
+  const email = String(request.auth.token?.email || '').toLowerCase();
+  const udoc = (await db.collection('users').doc(uid).get()).data() || {};
+  if (allowed && !allowed.includes(udoc.role)) throw new HttpsError('permission-denied', 'Not allowed for your role.');
+  await enforceRateLimit(uid, name);
+  return { uid, email, user: { uid, email, role: udoc.role, approveAreas: udoc.approveAreas || [], name: udoc.displayName || udoc.name || '' } };
+}
+async function bfConfig() {
+  const snap = await db.doc('config/screening').get();
+  if (!snap.exists) throw new HttpsError('failed-precondition', 'ยังไม่ได้ seed /config/screening');
+  return snap.data();
+}
+const bfAgents = async () => (await db.collection('agents').get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+const bfUsers = async () => (await db.collection('users').get()).docs.map((d) => ({ uid: d.id, ...d.data() }));
+const bfToHttps = (e) => (e && e.code && e.message && !e.httpErrorCode ? new HttpsError(e.code, e.message) : e);
+const bfMillis = (v) => (v?.toDate ? v.toDate().toISOString() : (v instanceof Date ? v.toISOString() : v || null));
+
+exports.backfillList = onCall({ cors: true, timeoutSeconds: 120 }, async (request) => {
+  await bfPrep(request, 'backfillList', ['admin', 'committee']);
+  const [config, all, camp] = await Promise.all([bfConfig(), bfAgents(), db.doc('assessmentCampaigns/current').get()]);
+  const rows = all.filter((a) => BF.inBackfillScope(a, all)).map((a) => {
+    const status = BF.backfillStatus(a, config);
+    const v = a.screening?.answers ? BF.backfillVerdict({ config, answers: a.screening.answers, tier: BF.getTier(a) }) : null;
+    return {
+      id: a.id, name: a.agentName || '', tier: BF.getTier(a), phase: BF.normalizeProgress(a.devProgress) >= 100 ? 'Ready to Use' : 'Pilot',
+      owner: a.owner || '', creators: Array.isArray(a.creatorEmails) ? a.creatorEmails : [], status,
+      level: v?.level || a.screening?.level || '', reasons: a.assessment?.reasons || v?.reasons || [],
+      firstAssessedAt: bfMillis(a.assessment?.firstAssessedAt), lastAssessedAt: bfMillis(a.assessment?.lastAssessedAt),
+    };
+  });
+  return { rows, campaign: camp.exists ? camp.data() : null };
+});
+
+exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540 }, async (request) => {
+  const { uid, email } = await bfPrep(request, 'backfillSend', ['admin', 'committee']);
+  const { dueDate, channels, testOnly, preview } = request.data || {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate || ''))) throw new HttpsError('invalid-argument', 'dueDate ไม่ถูกต้อง');
+  const chans = (Array.isArray(channels) ? channels : []).filter((c) => ['inbox', 'teams', 'email'].includes(c));
+  if (!chans.length && !preview) throw new HttpsError('invalid-argument', 'เลือกช่องทางอย่างน้อย 1 ช่อง');
+  const [config, all] = await Promise.all([bfConfig(), bfAgents()]);
+  const rows = all.filter((a) => BF.inBackfillScope(a, all)).map((a) => ({ agent: a, status: BF.backfillStatus(a, config) }));
+  const { digests, noEmail } = BF.creatorDigests(rows);
+  const dueLabel = BF.formatDueDate(new Date(`${dueDate}T05:00:00Z`));
+  const dir = new Map((await bfUsers()).map((u) => [String(u.email || '').toLowerCase(), u]));
+  const render = (d) => BF.renderBackfillMessage({ displayName: (dir.get(d.email)?.displayName || '').split(' ')[0], items: d.items, dueDate: dueLabel, appUrl: BF_APP_URL });
+  if (preview) {
+    if (!digests.length) throw new HttpsError('failed-precondition', 'ไม่มีรายการที่ต้องส่ง');
+    const m = render(digests[0]);
+    return { preview: { subject: m.subject, text: m.text, html: m.html }, count: digests.length };
+  }
+  const targets = testOnly ? [digests.find((d) => d.email === email) || digests[0]].filter(Boolean).map((d) => ({ ...d, to: email })) : digests.map((d) => ({ ...d, to: d.email }));
+  let sent = 0;
+  for (const d of targets) {
+    const m = render(d);
+    if (chans.includes('inbox')) {
+      await db.collection('inboxMessages').add({ toEmail: d.to.toLowerCase(), title: m.subject, body: m.text, link: m.link, kind: 'assessment-backfill', createdAt: FieldValue.serverTimestamp() });
+    }
+    if (chans.includes('teams') || chans.includes('email')) {
+      await sendMail(db, { to: [d.to], subject: m.subject, text: m.text, html: m.html, title: m.subject, link: m.link, cardLines: m.cardLines, ctaLabel: 'ทำ Assessment' });
+    }
+    sent += 1;
+  }
+  await db.doc('assessmentCampaigns/current').set({
+    dueDate, channels: chans,
+    sends: FieldValue.arrayUnion({ at: new Date().toISOString(), by: email || uid, count: sent, testOnly: !!testOnly }),
+  }, { merge: true });
+  return { sent, skippedNoEmail: noEmail.length, recipients: targets.map((d) => d.to) };
+});
+
+exports.backfillMyItems = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
+  const { uid, email } = await bfPrep(request, 'backfillMyItems', null);
+  const [config, all, camp] = await Promise.all([bfConfig(), bfAgents(), db.doc('assessmentCampaigns/current').get()]);
+  const items = all.filter((a) => BF.inBackfillScope(a, all) && !BF.canSubmit(a, { email, uid })).map((a) => ({
+    id: a.id, name: a.agentName || '', tier: BF.getTier(a), phase: BF.normalizeProgress(a.devProgress) >= 100 ? 'Ready to Use' : 'Pilot',
+    status: BF.backfillStatus(a, config), doneBy: a.assessment?.lastBy || '', doneAt: bfMillis(a.assessment?.lastAssessedAt),
+    missingDecl: ['description', 'permittedDomains', 'prohibitedUses', 'tool', 'requiredSkills', 'llm'].filter((k) => String(a[k] ?? '').trim() === ''),
+  }));
+  return { items, dueDate: camp.exists ? camp.data().dueDate || null : null };
+});
+
+async function bfNotify(agent, subject, to, lines) {
+  const text = [`Agent/Skill: ${agent.agentName || ''}`, ...lines].join('\n');
+  const link = `${BF_APP_URL}/?agent=${encodeURIComponent(agent.id)}`;
+  if (!to.length) return;
+  try { await sendMail(db, { to, subject, text, title: subject, link, cardLines: lines, ctaLabel: 'เปิดรายการ' }); } catch (e) { console.error('assessment notify failed', e); }
+}
+
+exports.backfillSubmit = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
+  const { user } = await bfPrep(request, 'backfillSubmit', null);
+  const { agentId, answers, decl, mode } = request.data || {};
+  if (!agentId || typeof agentId !== 'string') throw new HttpsError('invalid-argument', 'agentId required');
+  if (!['backfill', 'review'].includes(mode)) throw new HttpsError('invalid-argument', 'mode ไม่ถูกต้อง');
+  if (!answers || typeof answers !== 'object' || Object.keys(answers).length > 60) throw new HttpsError('invalid-argument', 'answers ไม่ถูกต้อง');
+  const config = await bfConfig();
+  const ref = db.collection('agents').doc(agentId);
+  let out; let agentNow; let verdict;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw { code: 'not-found', message: 'ไม่พบรายการ' };
+      const agent = { id: snap.id, ...snap.data() };
+      const res = BF.applySubmit(agent, { answers, decl, mode, config, user }, new Date());
+      verdict = BF.backfillVerdict({ config, answers, tier: BF.getTier(agent) });
+      if (mode === 'review') {
+        tx.set(db.collection('assessmentReviews').doc(), {
+          agentId, agentName: agent.agentName || '', approveArea: agent.approveArea || [], answers, decl: decl || {},
+          verdict: verdict.pass ? 'pass' : 'fail', previous: { status: agent.assessment?.status || '', reasons: agent.assessment?.reasons || [] },
+          requestedBy: user.email, requestedByUid: user.uid, createdAt: FieldValue.serverTimestamp(), status: 'pending',
+        });
+      }
+      const patch = { ...res.patch, updatedAt: FieldValue.serverTimestamp() };
+      if (patch.screening) { patch.screening = { ...patch.screening, preAt: patch.screening.preAt || FieldValue.serverTimestamp(), deployAt: FieldValue.serverTimestamp() }; }
+      if (patch.assessment) {
+        const a = patch.assessment;
+        patch.assessment = { ...a, firstAssessedAt: agent.assessment?.firstAssessedAt || FieldValue.serverTimestamp(), lastAssessedAt: FieldValue.serverTimestamp() };
+      }
+      tx.update(ref, patch);
+      res.records.forEach((r) => tx.set(db.collection('assessments').doc(), { ...r, createdAt: FieldValue.serverTimestamp() }));
+      agentNow = agent;
+      return res;
+    });
+  } catch (e) { throw bfToHttps(e); }
+  const reasons = out.patch.assessment?.reasons || [];
+  if (mode === 'backfill' && out.status === 'fail') {
+    const rec = BF.notPassRecipients(agentNow, await bfUsers(), await loadConfig(db));
+    await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ไม่ผ่าน Assessment — กรุณาแก้ไขโดยด่วน`, rec, [`เหตุผล: ${reasons.join(', ') || '-'}`]);
+  }
+  if (mode === 'review') {
+    const rec = BF.notPassRecipients({ ...agentNow, creatorEmails: [] }, await bfUsers(), await loadConfig(db));
+    await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ขอประเมินใหม่ — รอการยืนยัน`, rec, [`ผู้ขอ: ${user.email}`]);
+  }
+  return { status: out.status, level: verdict?.level || '', reasons };
+});
+
+exports.decideReassessment = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
+  const { user } = await bfPrep(request, 'decideReassessment', ['admin', 'approver']);
+  const { reviewId, decision, reason } = request.data || {};
+  if (!reviewId || typeof reviewId !== 'string') throw new HttpsError('invalid-argument', 'reviewId required');
+  const config = await bfConfig();
+  const rref = db.collection('assessmentReviews').doc(reviewId);
+  let agentNow; let status;
+  try {
+    await db.runTransaction(async (tx) => {
+      const rs = await tx.get(rref);
+      if (!rs.exists || rs.data().status !== 'pending') throw { code: 'failed-precondition', message: 'คำขอนี้ถูกตัดสินแล้วหรือไม่มีอยู่' };
+      const review = rs.data();
+      const as = await tx.get(db.collection('agents').doc(review.agentId));
+      if (!as.exists) throw { code: 'not-found', message: 'ไม่พบรายการ' };
+      const agent = { id: as.id, ...as.data() };
+      const denied = BF.canDecideReview(agent, user);
+      if (denied) throw { code: 'permission-denied', message: denied };
+      const res = BF.applyDecision(agent, review, { decision, reason, config, now: new Date() });
+      const patch = { ...res.patch, updatedAt: FieldValue.serverTimestamp() };
+      if (patch.screening) patch.screening = { ...patch.screening, deployAt: FieldValue.serverTimestamp() };
+      if (patch.assessment) patch.assessment = { ...patch.assessment, lastAssessedAt: FieldValue.serverTimestamp() };
+      tx.update(as.ref, patch);
+      res.records.forEach((r) => tx.set(db.collection('assessments').doc(), { ...r, createdAt: FieldValue.serverTimestamp() }));
+      tx.update(rref, { status: decision === 'accept' ? 'accepted' : 'rejected', decidedBy: user.email, decidedAt: FieldValue.serverTimestamp(), decisionReason: String(reason || '') });
+      agentNow = agent; status = res.status;
+    });
+  } catch (e) { throw bfToHttps(e); }
+  const users = await bfUsers();
+  const cfg = await loadConfig(db);
+  const creators = (agentNow.creatorEmails || []).map((e) => String(e).toLowerCase());
+  const to = decision === 'accept' ? BF.notPassRecipients(agentNow, users, cfg) : creators;
+  await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ผลการขอประเมินใหม่: ${decision === 'accept' ? 'ผ่าน' : 'ไม่ผ่าน'}`, to, [decision === 'reject' ? `เหตุผล: ${reason}` : 'ยืนยันผลประเมินใหม่แล้ว']);
+  return { ok: true, status };
+});
+
 if (IS_TEST) {
   delete exports.syncPortfolioAdoption;
   delete exports.delayAlertsMon;

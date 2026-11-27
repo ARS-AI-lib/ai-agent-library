@@ -53,6 +53,9 @@ async function loadConfig(db) {
       approverOverride: Array.isArray(d.approverOverride)
         ? d.approverOverride.map((e) => String(e || '').toLowerCase()).filter(Boolean)
         : [],
+      assessmentApproverOverride: Array.isArray(d.assessmentApproverOverride)
+        ? d.assessmentApproverOverride.map((e) => String(e || '').toLowerCase()).filter(Boolean)
+        : [],
       // Email through the same Flow (shared mailbox). Off until the flow has the email branch.
       emailEnabled: d.emailEnabled === true,
       teamsDomains: Array.isArray(d.teamsDomains)

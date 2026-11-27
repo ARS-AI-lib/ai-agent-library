@@ -137,8 +137,23 @@ function applySubmit(agent, input, now) {
   return { status, patch, records: [rec('pre', pre), rec('deploy', { ...screening.answers })] };
 }
 
+/** Review decision (pure). Accept re-derives the verdict from the stored answers; a fail verdict cannot be accepted. */
+function applyDecision(agent, review, { decision, reason, config, now }) {
+  if (agent?.assessment?.status !== 'pending_review') throw err('failed-precondition', 'รายการนี้ไม่ได้รอการยืนยัน');
+  const by = review?.requestedBy || '';
+  if (decision === 'reject') {
+    if (String(reason || '').trim().length < 5) throw err('invalid-argument', 'กรุณาระบุเหตุผลอย่างน้อย 5 ตัวอักษร');
+    return { status: 'fail', records: [], patch: { assessment: { ...agent.assessment, status: 'fail', lastBy: by } } };
+  }
+  if (decision !== 'accept') throw err('invalid-argument', 'decision ไม่ถูกต้อง');
+  const v = backfillVerdict({ config, answers: review.answers || {}, tier: getTier(agent) });
+  if (!v.pass) throw err('failed-precondition', 'ผลประเมินยังไม่ผ่าน ยืนยันไม่ได้');
+  const base = { ...agent, assessment: { firstAssessedAt: agent.assessment.firstAssessedAt }, screening: agent.screening ? { ...agent.screening, deployAt: null } : agent.screening };
+  return applySubmit(base, { answers: review.answers, decl: review.decl, mode: 'backfill', config, user: { email: by, uid: review.requestedByUid || '' } }, now);
+}
+
 module.exports = {
   evaluateAnswers, backfillVerdict, backfillStatus, inBackfillScope, creatorDigests,
-  canSubmit, canDecideReview, notPassRecipients, renderBackfillMessage, formatDueDate, applySubmit,
+  canSubmit, canDecideReview, notPassRecipients, renderBackfillMessage, formatDueDate, applySubmit, applyDecision,
   normalizeProgress, isPairedSubSkill, getTier,
 };

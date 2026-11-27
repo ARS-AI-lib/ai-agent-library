@@ -120,5 +120,16 @@ eq('review on non-fail → failed-precondition', thr(() => run(ag2, { mode: 'rev
 eq('fail verdict status', run(ag2, { answers: { ...PASS, C7: 'C7b' } }).status, 'fail');
 // re-run keeps firstAssessedAt (status fail → backfill rejected, so use review path carrying it)
 eq('firstAssessedAt kept', rv.patch.assessment.firstAssessedAt, 'FIRST');
+// applyDecision (review accept/reject)
+const pend = { ...failAg, assessment: { status: 'pending_review', firstAssessedAt: 'FIRST', reasons: ['C7'] } };
+const rvw = { answers: PASS, decl, requestedBy: 'c@arise.tech', requestedByUid: 'uc' };
+const dec = (d, reason, agent = pend) => R.applyDecision(agent, rvw, { decision: d, reason, config: CFG, now: NOW });
+const acc = dec('accept');
+eq('accept → pass, screening v2, firstAssessedAt kept', [acc.status, acc.patch.assessment.status, acc.patch.assessment.firstAssessedAt, acc.patch.screening.v, acc.records.length], ['pass', 'pass', 'FIRST', 2, 2]);
+eq('reject short reason → invalid-argument', thr(() => dec('reject', 'no')), 'invalid-argument');
+const rej = dec('reject', 'ข้อมูลไม่เพียงพอ');
+eq('reject → fail, no screening change', [rej.status, Object.keys(rej.patch), rej.patch.assessment.status, rej.records.length], ['fail', ['assessment'], 'fail', 0]);
+eq('accept failing verdict → failed-precondition', thr(() => R.applyDecision(pend, { ...rvw, answers: { ...PASS, C7: 'C7b' } }, { decision: 'accept', config: CFG, now: NOW })), 'failed-precondition');
+eq('decide when not pending_review → failed-precondition', thr(() => dec('accept', '', failAg)), 'failed-precondition');
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
