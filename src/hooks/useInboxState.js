@@ -42,8 +42,9 @@ export default function useInboxState(uid, enabled) {
     write(pruneReadIds([...current.readIds, id], knownIds));
   }, [current.readIds, write]);
 
-  const markAllRead = useCallback((ids) => {
-    const next = pruneReadIds([...current.readIds, ...(ids || [])], ids);
+  // ids = ids to mark read; knownIds = what may stay stored (defaults to ids).
+  const markAllRead = useCallback((ids, knownIds) => {
+    const next = pruneReadIds([...current.readIds, ...(ids || [])], knownIds || ids);
     if (next.length === current.readIds.length && next.every((x, i) => x === current.readIds[i])) return;
     write(next);
   }, [current.readIds, write]);

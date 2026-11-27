@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from '../lib/callable';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { countChanges, nextSelected } from '../lib/screeningConfigEdit';
 import '../styles/Screening.css';

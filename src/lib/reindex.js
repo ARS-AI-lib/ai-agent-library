@@ -1,4 +1,4 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from './callable';
 
 // Keeps the semantic search index in step with agent edits.
 //

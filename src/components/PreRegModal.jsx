@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getType } from '../lib/tier';
 import { addDoc, doc, setDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from '../lib/callable';
 import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
@@ -10,7 +10,8 @@ import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { assessmentRecord } from '../lib/assessments';
 import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills, requiredFieldStatus } from '../lib/registrationType';
 import { DECL_FIELDS } from '../lib/declaration';
-import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
+import DeclField from './DeclField';
+import { ScreeningQuestions, ScreeningResultModal } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
@@ -134,6 +135,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const screeningConfig = useScreeningConfig();
   const [screeningAnswers, setScreeningAnswers] = useState({});
   const [assessOpen, setAssessOpen] = useState(false);
+  const [assessResultOpen, setAssessResultOpen] = useState(false);   // result popup after Continue
   // Opt-in (default on) to REQUEST the AI-suggested link; a person still confirms it.
   const [requestLink, setRequestLink] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -297,8 +299,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       const skErr = validateSkillRows(form.skills, allAgents);
       if (skErr) return skErr;
     }
-    if (!form.tool.trim()) return 'ใส่ Permitted Tools (ประเภท tool ที่อนุญาต)';
-    if (!requiredSkillsValue.trim()) return 'ใส่ Required Skills (ถ้าไม่ต้องใช้ร่วมกับ skill อื่น ให้พิมพ์ "ไม่ต้อง")';
+    const dv = { permittedDomains: form.permittedDomains, prohibitedUses: form.prohibitedUses, tool: form.tool, requiredSkills: requiredSkillsValue, llm: form.llm };
+    for (const f of DECL_FIELDS) if (!String(dv[f.key] ?? '').trim()) return `ใส่ ${f.label} (หรือติ๊ก "${f.none}")`;
     if (!form.owner.trim()) return 'ใส่ Owner team';
     if (!isValidTeamName(form.owner)) return 'ชื่อ Owner team ต้องมีอย่างน้อย 2 ตัวอักษร';
     if (!form.reusable) return 'เลือก Reusable';
@@ -320,13 +322,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     ['Input', /^ใส่ Input/],
     ['Output', /^ใส่ Output/],
     ['Business Value', /Business Value/],
-    ['Permitted Tools', /Permitted Tools/],
-    ['Required Skills', /Required Skills/],
+    ...DECL_FIELDS.map((f) => [f.label, new RegExp(`^ใส่ ${f.label} `)]),
     ['Owner team', /Owner team/],
     ['Reuse Conditions', /Reuse Conditions/],
     ['Reusable', /^เลือก Reusable/],
     ['Human Job', /Human Job/],
   ];
+  // Which declaration field the current validation message is about (drives the red border).
+  const declErr = DECL_FIELDS.find((f) => validationMsg.startsWith(`ใส่ ${f.label} `))?.key || '';
   function goToError(err) {
     if (goToSkillRowError('.mbox.mform', err)) return;
     goToField('.mbox.mform', err, ERROR_FIELDS);
@@ -1056,16 +1059,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
 
             <div className="fsec"><div className="fsec-h"><h4>Scope of use</h4><span>ประกาศขอบเขตตามแบบคัดกรองของธนาคาร</span></div></div>
             <div className="grid2">
-              <div className="fg">
-                <label>Permitted Domains</label>
-                <input value={form.permittedDomains} onChange={(e) => setField('permittedDomains', e.target.value)} placeholder={DECL_FIELDS[0].placeholder} />
-                <div className="fhelp">{DECL_FIELDS[0].hint}</div>
-              </div>
-              <div className="fg">
-                <label>Prohibited Uses</label>
-                <input value={form.prohibitedUses} onChange={(e) => setField('prohibitedUses', e.target.value)} placeholder={DECL_FIELDS[1].placeholder} />
-                <div className="fhelp">{DECL_FIELDS[1].hint}</div>
-              </div>
+              <DeclField field={DECL_FIELDS[0]} value={form.permittedDomains} onChange={(v) => setField('permittedDomains', v)} error={declErr === 'permittedDomains'} />
+              <DeclField field={DECL_FIELDS[1]} value={form.prohibitedUses} onChange={(v) => setField('prohibitedUses', v)} error={declErr === 'prohibitedUses'} />
             </div>
 
             <div className="fg">
@@ -1157,27 +1152,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             {/* Declaration (bank screening D1–D6): purpose = Description above; Domains + Prohibited Uses sit before Business Value; the rest below */}
             <div className="fsec"><div className="fsec-h"><h4>Tools & dependencies</h4></div></div>
             <div className="grid2">
-              <div className="fg">
-                <label>Permitted Tools <span className="req">*</span></label>
-                <input value={form.tool} onChange={(e) => setField('tool', e.target.value)} placeholder={DECL_FIELDS[2].placeholder} />
-                <div className="fhelp">{DECL_FIELDS[2].hint}</div>
-              </div>
-              <div className="fg">
-                <label>Models Tested</label>
-                <input value={form.llm} onChange={(e) => setField('llm', e.target.value)} placeholder={DECL_FIELDS[4].placeholder} />
-                <div className="fhelp">{DECL_FIELDS[4].hint}</div>
-              </div>
+              <DeclField field={DECL_FIELDS[2]} value={form.tool} onChange={(v) => setField('tool', v)} error={declErr === 'tool'} />
+              <DeclField field={DECL_FIELDS[4]} value={form.llm} onChange={(v) => setField('llm', v)} error={declErr === 'llm'} />
             </div>
-            <div className="fg">
-              <label>Required Skills <span className="req">*</span></label>
-              <input
-                value={requiredSkillsValue}
-                onChange={(e) => setField('requiredSkills', e.target.value)}
-                placeholder={isWf ? 'เติมอัตโนมัติจาก skill ใน workflow' : DECL_FIELDS[3].placeholder}
-                readOnly={isWf}
-              />
-              <div className="fhelp">{isWf ? 'เติมอัตโนมัติจาก Starter skill และ skill ที่เพิ่ม' : DECL_FIELDS[3].hint}</div>
-            </div>
+            {isWf ? (
+              <DeclField field={DECL_FIELDS[3]} value={requiredSkillsValue} onChange={() => {}} readOnly hint="เติมอัตโนมัติจาก Starter skill และ skill ที่เพิ่ม" placeholder="เติมอัตโนมัติจาก skill ใน workflow" />
+            ) : (
+              <DeclField field={DECL_FIELDS[3]} value={form.requiredSkills} onChange={(v) => setField('requiredSkills', v)} error={declErr === 'requiredSkills'} />
+            )}
 
             <div className="fg">
               <label>Data Privacy</label>
@@ -1233,38 +1215,38 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 <div className="msub">ตอบแบบประเมินก่อนตรวจความซ้ำซ้อน</div>
               </div>
             </div>
-            <div className="as-wrap">
-              <ScreeningQuestions
-                config={screeningConfig}
-                questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
-                answers={screeningAnswers}
-                blockKey="blocksPre"
-                onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
-              />
-              <ScreeningSide
+            <ScreeningQuestions
+              config={screeningConfig}
+              questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
+              answers={screeningAnswers}
+              blockKey="blocksPre"
+              onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
+            />
+            <div className="btn-group" style={{ marginTop: 14 }}>
+              <button className="btn btn-secondary" onClick={() => setTab('form')}>← Back to Form</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => setAssessResultOpen(true)}
+                disabled={!preAssess.complete}
+                title={!preAssess.complete ? 'ตอบ C1–C9 ให้ครบก่อน' : undefined}
+              >
+                {!preAssess.complete ? 'ตอบให้ครบก่อน' : 'Continue'}
+              </button>
+            </div>
+            {assessResultOpen && (
+              <ScreeningResultModal
                 config={screeningConfig}
                 answers={screeningAnswers}
                 questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
                 stage="pre"
                 blockKey="blocksPre"
+                blocked={preAssess.blocked}
+                reasons={preAssess.reasons}
+                onClose={() => setAssessResultOpen(false)}
+                onContinue={() => { setAssessResultOpen(false); runCheck(); }}
+                continueLabel="Continue to Duplicate Check"
               />
-            </div>
-            {preAssess.blocked && (
-              <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
-                ไม่สามารถไปต่อได้ — {preAssess.reasons[0]}
-              </div>
             )}
-            <div className="btn-group" style={{ marginTop: 14 }}>
-              <button className="btn btn-secondary" onClick={() => setTab('form')}>← Back to Form</button>
-              <button
-                className="btn btn-primary"
-                onClick={runCheck}
-                disabled={!preAssess.complete || preAssess.blocked}
-                title={!preAssess.complete ? 'ตอบ C1–C9 ให้ครบก่อน' : undefined}
-              >
-                {!preAssess.complete ? 'ตอบให้ครบก่อน' : preAssess.blocked ? 'ถูกบล็อก (C7)' : 'Continue to Duplicate Check'}
-              </button>
-            </div>
           </div>
         )}
 

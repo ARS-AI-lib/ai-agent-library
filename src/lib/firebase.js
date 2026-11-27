@@ -27,7 +27,7 @@ export const googleProvider = new GoogleAuthProvider();
 
 // ⚠️ Named (non-default) Firestore database — ต้องระบุชื่อ DB ตรงนี้เสมอ
 // (ตามที่บันทึกไว้: getFirestore(app) เปล่าๆ จะไปชี้ default DB ผิดตัว)
-export const FIRESTORE_DB_ID = 'ai-agent-lib';
+export const FIRESTORE_DB_ID = import.meta.env.VITE_FIRESTORE_DB_ID || 'ai-agent-lib';
 export const db = getFirestore(app, FIRESTORE_DB_ID);
 
 // ── Local emulators (dev only) ───────────────────────────────────

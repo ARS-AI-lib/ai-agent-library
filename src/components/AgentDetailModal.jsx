@@ -8,9 +8,12 @@ import { checklistFor, checklistGate, buildDeployChecklist } from '../lib/deploy
 import { questionsToAsk, deployGate, buildScreening, normalizeAnswers } from '../lib/screening';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
+import DeclField from './DeclField';
 import { assessmentRecord } from '../lib/assessments';
-import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
+import { ScreeningQuestions, ScreeningResultModal } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
+import { assessmentWarning } from '../lib/assessmentBackfill';
+import RiskIcon from './RiskIcon';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames, typeBadgeName, isWorkflow, workflowMembers, workflowOf } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
@@ -45,6 +48,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [requesting, setRequesting] = useState(false);
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
   const [deployStep, setDeployStep] = useState(1);
+  const [deployResultOpen, setDeployResultOpen] = useState(false);   // result popup after Continue
   const [deployChecked, setDeployChecked] = useState([]);
   const screeningConfig = useScreeningConfig();
   const [deployAnswers, setDeployAnswers] = useState({});
@@ -171,6 +175,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // Re-sanitised at render even though writes are already sanitised — docs
   // predating that write path (or touched by a script) must not be trusted.
   const endpointHref = safeEndpointUrl(agent.endpoint);
+  const riskWarning = assessmentWarning(agent);
+  const asmStatus = agent.assessment?.status;
+  const isCreatorOfItem = isMyAgent(agent, user) || !!(agent.createdBy && agent.createdBy === user?.uid);
   const useCaseNames = agentUseCaseNames(agent);
   const process = Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping.join(', ') : agent.sdlcProcessMapping;
   const scope = isInternalOrExternal(agent);
@@ -478,6 +485,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
 
   function openDeployDialog() {
     setDeployStep(1);
+    setDeployResultOpen(false);
     setDeployChecked([]);
     setDeployAnswers(normalizeAnswers(screeningConfig, agent.screening?.answers));
     setDeployDecl({});
@@ -527,6 +535,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         await updateDoc(doc(db, 'agents', sk.id), {
           ...withPhase(sk),
           deployChecklist: { ...buildDeployChecklist(getTier(sk), deployChecked), at: serverTimestamp() },
+          screening: patch.screening,   // the package shares one assessment; the rules require it on every request
           ...declarationPatch(sk, deployDecl),
         });
       }
@@ -841,8 +850,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 href={endpointHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
-                title={endpointHref}
+                className={riskWarning ? 'abf-risk' : undefined}
+                style={{ color: riskWarning ? undefined : 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
+                title={riskWarning || endpointHref}
+                aria-label={riskWarning ? `${endpointLabel(agent.endpoint)} — ${riskWarning}` : undefined}
                 onClick={(e) => {
                   recordAgentEvent(agent.id, 'endpoint');
                   handleEndpointClick(e, agent.endpoint);
@@ -853,12 +864,22 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
                 </svg>
                 {endpointLabel(agent.endpoint)}
+                {riskWarning && <RiskIcon />}
               </a>
               {/* "ลิงก์ภายนอก" tag removed entirely (2026-08-26, user
                   request) — the §24/§25 requirement to distinguish our own
                   files from external links stays met by File History existing
                   only on our own uploads; no inline tag needed here anymore. */}
             </div>
+          )}
+          {isCreatorOfItem && asmStatus === 'fail' && (
+            <div className="mrow">
+              <span className="mk">Assessment</span>
+              <button type="button" className="btn-sm" onClick={() => { window.location.href = `/assess?agent=${encodeURIComponent(agent.id)}&review=1`; }}>Request re-assessment</button>
+            </div>
+          )}
+          {isCreatorOfItem && asmStatus === 'pending_review' && (
+            <div className="mrow"><span className="mk">Assessment</span><span style={{ color: 'var(--mu)', fontSize: 11 }}>รอ Approver ยืนยันผลประเมินใหม่</span></div>
           )}
           <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
           {isWorkflow(agent) && (
@@ -1136,37 +1157,39 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                           {missingDecl.map((k) => {
                             const f = DECL_FIELDS.find((x) => x.key === k);
                             return (
-                              <div className="fg" key={k}>
-                                <label>{f.label} *</label>
-                                <input value={deployDecl[k] ?? ''} placeholder={f.placeholder} onChange={(e) => setDeployDecl((p) => ({ ...p, [k]: e.target.value }))} />
-                              </div>
+                              <DeclField key={k} field={f} value={deployDecl[k] ?? ''} onChange={(v) => setDeployDecl((p) => ({ ...p, [k]: v }))} />
                             );
                           })}
                         </div>
                       )}
-                      <div className="as-wrap">
-                        <ScreeningQuestions
-                          config={screeningConfig}
-                          questionIds={codes}
-                          answers={deployAnswers}
-                          blockKey="blocksDeploy"
-                          onChange={(code, v) => setDeployAnswers((p) => ({ ...p, [code]: v }))}
-                        />
-                        <ScreeningSide config={screeningConfig} answers={deployAnswers} questionIds={codes} blockKey="blocksDeploy" />
-                      </div>
+                      <ScreeningQuestions
+                        config={screeningConfig}
+                        questionIds={codes}
+                        answers={deployAnswers}
+                        blockKey="blocksDeploy"
+                        onChange={(code, v) => setDeployAnswers((p) => ({ ...p, [code]: v }))}
+                      />
                     </div>
-                    {dGate.blocked && (
-                      <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
-                        ยังขอ Deploy ไม่ได้ — {dGate.reasons[0]}
-                      </div>
-                    )}
                     <div className="fsticky">
-                      <span className="fmeta">{!dGate.complete || !declDone ? 'ตอบให้ครบก่อนขออนุมัติ' : dGate.blocked ? 'ติดเงื่อนไขที่บล็อก' : 'พร้อมขออนุมัติ'}</span>
+                      <span className="fmeta">{!dGate.complete || !declDone ? 'ตอบให้ครบก่อนกด Continue' : 'กด Continue เพื่อดูผลประเมิน'}</span>
                       <div className="fbtns">
                       <button className="btn btn-secondary" onClick={() => setDeployStep(1)}>← Back</button>
-                      <button className="btn btn-primary" disabled={!dGate.complete || dGate.blocked || !declDone} onClick={handleRequestDeploy}>Request deploy</button>
+                      <button className="btn btn-primary" disabled={!dGate.complete || !declDone} onClick={() => setDeployResultOpen(true)}>Continue</button>
                       </div>
                     </div>
+                    {deployResultOpen && (
+                      <ScreeningResultModal
+                        config={screeningConfig}
+                        answers={deployAnswers}
+                        questionIds={codes}
+                        blockKey="blocksDeploy"
+                        blocked={dGate.blocked}
+                        reasons={dGate.reasons}
+                        onClose={() => setDeployResultOpen(false)}
+                        onContinue={() => { setDeployResultOpen(false); handleRequestDeploy(); }}
+                        continueLabel="Request deploy"
+                      />
+                    )}
                   </>
                 )}
               </div>

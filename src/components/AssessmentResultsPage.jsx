@@ -6,8 +6,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { AREA_ORDER } from '../lib/approveAreas';
 import { downloadCsv } from '../lib/csv';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { filterRecords, groupByOwner, combineByAgent, agentCsv, answerDetail, answerLabel, bangkokDay, bangkokYear, DECL_COLUMNS } from '../lib/assessments';
+import { getFunctions, httpsCallable } from '../lib/callable';
+import { filterRecords, groupByOwner, combineByAgent, agentCsv, answerDetail, answerLabel, clipText, bangkokDay, bangkokYear, DECL_COLUMNS } from '../lib/assessments';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';
 import '../styles/Screening.css';
@@ -51,7 +51,7 @@ function AgentDetail({ config, row }) {
       <div className="asr-sec">Declaration</div>
       <dl className="asr-decl">
         {DECL_COLUMNS.map((c) => (
-          <div key={c.key}><dt>{c.label}</dt><dd>{row.decl?.[c.key] || <span className="asr-muted">—</span>}</dd></div>
+          <div key={c.key}><dt>{c.label}</dt><dd>{(c.key === 'description' ? clipText(row.decl?.[c.key], 250) : row.decl?.[c.key]) || <span className="asr-muted">—</span>}</dd></div>
         ))}
       </dl>
       {stages.map(([stage, title, score]) => (
@@ -90,7 +90,7 @@ export function RecordsTable({ config, records, groupOwner }) {
           <td className="usage-mono">{bangkokDay(r.createdAt)}</td>
           <td className="usage-strong"><span className="asr-caret" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>{r.agentName}</td>
           <td className="asr-center"><span className={`scr-lvl ${r.level || ''}`}>{r.level || '—'}</span></td>
-          <td className="usage-mono asr-center">{r.hasPre ? r.preScore : '—'}</td>
+          <td className="usage-mono asr-center">{r.preAnswered ? r.preScore : '—'}</td>
           <td className="usage-mono asr-center">{r.deployScore ?? '—'}</td>
           <td className="usage-mono asr-center asr-total">{r.total}</td>
           <td className="asr-center">

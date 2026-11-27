@@ -1,4 +1,4 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from './callable';
 import { isMyAgent } from './agentUtils';
 
 // Endpoint file attachments + SSO-gated download (2026-08-18).

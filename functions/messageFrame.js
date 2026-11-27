@@ -3,7 +3,7 @@
 // greeting, closing and the single optional button. Pure, offline-testable.
 // Email clients strip <style> and most layout, so this stays inline-styled.
 
-const APP_URL = 'https://wolfy-ai-library.web.app';
+const APP_URL = process.env.CANONICAL_ORIGIN || 'https://wolfy-ai-library.web.app';
 const NAME_TOKEN = '{{name}}';
 const GENERIC_NAME = 'ผู้ใช้งาน AI Agent Library';
 

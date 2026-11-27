@@ -3,7 +3,7 @@ import { toast } from '../lib/toast';
 import { doc, addDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { isInternalOrExternal, isSkill, getType } from '../lib/tier';
-import { splitRoles, uniq, pairedSubSkills, childSkillIdList, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditOwner, canEditReadyToUseFields, agentUseCaseNames, isValidTeamName } from '../lib/agentUtils';
+import { splitRoles, uniq, pairedSubSkills, childSkillIdList, extractProcessId, processLabel, canUpdateProgress, canEditDetails, canEditSDLC, canEditApproveArea, canEditCategory, canEditOwner, canEditReadyToUseFields, agentUseCaseNames, isValidTeamName, isWorkflow } from '../lib/agentUtils';
 import { lookupDirectoryNames } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
 import { AREA_ORDER, agentApproveAreas, categoryAreas } from '../lib/approveAreas';
@@ -18,6 +18,8 @@ import { isInternalToolName } from '../lib/internalTool';
 import useCloseGuard from '../hooks/useCloseGuard';
 import { failMsg } from '../lib/copy';
 import Hint from './Hint';
+import DeclField from './DeclField';
+import { DECL_FIELDS } from '../lib/declaration';
 
 const REUSABLE_OPTIONS = ['Reusable', 'Reusable with Conditions', 'Non-reusable'];
 // <fieldset disabled> natively disables every form control inside it — used to
@@ -108,6 +110,11 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     category: new Set(Array.isArray(agent.category) ? agent.category.filter(Boolean) : []),
     sdlcProcessMapping: new Set(Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping : [agent.sdlcProcessMapping].filter(Boolean)),
     useCase: new Set(agentUseCaseNames(agent)),
+    permittedDomains: agent.permittedDomains || '',
+    prohibitedUses: agent.prohibitedUses || '',
+    requiredSkills: agent.requiredSkills || '',
+    tool: agent.tool || '',
+    llm: agent.llm || '',
   }));
   // Did the user actually move Stage / Process in THIS session? The two
   // drop-if-stale effects below only run when they did — see their comments
@@ -270,7 +277,12 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
   }
 
   // Show the message and take the user to the field it is about (src/lib/formFocus.js).
+  // Declaration fields shown/required here (Task 10): a workflow's Required Skills is derived at
+  // registration, so it is not edited here.
+  const declFields = DECL_FIELDS.filter((f) => !(f.key === 'requiredSkills' && isWorkflow(agent)));
+  const declErr = declFields.find((f) => error.startsWith(`ใส่ ${f.label} `))?.key || '';
   const EDIT_FIELDS = [
+    ...DECL_FIELDS.map((f) => [f.label, new RegExp(`^ใส่ ${f.label} `)]),
     ['Agent / Skill Name', /^ใส่ชื่อ/], ['Description', /Description/], ['Input', /^ใส่ Input/], ['Output', /^ใส่ Output/],
     ['Core Ability', /Core Ability/], ['Related Role', /Related Role/], ['Reuse Conditions', /Reuse Conditions/],
     ['Reusable', /^เลือก Reusable/], ['Owner', /Owner team/],
@@ -298,6 +310,10 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         [!form.reusable, 'เลือก Reusable'],
       ].find(([bad]) => bad);
       if (missing) { fail(missing[1]); return; }
+      // Declaration (always required since 2026-11-27): text or the field's "none" phrase. Older
+      // items that predate these fields are forced to fill them here.
+      const dMissing = declFields.find((f) => !String(form[f.key] ?? '').trim());
+      if (dMissing) { fail(`ใส่ ${dMissing.label} (หรือติ๊ก "${dMissing.none}")`); return; }
       if (form.reusable === 'Reusable with Conditions' && !form.reuseCondition.trim()) {
         fail('ใส่ Reuse Conditions');
         return;
@@ -332,6 +348,8 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
           internalUse: !isExternal,
           reusable: form.reusable,
           reuseCondition: form.reusable === 'Reusable with Conditions' ? form.reuseCondition.trim() : '',
+          // Declaration (Task 10) — in Tier A/B hasOnly in firestore.rules, so it rides in Write 1.
+          ...Object.fromEntries(declFields.map((f) => [f.key, String(form[f.key] ?? '').trim()])),
           hml: form.hml,
           humanJob: form.hml ? form.humanJob.trim() : '',
           ...(isSkill(agent) ? { externalSource: !!form.externalSource } : {}),
@@ -675,6 +693,10 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
               <textarea rows={2} value={form.output} onChange={(e) => setField('output', e.target.value)} placeholder="ผลลัพธ์ที่สร้าง" />
             </div>
           </div>
+
+          {declFields.map((f) => (
+            <DeclField key={f.key} field={f} value={form[f.key]} onChange={(v) => setField(f.key, v)} error={declErr === f.key} />
+          ))}
 
           {isSkill(agent) && (
             <div className="fg">

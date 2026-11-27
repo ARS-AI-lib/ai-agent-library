@@ -1,6 +1,6 @@
 import { toJsDate, isMyAgent, isPairedSubSkill } from './agentUtils';
 import { nextStep } from './mySubmissions';
-import { visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, queueAreaEmptyForApprover } from './pendingQueue';
+import { visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, visibleAssessmentReviews, queueAreaEmptyForApprover } from './pendingQueue';
 
 // Inbox (announcements + "my requests") — pure logic, no Firebase, no React.
 //
@@ -70,11 +70,19 @@ export function splitLinks(text) {
   const out = [];
   const push = (seg) => { if (seg.text) out.push(seg); };
   const s = String(text ?? '');
-  const re = /https?:\/\/[^\s<>"']+/g;
+  // [label](https://…) first (label shown, href must be http(s)), then bare http(s) URLs.
+  const re = /\[([^\]\n]{1,80})\]\((https?:\/\/[^\s)<>"']+)\)|https?:\/\/[^\s<>"']+/g;
   let last = 0;
   let m;
   let pendingTail = '';
   while ((m = re.exec(s))) {
+    if (m[1] !== undefined) {
+      push({ text: pendingTail + s.slice(last, m.index) });
+      pendingTail = '';
+      push({ text: m[1], href: m[2] });
+      last = m.index + m[0].length;
+      continue;
+    }
     let url = m[0];
     const tail = url.match(/[.,;:!?)]+$/);
     if (tail) url = url.slice(0, url.length - tail[0].length);
@@ -112,18 +120,46 @@ export function myRequestItems({ pending, allAgents, rejected, user, now = Date.
 
 // Approver queue size WITHOUT the base-user "own submissions" fallback that
 // visiblePending applies — an inbox badge must not count a user's own items.
-export function inboxQueueCount(pending, deployRequests, renameReqs, agents, v) {
+export function inboxQueueCount(pending, deployRequests, renameReqs, agents, v, reviews = []) {
   const hasAreaMatch = v.fullAccess || (v.areas.size > 0 && !queueAreaEmptyForApprover(pending, v));
   return (hasAreaMatch ? visiblePending(pending, v).length : 0)
     + visibleDeployRequests(deployRequests, agents, v).length
     + visibleRenameRequests(renameReqs, agents, v).length
-    + visibleLinkRequests([...(agents || []), ...(pending || [])], v).length;
+    + visibleLinkRequests([...(agents || []), ...(pending || [])], v).length
+    + visibleAssessmentReviews(reviews, agents, v).length;
 }
 
 export function showToApprove(v, queueCount) {
   return !!v.fullAccess || queueCount > 0;
 }
 
-export function inboxBadgeCount({ unreadCount, queueCount }) {
-  return (unreadCount || 0) + (queueCount || 0);
+// Per-person messages share the announcements' read-state doc; their ids are
+// stored as `msg:{id}` so they cannot collide with an announcement id.
+export const msgReadId = (id) => `msg:${id}`;
+
+// Only http(s) URLs may become a link; javascript:/data:/relative -> null.
+export function safeHttpUrl(u) {
+  if (typeof u !== 'string' || !u.trim()) return null;
+  try {
+    const url = new URL(u.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch { return null; }
+}
+
+// Ids the read-state may keep. `msg:` ids are only pruned once the messages
+// listener has delivered; before that, already-stored msg: ids are preserved.
+export function knownReadIds(annIds, messages, messagesLoaded, readIds) {
+  const msgIds = messagesLoaded
+    ? (messages || []).map((m) => msgReadId(m.id))
+    : [...(readIds || [])].filter((id) => String(id).startsWith('msg:'));
+  return [...(annIds || []), ...msgIds];
+}
+
+export function unreadMessages(messages, readIds) {
+  const read = new Set(readIds || []);
+  return (messages || []).filter((m) => !read.has(msgReadId(m.id)));
+}
+
+export function inboxBadgeCount({ unreadCount, queueCount, unreadMessages: unreadMsgs }) {
+  return (unreadCount || 0) + (queueCount || 0) + (unreadMsgs || 0);
 }

@@ -37,7 +37,7 @@ const I = loadEsm('inbox.js', {
   toJsDate: utils.toJsDate, isMyAgent: utils.isMyAgent, isPairedSubSkill: utils.isPairedSubSkill,
   nextStep: mine.nextStep,
   visiblePending: pq.visiblePending, visibleDeployRequests: pq.visibleDeployRequests,
-  visibleRenameRequests: pq.visibleRenameRequests, visibleLinkRequests: pq.visibleLinkRequests,
+  visibleRenameRequests: pq.visibleRenameRequests, visibleLinkRequests: pq.visibleLinkRequests, visibleAssessmentReviews: pq.visibleAssessmentReviews,
   queueAreaEmptyForApprover: pq.queueAreaEmptyForApprover,
 });
 
@@ -115,6 +115,10 @@ eq(typeof I.validateAnnouncement({ ...ok, audience: 'nobody' }), 'string', 'vali
 // splitLinks
 eq(I.splitLinks('see https://a.com/x, ok'),
   [{ text: 'see ' }, { text: 'https://a.com/x', href: 'https://a.com/x' }, { text: ', ok' }], 'splitLinks basic + trailing comma');
+eq(I.splitLinks('1. A → [Assessment](https://x/assess?agent=1) done'),
+  [{ text: '1. A → ' }, { text: 'Assessment', href: 'https://x/assess?agent=1' }, { text: ' done' }], 'splitLinks markdown link');
+eq(I.splitLinks('[x](javascript:alert(1))').some((s) => 'href' in s), false, 'splitLinks rejects javascript: markdown');
+eq(I.splitLinks('[x](data:text/html,y)').some((s) => 'href' in s), false, 'splitLinks rejects data: markdown');
 const evil = I.splitLinks('<script>alert(1)</script> javascript:alert(1) data:text/html,x');
 eq(evil.some((s) => 'href' in s), false, 'splitLinks: no href for script/javascript:/data:');
 eq(evil.map((s) => s.text).join(''), '<script>alert(1)</script> javascript:alert(1) data:text/html,x', 'splitLinks: text preserved');
@@ -164,8 +168,43 @@ const inB = (id) => ({ id, approvalStatus: 'pending', approveArea: [B] });
 const vAp = pq.queueViewer({ isAdmin: false, isCommittee: false, role: 'approver', approveAreas: [A], uid: 'ap', email: 'ap@x' });
 eq(I.inboxQueueCount([inA('x'), inB('y'), inB('z')], [], [], [], vAp), 1, 'approver: 1 of 3 matches -> 1');
 eq(I.inboxQueueCount([{ ...inB('y'), createdBy: 'ap' }, inB('z')], [], [], [], vAp), 0, 'approver nothing matching -> 0 (fallback ignored)');
+{
+  const rv = (id, area) => ({ id: 'r' + id, agentId: id, status: 'pending', approveArea: [area] });
+  const ags = [{ id: 'g1', approveArea: [A], approvalStatus: 'approved' }, { id: 'g2', approveArea: [B], approvalStatus: 'approved' }];
+  const rvs = [rv('g1', A), rv('g2', B), { id: 'rx', agentId: 'gone', status: 'pending' }];
+  const vCom = pq.queueViewer({ isAdmin: false, isCommittee: true, role: 'committee', approveAreas: [A], uid: 'c', email: 'c@x' });
+  const vSt = pq.queueViewer({ isAdmin: false, isCommittee: false, role: 'staff', approveAreas: [A], uid: 's', email: 's@x' });
+  eq(pq.visibleAssessmentReviews(rvs, ags, vFull).length, 2, 'reviews: admin sees all (resolvable)');
+  eq(pq.visibleAssessmentReviews(rvs, ags, vAp).map((x) => x.r.id), ['rg1'], 'reviews: approver by area overlap');
+  eq(pq.visibleAssessmentReviews(rvs, ags, vCom).length, 0, 'reviews: committee none');
+  const own = [{ ...rv('g1', A), requestedByUid: 'ap' }, { ...rv('g2', B), requestedByUid: 'zz' }];
+  eq(pq.visibleAssessmentReviews(own, ags, vAp).length, 0, 'reviews: own request hidden from approver (A only)');
+  eq(pq.visibleAssessmentReviews(own, ags, vFull).length, 2, 'reviews: admin w/ other uid sees both');
+  const vAdminSelf = pq.queueViewer({ isAdmin: true, isCommittee: false, role: 'admin', approveAreas: [], uid: 'zz', email: 'a@x' });
+  eq(pq.visibleAssessmentReviews(own, ags, vAdminSelf).map((x) => x.r.id).sort(), ['rg1', 'rg2'], 'reviews: admin sees (and may confirm) their own request');
+  eq(pq.pendingBadgeCount([], [], [], ags, vAdminSelf, own), 2, 'badge counts the admin\'s own request');
+  eq(pq.visibleAssessmentReviews(rvs, ags, vSt).length, 0, 'reviews: staff none');
+  eq(pq.pendingBadgeCount([], [], [], ags, vAp, rvs), 1, 'badge includes reviews');
+  eq(pq.pendingBadgeCount([], [], [], ags, vAp), 0, 'badge old callers unchanged');
+  eq(I.inboxQueueCount([], [], [], ags, vAp, rvs), 1, 'inboxQueueCount includes reviews');
+  eq(I.inboxQueueCount([], [], [], ags, vAp), 0, 'inboxQueueCount old callers unchanged');
+}
 eq([I.showToApprove(vFull, 0), I.showToApprove(v0, 0), I.showToApprove(v0, 2)], [true, false, true], 'showToApprove');
 eq([I.inboxBadgeCount({ unreadCount: 2, queueCount: 3 }), I.inboxBadgeCount({ unreadCount: 0, queueCount: 0 })], [5, 0], 'inboxBadgeCount');
 
+// per-person messages (read ids are `msg:{id}`)
+const msgs = [{ id: 'm1' }, { id: 'm2' }, { id: 'm3' }];
+eq(I.unreadMessages(msgs, new Set(['msg:m1', 'm2'])).map((m) => m.id), ['m2', 'm3'], 'unreadMessages honours msg: prefix, ignores bare/announcement ids');
+eq(I.unreadMessages(msgs, ['msg:m1', 'msg:m2', 'msg:m3']).length, 0, 'unreadMessages accepts array, all read -> 0');
+eq(I.unreadMessages(null, null), [], 'unreadMessages null-safe');
+eq(I.inboxBadgeCount({ unreadCount: 2, queueCount: 3, unreadMessages: 4 }), 9, 'badge = announcements + messages + queue');
+eq(I.inboxBadgeCount({ unreadCount: 1, queueCount: 1 }), 2, 'badge old two-arg callers unchanged');
+eq(I.pruneReadIds(['a1', 'msg:m1', 'msg:gone'], ['a1', 'msg:m1']), ['a1', 'msg:m1'], 'pruneReadIds keeps known msg ids, drops unknown');
+
+eq(['javascript:alert(1)','data:text/html,x','vbscript:x','/rel/path','','  ',undefined,null,'JaVaScRiPt:1'].map(I.safeHttpUrl), Array(9).fill(null), 'safeHttpUrl rejects non-http(s)');
+eq([I.safeHttpUrl('HTTPS://Example.com/a?b=1'), I.safeHttpUrl('http://x.io')], ['https://example.com/a?b=1', 'http://x.io/'], 'safeHttpUrl allows http(s), normalizes');
+eq(I.knownReadIds(['a1'], [], false, ['a1', 'msg:m1']), ['a1', 'msg:m1'], 'knownReadIds keeps stored msg ids before load');
+eq(I.knownReadIds(['a1'], [{ id: 'm2' }], true, ['msg:m1']), ['a1', 'msg:m2'], 'knownReadIds uses loaded messages after load');
+eq(I.pruneReadIds(['msg:m1'], I.knownReadIds([], [], false, ['msg:m1'])), ['msg:m1'], 'msg read survives prune before load');
 if (fails) { console.error(`\n✗ ${fails} case(s) failed`); process.exit(1); }
 console.log('\n✓ all inbox cases pass');

@@ -53,6 +53,9 @@ async function loadConfig(db) {
       approverOverride: Array.isArray(d.approverOverride)
         ? d.approverOverride.map((e) => String(e || '').toLowerCase()).filter(Boolean)
         : [],
+      assessmentApproverOverride: Array.isArray(d.assessmentApproverOverride)
+        ? d.assessmentApproverOverride.map((e) => String(e || '').toLowerCase()).filter(Boolean)
+        : [],
       // Email through the same Flow (shared mailbox). Off until the flow has the email branch.
       emailEnabled: d.emailEnabled === true,
       teamsDomains: Array.isArray(d.teamsDomains)
@@ -112,6 +115,7 @@ async function sendViaGmailOAuth({ from, replyTo, to, subject, text, html }) {
   }
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    signal: AbortSignal.timeout(30000),
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -126,6 +130,7 @@ async function sendViaGmailOAuth({ from, replyTo, to, subject, text, html }) {
 
   const raw = buildRawMessage({ from, replyTo, to, subject, text, html });
   const sendRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    signal: AbortSignal.timeout(30000),
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ raw }),
@@ -163,6 +168,8 @@ function buildTeamsCard({ subject, title, cardLines = [], link, endpoint, ctaLab
       { type: 'TextBlock', text: title || String(subject || '').replace(/^\[AI Library\]\s*/, ''), weight: 'Bolder', size: 'Medium', wrap: true },
       { type: 'TextBlock', text: `เรียน ${NAME_TOKEN}`, wrap: true, spacing: 'Small' },
       ...cardLines.map((l) => {
+        // { text, spacing } form: only the assessment backfill message uses it (extra gap between blocks).
+        if (l && typeof l === 'object') return { type: 'TextBlock', text: l.text, wrap: true, spacing: l.spacing || 'Small' };
         const h = /^\*\*(.+)\*\*$/.exec(l);
         return h
           ? { type: 'TextBlock', text: h[1], weight: 'Bolder', wrap: true, spacing: 'Medium' }
@@ -210,6 +217,7 @@ async function sendViaTeamsFlow({ deliveries, subject, title, html, link, endpoi
     try {
       const who = names[String(recipient).toLowerCase()] || '';
       const r = await fetch(url, {
+        signal: AbortSignal.timeout(30000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // teams/email tell the Flow which branch to run for this person.

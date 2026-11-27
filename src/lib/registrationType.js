@@ -36,7 +36,7 @@ export function workflowRequiredSkills(starterName, memberNames) {
 // Conditions, Human Job when HML is on. Workflow skills derives Required Skills from its member rows
 // and adds Workflow Name. (Skill-row fields and Workflow-name uniqueness are checked at submit only.)
 export const MIN_DETAIL = 100;
-const REQUIRED_TEXT = ['agentName', 'input', 'output', 'owner', 'reusable', 'tool'];
+const REQUIRED_TEXT = ['agentName', 'input', 'output', 'owner', 'reusable', 'tool', 'permittedDomains', 'prohibitedUses', 'llm'];
 const LONG_TEXT = ['description', 'businessValue'];
 const filled = (v) => String(v ?? '').trim() !== '';
 const nonEmpty = (v) => (v instanceof Set ? v.size > 0 : Array.isArray(v) ? v.length > 0 : false);

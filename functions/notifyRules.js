@@ -29,7 +29,7 @@
  * admin/committee, which is exactly what visiblePending() does today.
  */
 
-const APP_URL = 'https://wolfy-ai-library.web.app';
+const APP_URL = process.env.CANONICAL_ORIGIN || 'https://wolfy-ai-library.web.app';
 
 // Roles that receive area-routed mail. Mirrors the approver queue: admin and
 // committee are the fullAccess safety net and see everything.

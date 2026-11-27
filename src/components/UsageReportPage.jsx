@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import PageHeader from './PageHeader';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from '../lib/callable';
 import { useAuth } from '../hooks/useAuth';
 import { AREA_ORDER } from '../lib/approveAreas';
 import { downloadCsv } from '../lib/csv';

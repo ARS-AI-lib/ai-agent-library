@@ -108,6 +108,7 @@ export function combineByAgent(config, records) {
       answers,
       hasPre: !!pre,
       hasDeploy: !!deploy,
+      preAnswered: config.questions.some((qq) => qq.stage === 'pre' && !!optionOf(config, qq.id, answers[qq.id])),
       preScore: evaluate(config, answers, 'pre', { partial: true }).total,
       deployScore: deploy ? evaluate(config, answers, 'deploy', { partial: true }).total : null,
       total: all.total,
@@ -116,6 +117,15 @@ export function combineByAgent(config, records) {
       should: all.should.map((m) => m.item),
     };
   });
+}
+
+// Long text for the on-screen Declaration block (CSV keeps the full text).
+export function clipText(text, max = 250) {
+  const t = String(text ?? '').trim();
+  const parts = typeof Intl !== 'undefined' && Intl.Segmenter
+    ? Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(t), (x) => x.segment)
+    : Array.from(t);
+  return parts.length > max ? `${parts.slice(0, max).join('')}…` : t;
 }
 
 // One answer for display: text, points and whether it still needs attention.
@@ -137,7 +147,7 @@ export function agentCsv(config, rows) {
   const headers = ['Date', 'Owner', 'Agent/Skill', 'Level', 'Pre-assessment score', 'Deploy request score', 'Total score', 'Required fixes', 'Recommended fixes', ...DECL_COLUMNS.map((c) => c.label), ...config.questions.map((q) => q.code)];
   const out = rows.map((r) => [
     bangkokDateTime(r.createdAt), safeCell(r.owner || ''), safeCell(r.agentName || ''), r.level || '',
-    r.preScore, r.deployScore ?? '', r.total, r.must.join(' '), r.should.join(' '),
+    r.preAnswered ? r.preScore : '', r.deployScore ?? '', r.total, r.must.join(' '), r.should.join(' '),
     ...DECL_COLUMNS.map((c) => safeCell(r.decl?.[c.key] || '')),
     ...config.questions.map((q) => safeCell(answerLabel(answerDetail(config, r.answers, q)))),
   ]);

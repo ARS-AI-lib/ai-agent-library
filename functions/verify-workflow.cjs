@@ -58,17 +58,17 @@ eq('buildWorkflowDoc does not mutate the starter doc', [main.agentName, 'isWorkf
 eq('workflowRequiredSkills: starter first, blanks dropped', R.workflowRequiredSkills('Starter', ['A', '', 'B']), 'Starter, A, B');
 eq('a built workflow doc is a workflow with its members', (() => { const d = { id: 'w9', ...wd }; const st = { id: 'st1', agentName: 'Starter', ...SK }; const m1 = { id: 'm1', agentName: 'M1', ...SK }; return [U.isWorkflow(d), names(U.workflowMembers(d, [d, st, m1]))]; })(), [true, ['Starter', 'M1']]);
 // Registration "Required fields n of N" (the sticky footer counter)
-const blank = { agentName: '', description: '', input: '', output: '', businessValue: '', owner: '', reusable: '', tool: '', requiredSkills: '', workflowName: '', coreAbility: new Set(), relatedRole: new Set(), skills: [] };
-eq('requiredFieldStatus: empty form → 0 of 11', R.requiredFieldStatus(blank, false), { done: 0, total: 11 });
-eq('requiredFieldStatus: Workflow adds Workflow Name → total 12', R.requiredFieldStatus(blank, true).total, 12);
+const blank = { agentName: '', description: '', input: '', output: '', businessValue: '', owner: '', reusable: '', tool: '', permittedDomains: '', prohibitedUses: '', llm: '', requiredSkills: '', workflowName: '', coreAbility: new Set(), relatedRole: new Set(), skills: [] };
+eq('requiredFieldStatus: empty form → 0 of 14', R.requiredFieldStatus(blank, false), { done: 0, total: 14 });
+eq('requiredFieldStatus: Workflow adds Workflow Name → total 15', R.requiredFieldStatus(blank, true).total, 15);
 eq('requiredFieldStatus: whitespace-only is not done', R.requiredFieldStatus({ ...blank, agentName: '   ' }, false).done, 0);
 const long = 'x'.repeat(100);
-const full = { ...blank, agentName: 'a', description: long, input: 'i', output: 'o', businessValue: long, owner: 'T', reusable: 'Reusable', tool: 't', requiredSkills: 'r', coreAbility: new Set(['x']), relatedRole: new Set(['y']) };
-eq('requiredFieldStatus: everything filled → done = total', R.requiredFieldStatus(full, false), { done: 11, total: 11 });
-eq('requiredFieldStatus: ability/role accept arrays too', R.requiredFieldStatus({ ...full, coreAbility: ['x'], relatedRole: [] }, false).done, 10);
-eq('requiredFieldStatus: Workflow derives Required Skills from the member rows', [R.requiredFieldStatus({ ...full, requiredSkills: '', workflowName: 'W', skills: [{}] }, true).done, R.requiredFieldStatus({ ...full, requiredSkills: '', workflowName: 'W', skills: [] }, true).done], [12, 11]);
-eq('requiredFieldStatus: Description / Business Value count only at the 100-char minimum (same as validate)', [R.requiredFieldStatus({ ...full, description: 'short' }, false).done, R.requiredFieldStatus({ ...full, businessValue: 'x'.repeat(99) }, false).done], [10, 10]);
-eq('requiredFieldStatus: Reusable with Conditions adds Reuse Conditions', [R.requiredFieldStatus({ ...full, reusable: 'Reusable with Conditions', reuseCondition: '' }, false), R.requiredFieldStatus({ ...full, reusable: 'Reusable with Conditions', reuseCondition: 'when X' }, false)], [{ done: 11, total: 12 }, { done: 12, total: 12 }]);
-eq('requiredFieldStatus: HML adds Human Job', [R.requiredFieldStatus({ ...full, hml: true, humanJob: '' }, false), R.requiredFieldStatus({ ...full, hml: true, humanJob: 'review' }, false)], [{ done: 11, total: 12 }, { done: 12, total: 12 }]);
+const full = { ...blank, agentName: 'a', description: long, input: 'i', output: 'o', businessValue: long, owner: 'T', reusable: 'Reusable', tool: 't', permittedDomains: 'd', prohibitedUses: 'p', llm: 'l', requiredSkills: 'r', coreAbility: new Set(['x']), relatedRole: new Set(['y']) };
+eq('requiredFieldStatus: everything filled → done = total', R.requiredFieldStatus(full, false), { done: 14, total: 14 });
+eq('requiredFieldStatus: ability/role accept arrays too', R.requiredFieldStatus({ ...full, coreAbility: ['x'], relatedRole: [] }, false).done, 13);
+eq('requiredFieldStatus: Workflow derives Required Skills from the member rows', [R.requiredFieldStatus({ ...full, requiredSkills: '', workflowName: 'W', skills: [{}] }, true).done, R.requiredFieldStatus({ ...full, requiredSkills: '', workflowName: 'W', skills: [] }, true).done], [15, 14]);
+eq('requiredFieldStatus: Description / Business Value count only at the 100-char minimum (same as validate)', [R.requiredFieldStatus({ ...full, description: 'short' }, false).done, R.requiredFieldStatus({ ...full, businessValue: 'x'.repeat(99) }, false).done], [13, 13]);
+eq('requiredFieldStatus: Reusable with Conditions adds Reuse Conditions', [R.requiredFieldStatus({ ...full, reusable: 'Reusable with Conditions', reuseCondition: '' }, false), R.requiredFieldStatus({ ...full, reusable: 'Reusable with Conditions', reuseCondition: 'when X' }, false)], [{ done: 14, total: 15 }, { done: 15, total: 15 }]);
+eq('requiredFieldStatus: HML adds Human Job', [R.requiredFieldStatus({ ...full, hml: true, humanJob: '' }, false), R.requiredFieldStatus({ ...full, hml: true, humanJob: 'review' }, false)], [{ done: 14, total: 15 }, { done: 15, total: 15 }]);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

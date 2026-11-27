@@ -37,7 +37,11 @@ function requireCompanyUser(request) {
 setGlobalOptions({ region: 'asia-southeast1', maxInstances: 5 });
 
 const adminApp = initializeApp();
-const db = getFirestore(adminApp, 'ai-agent-lib'); // named DB, not "(default)"
+// Named DB, not "(default)". The test site's copy of these functions (see
+// scripts/deploy-test.sh) sets DB_ID/TEST_MODE in its own .env; production never does.
+const DB_ID = process.env.DB_ID || 'ai-agent-lib';
+const IS_TEST = process.env.TEST_MODE === '1';
+const db = getFirestore(adminApp, DB_ID);
 
 // Core Ability is a choice field owned by /config/schema (never hardcoded —
 // same rule as the React form's dropdown) so the AI's suggested_ability
@@ -658,6 +662,7 @@ const RATE_LIMITS = {
   manageScreeningConfig: 60,
   archiveAssessmentYear: 30,
   listArchivedAssessments: 60,
+  backfillList: 30, backfillSend: 10, backfillMyItems: 60, backfillSubmit: 30, decideReassessment: 30,
 };
 
 async function enforceRateLimit(uid, fnName) {
@@ -950,7 +955,7 @@ const { isProtectedAdminEmail } = require('./protectedAdmins');
 const USAGE_REPORT_ROLES = new Set(['admin', 'committee', 'staff', 'approver']);
 
 const BUCKET = 'wolfy-481609.appspot.com';
-const ENDPOINT_FILE_PREFIX = 'endpointFiles';
+const ENDPOINT_FILE_PREFIX = IS_TEST ? 'test-endpointFiles' : 'endpointFiles';
 
 // Origins that serve this SPA. The client sends its own origin so a preview
 // channel builds a working link, but it is NEVER trusted verbatim — an
@@ -961,8 +966,9 @@ const LIBRARY_ORIGINS = new Set([
   'https://wolfy-481609.web.app',
   'https://wolfy-ai-library.firebaseapp.com',
   'https://wolfy-481609.firebaseapp.com',
+  ...(process.env.CANONICAL_ORIGIN ? [process.env.CANONICAL_ORIGIN] : []),
 ]);
-const CANONICAL_ORIGIN = 'https://wolfy-ai-library.web.app';
+const CANONICAL_ORIGIN = process.env.CANONICAL_ORIGIN || 'https://wolfy-ai-library.web.app';
 
 // Auth already restricts sign-in to the org's Workspace domains, but the
 // download callable IS the SSO gate, so it re-checks rather than inheriting an
@@ -1853,7 +1859,7 @@ const { createUserDocOnce } = require('./userProvision');
 // committee member was silently reset). Audit only — no alert, by decision.
 const { roleAuditEntry } = require('./userProvision');
 exports.auditUserRole = onDocumentWritten(
-  { database: 'ai-agent-lib', document: 'users/{uid}', region: 'asia-southeast1' },
+  { database: DB_ID, document: 'users/{uid}', region: 'asia-southeast1' },
   async (event) => {
     const entry = roleAuditEntry(
       event.params.uid,
@@ -2357,3 +2363,230 @@ exports.sendDelayDigest = onTaskDispatched(
   },
 );
 
+// Test copy only: no Portfolio sync, no scheduled/queued digests — those would
+// act on real data (the portfolio DB) or duplicate production's own runs.
+// ── Assessment backfill (2026-11-27) ─────────────────────────────────
+// Creators of already-live Agents/Skills (>=90%) assess them once, retroactively. Callables stay thin:
+// validate → assessmentBackfillRules (pure) → write → notify. Server re-derives verdict/tier/recipients.
+const BF = require('./assessmentBackfillRules');
+const BF_APP_URL = process.env.CANONICAL_ORIGIN || 'https://wolfy-ai-library.web.app';
+
+async function bfPrep(request, name, allowed) {
+  requireCompanyUser(request);
+  const uid = request.auth.uid;
+  const email = String(request.auth.token?.email || '').toLowerCase();
+  const udoc = (await db.collection('users').doc(uid).get()).data() || {};
+  if (allowed && !allowed.includes(udoc.role)) throw new HttpsError('permission-denied', 'Not allowed for your role.');
+  await enforceRateLimit(uid, name);
+  return { uid, email, user: { uid, email, role: udoc.role, approveAreas: udoc.approveAreas || [], name: udoc.displayName || udoc.name || '' } };
+}
+async function bfConfig() {
+  const snap = await db.doc('config/screening').get();
+  if (!snap.exists) throw new HttpsError('failed-precondition', 'ยังไม่ได้ seed /config/screening');
+  return snap.data();
+}
+const bfAgents = async () => (await db.collection('agents').get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+const bfUsers = async () => (await db.collection('users').get()).docs.map((d) => ({ uid: d.id, ...d.data() }));
+const bfToHttps = (e) => (e && e.code && e.message && !e.httpErrorCode ? new HttpsError(e.code, e.message) : e);
+const bfMillis = (v) => (v?.toDate ? v.toDate().toISOString() : (v instanceof Date ? v.toISOString() : v || null));
+
+exports.backfillList = onCall({ cors: true, timeoutSeconds: 120 }, async (request) => {
+  await bfPrep(request, 'backfillList', ['admin', 'committee']);
+  const [config, all, camp] = await Promise.all([bfConfig(), bfAgents(), db.doc('assessmentCampaigns/current').get()]);
+  const rows = all.filter((a) => BF.inBackfillScope(a, all)).map((a) => {
+    const status = BF.backfillStatus(a, config);
+    const v = a.screening?.answers ? BF.backfillVerdict({ config, answers: a.screening.answers, tier: BF.getTier(a) }) : null;
+    return {
+      id: a.id, name: a.agentName || '', tier: BF.getTier(a), phase: BF.normalizeProgress(a.devProgress) >= 100 ? 'Ready to Use' : 'Pilot',
+      owner: a.owner || '', creators: Array.isArray(a.creatorEmails) ? a.creatorEmails : [], status,
+      level: v?.level || a.screening?.level || '', reasons: a.assessment?.reasons || v?.reasons || [],
+      firstAssessedAt: bfMillis(a.assessment?.firstAssessedAt), lastAssessedAt: bfMillis(a.assessment?.lastAssessedAt),
+    };
+  });
+  return { rows, campaign: camp.exists ? camp.data() : null };
+});
+
+exports.backfillSend = onCall({ cors: true, timeoutSeconds: 3600, secrets: [TEAMS_FLOW_URL] }, async (request) => {
+  const t0 = Date.now();
+  const { uid, email } = await bfPrep(request, 'backfillSend', ['admin', 'committee']);
+  const { dueDate, channels, testOnly, preview } = request.data || {};
+  let msgOv; let pickIds;
+  try { msgOv = BF.validateMessage(request.data?.message); pickIds = BF.validateAgentIds(request.data?.agentIds); } catch (e) { throw bfToHttps(e); }
+  const dueErr = BF.validateDueDate(dueDate, new Date());
+  if (dueErr) throw new HttpsError('invalid-argument', dueErr);
+  const chans = (Array.isArray(channels) ? channels : []).filter((c) => ['inbox', 'teams', 'email'].includes(c));
+  if (!chans.length && !preview) throw new HttpsError('invalid-argument', 'เลือกช่องทางอย่างน้อย 1 ช่อง');
+  const [config, all] = await Promise.all([bfConfig(), bfAgents()]);
+  // Scope and status are always re-derived here; agentIds only narrows the not_done set.
+  const rows = BF.selectRows(all.filter((a) => BF.inBackfillScope(a, all)).map((a) => ({ agent: a, status: BF.backfillStatus(a, config) })), pickIds);
+  const { digests, noEmail } = BF.creatorDigests(rows);
+  const dueLabel = BF.formatDueDate(new Date(`${dueDate}T05:00:00Z`));
+  const dir = new Map((await bfUsers()).map((u) => [String(u.email || '').toLowerCase(), u]));
+  const render = (d) => BF.renderBackfillMessage({ displayName: (dir.get(d.email)?.displayName || '').split(' ')[0], items: d.items, dueDate: dueLabel, appUrl: BF_APP_URL, overrides: msgOv });
+  if (!preview && pickIds && !digests.length) throw new HttpsError('invalid-argument', 'ไม่ได้เลือกรายการที่ต้องส่ง');
+  if (preview) {
+    if (!digests.length) return { preview: null, count: 0, defaults: BF.defaultMessageParts(dueLabel) };
+    const m = render(digests[0]);
+    return { preview: { subject: m.subject, text: m.inboxText, html: m.html }, count: digests.length, defaults: BF.defaultMessageParts(dueLabel) };
+  }
+  const allTargets = testOnly ? [digests.find((d) => d.email === email) || digests[0]].filter(Boolean).map((d) => ({ ...d, to: email })) : digests.map((d) => ({ ...d, to: d.email }));
+  // 10 s between creators (user order); the 3300 s deadline guard (timeout 3600) truncates first for large batches.
+  const SEND_GAP_MS = 10000; const SEND_DEADLINE_MS = 3300000;
+  const MAX_SEND = 400;
+  const targets = allTargets.slice(0, MAX_SEND);
+  const truncated = allTargets.length - targets.length;
+  const mailChan = chans.includes('teams') || chans.includes('email');
+  const campRef = db.doc('assessmentCampaigns/current');
+  const startedAt = new Date().toISOString();
+  if (!testOnly && targets.length) {
+    await campRef.set({ dueDate, channels: chans, currentSend: { at: startedAt, by: email || uid, status: 'started', planned: targets.length } }, { merge: true });
+  }
+  const results = []; const failedRecipients = []; let inboxCount = 0; let attempted = 0;
+  for (let i = 0; i < targets.length; i += 1) {
+    if (BF.shouldStopSending(Date.now() - t0, SEND_DEADLINE_MS)) break;
+    attempted += 1;
+    const d = targets[i];
+    if (i > 0) await new Promise((r) => setTimeout(r, SEND_GAP_MS));
+    try {
+      const m = render(d);
+      if (chans.includes('inbox')) {
+        await db.collection('inboxMessages').add({ toEmail: d.to.toLowerCase(), title: m.subject, body: m.inboxText, link: m.link, kind: 'assessment-backfill', createdAt: FieldValue.serverTimestamp() });
+        inboxCount += 1;
+      }
+      if (mailChan) {
+        results.push(await sendMail(db, { to: [d.to], subject: m.subject, text: m.text, html: m.html, title: m.subject, link: m.link, cardLines: m.cardLines, ctaLabel: 'ทำ Assessment' }));
+      }
+    } catch (e) {
+      console.error('backfillSend delivery failed');
+      results.push({ error: true });
+      failedRecipients.push(d.to);
+    }
+  }
+  const tally = BF.tallyDeliveries(results);
+  const remaining = (targets.length - attempted) + (allTargets.length - targets.length);
+  const isPartial = remaining > 0;
+  if (!testOnly && targets.length) {
+    await campRef.set({
+      currentSend: FieldValue.delete(),
+      sends: FieldValue.arrayUnion({ at: startedAt, by: email || uid, count: tally.sent, inbox: inboxCount, testOnly: false, remaining, status: isPartial ? 'partial' : 'done' }),
+    }, { merge: true });
+  } else if (testOnly && targets.length) {
+    await campRef.set({
+      testSends: FieldValue.arrayUnion({ at: startedAt, by: email || uid, count: tally.sent, inbox: inboxCount }),
+    }, { merge: true });
+  }
+  const counts = { inbox: inboxCount, sent: tally.sent, held: tally.held, skipped: tally.skipped, dryRun: tally.dryRun, disabled: tally.disabled, failed: tally.failed };
+  return { ...counts, remaining, summary: BF.summarizeSend({ ...counts, remaining }), skippedNoEmail: noEmail.length, truncated: isPartial, truncatedCount: truncated, failedRecipients, recipients: targets.map((d) => d.to) };
+});
+
+exports.backfillMyItems = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
+  const { uid, email } = await bfPrep(request, 'backfillMyItems', null);
+  const [config, all, camp] = await Promise.all([bfConfig(), bfAgents(), db.doc('assessmentCampaigns/current').get()]);
+  const items = all.filter((a) => BF.inBackfillScope(a, all) && !BF.canSubmit(a, { email, uid })).map((a) => ({
+    id: a.id, name: a.agentName || '', tier: BF.getTier(a), phase: BF.normalizeProgress(a.devProgress) >= 100 ? 'Ready to Use' : 'Pilot',
+    status: BF.backfillStatus(a, config), doneBy: a.assessment?.lastBy || '', doneAt: bfMillis(a.assessment?.lastAssessedAt),
+    missingDecl: ['description', 'permittedDomains', 'prohibitedUses', 'tool', 'requiredSkills', 'llm'].filter((k) => String(a[k] ?? '').trim() === ''),
+  }));
+  return { items, dueDate: camp.exists ? camp.data().dueDate || null : null };
+});
+
+async function bfNotify(agent, subject, to, lines) {
+  const text = [`Agent/Skill: ${agent.agentName || ''}`, ...lines].join('\n');
+  const link = `${BF_APP_URL}/?agent=${encodeURIComponent(agent.id)}`;
+  if (!to.length) return;
+  try { await sendMail(db, { to, subject, text, title: subject, link, cardLines: lines, ctaLabel: 'เปิดรายการ' }); } catch (e) { console.error('assessment notify failed', agent.id); }
+}
+
+exports.backfillSubmit = onCall({ cors: true, timeoutSeconds: 60, secrets: [TEAMS_FLOW_URL] }, async (request) => {
+  const { user } = await bfPrep(request, 'backfillSubmit', null);
+  const { agentId, answers, decl, mode } = request.data || {};
+  if (!agentId || typeof agentId !== 'string') throw new HttpsError('invalid-argument', 'agentId required');
+  if (!['backfill', 'review'].includes(mode)) throw new HttpsError('invalid-argument', 'mode ไม่ถูกต้อง');
+  const config = await bfConfig();
+  let clean;
+  try { clean = BF.sanitizeSubmitInput({ answers, decl }, config); } catch (e) { throw bfToHttps(e); }
+  const allAgents = await bfAgents();
+  const ref = db.collection('agents').doc(agentId);
+  let out; let agentNow; let verdict;
+  try {
+    out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw { code: 'not-found', message: 'ไม่พบรายการ' };
+      const agent = { id: snap.id, ...snap.data() };
+      const res = BF.applySubmit(agent, { answers: clean.answers, decl: clean.decl, mode, config, user, all: allAgents.map((a) => (a.id === agent.id ? agent : a)) }, new Date());
+      verdict = BF.backfillVerdict({ config, answers: clean.answers, tier: BF.getTier(agent) });
+      if (mode === 'review') {
+        tx.set(db.collection('assessmentReviews').doc(), {
+          agentId, agentName: agent.agentName || '', approveArea: agent.approveArea || [], answers: clean.answers, decl: clean.decl,
+          verdict: verdict.pass ? 'pass' : 'fail', previous: { status: agent.assessment?.status || '', reasons: agent.assessment?.reasons || [] },
+          requestedBy: user.email, requestedByUid: user.uid, createdAt: FieldValue.serverTimestamp(), status: 'pending',
+        });
+      }
+      const patch = { ...res.patch, updatedAt: FieldValue.serverTimestamp() };
+      if (patch.screening) { patch.screening = { ...patch.screening, preAt: patch.screening.preAt || FieldValue.serverTimestamp(), deployAt: FieldValue.serverTimestamp() }; }
+      if (patch.assessment) {
+        const a = patch.assessment;
+        patch.assessment = { ...a, firstAssessedAt: agent.assessment?.firstAssessedAt || FieldValue.serverTimestamp(), lastAssessedAt: FieldValue.serverTimestamp() };
+      }
+      tx.update(ref, patch);
+      res.records.forEach((r) => tx.set(db.collection('assessments').doc(), { ...r, createdAt: FieldValue.serverTimestamp() }));
+      agentNow = agent;
+      return res;
+    });
+  } catch (e) { throw bfToHttps(e); }
+  const reasons = out.patch.assessment?.reasons || [];
+  try {
+    if (mode === 'backfill' && out.status === 'fail') {
+      const rec = BF.notPassRecipients(agentNow, await bfUsers(), await loadConfig(db));
+      await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ไม่ผ่าน Assessment — กรุณาแก้ไขโดยด่วน`, rec, [`เหตุผล: ${reasons.join(', ') || '-'}`]);
+    }
+    if (mode === 'review') {
+      const rec = BF.notPassRecipients({ ...agentNow, creatorEmails: [] }, await bfUsers(), await loadConfig(db));
+      await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ขอประเมินใหม่ — รอการยืนยัน`, rec, [`ผู้ขอ: ${user.email}`]);
+    }
+  } catch (e) { console.error('assessment notify failed', agentId); }
+  return { status: out.status, level: verdict?.level || '', reasons };
+});
+
+exports.decideReassessment = onCall({ cors: true, timeoutSeconds: 60, secrets: [TEAMS_FLOW_URL] }, async (request) => {
+  const { user } = await bfPrep(request, 'decideReassessment', ['admin', 'approver']);
+  const { reviewId, decision, reason } = request.data || {};
+  if (!reviewId || typeof reviewId !== 'string') throw new HttpsError('invalid-argument', 'reviewId required');
+  const config = await bfConfig();
+  const rref = db.collection('assessmentReviews').doc(reviewId);
+  let agentNow; let status;
+  try {
+    await db.runTransaction(async (tx) => {
+      const rs = await tx.get(rref);
+      if (!rs.exists || rs.data().status !== 'pending') throw { code: 'failed-precondition', message: 'คำขอนี้ถูกตัดสินแล้วหรือไม่มีอยู่' };
+      const review = rs.data();
+      const as = await tx.get(db.collection('agents').doc(review.agentId));
+      if (!as.exists) throw { code: 'not-found', message: 'ไม่พบรายการ' };
+      const agent = { id: as.id, ...as.data() };
+      const denied = BF.canDecideReview(agent, user);
+      if (denied) throw { code: 'permission-denied', message: denied };
+      const res = BF.applyDecision(agent, review, { decision, reason, config, now: new Date(), deciderUid: user.uid, deciderIsAdmin: user.role === 'admin' });
+      const patch = { ...res.patch, updatedAt: FieldValue.serverTimestamp() };
+      if (patch.screening) patch.screening = { ...patch.screening, deployAt: FieldValue.serverTimestamp() };
+      if (patch.assessment) patch.assessment = { ...patch.assessment, lastAssessedAt: FieldValue.serverTimestamp() };
+      tx.update(as.ref, patch);
+      res.records.forEach((r) => tx.set(db.collection('assessments').doc(), { ...r, createdAt: FieldValue.serverTimestamp() }));
+      tx.update(rref, { status: decision === 'accept' ? 'accepted' : 'rejected', decidedBy: user.email, decidedAt: FieldValue.serverTimestamp(), decisionReason: String(reason || '') });
+      agentNow = agent; status = res.status;
+    });
+  } catch (e) { throw bfToHttps(e); }
+  try {
+    const users = await bfUsers();
+    const cfg = await loadConfig(db);
+    const creators = (agentNow.creatorEmails || []).map((e) => String(e).toLowerCase());
+    const to = decision === 'accept' ? BF.notPassRecipients(agentNow, users, cfg) : creators;
+    await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ผลการขอประเมินใหม่: ${decision === 'accept' ? 'ผ่าน' : 'ไม่ผ่าน'}`, to, [decision === 'reject' ? `เหตุผล: ${reason}` : 'ยืนยันผลประเมินใหม่แล้ว']);
+  } catch (e) { console.error('assessment notify failed', reviewId); }
+  return { ok: true, status };
+});
+
+if (IS_TEST) {
+  delete exports.syncPortfolioAdoption;
+  delete exports.delayAlertsMon;
+  delete exports.sendDelayDigest;
+}

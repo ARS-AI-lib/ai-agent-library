@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signInWithCredential, GoogleAuthProvider, signOut as fbSignOut } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from '../lib/callable';
 import { auth, googleProvider, db, isAllowedUser, ALLOWED_DOMAINS_LABEL, USING_EMULATOR } from '../lib/firebase';
 import { setDirectoryToken, warmDirectory } from '../lib/directory';
 

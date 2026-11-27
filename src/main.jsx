@@ -9,8 +9,11 @@ import TimelinePage from './components/TimelinePage.jsx'
 import FileDownloadPage from './components/FileDownloadPage.jsx'
 import UsageReportPage from './components/UsageReportPage.jsx'
 import AssessmentResultsPage from './components/AssessmentResultsPage.jsx'
+import AssessBackfillPage from './components/AssessBackfillPage.jsx'
+import AssessmentBackfillPage from './components/AssessmentBackfillPage.jsx'
 import WorkshopPage from './components/WorkshopPage.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import NewVersionBanner from './components/NewVersionBanner.jsx'
 
 // V7 look is scoped under body.v7 (see styles/v7.css).
 document.body.classList.add('v7');
@@ -28,6 +31,8 @@ const path = window.location.pathname.replace(/\/+$/, '');
 const Root = path === '/timeline' ? TimelinePage
   : path === '/usage' ? UsageReportPage
     : path === '/assessments' ? AssessmentResultsPage
+    : path === '/assess' ? AssessBackfillPage
+    : path === '/assessment-backfill' ? AssessmentBackfillPage
     : path === '/workshop' ? WorkshopPage
       : path.startsWith('/f/') ? FileDownloadPage
         : App;
@@ -36,6 +41,7 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
       <Root />
+      <NewVersionBanner />
     </ErrorBoundary>
   </StrictMode>,
 )

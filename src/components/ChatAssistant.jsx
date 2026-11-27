@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from '../lib/callable';
 import { db } from '../lib/firebase';
 import { runSkill, resolveAgentByName, readinessOf } from '../lib/skills';
 import { recordAgentEvent, recordSearchHits } from '../lib/agentEvents';

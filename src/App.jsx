@@ -7,9 +7,10 @@ import { useConfigSchema } from './hooks/useConfigSchema';
 import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from './lib/agentUtils';
 import { getType, getTier } from './lib/tier';
 import { queueViewer } from './lib/pendingQueue';
-import { activeAnnouncements, unreadAnnouncements, inboxQueueCount, inboxBadgeCount, canPostAnnouncements } from './lib/inbox';
+import { activeAnnouncements, unreadAnnouncements, inboxQueueCount, inboxBadgeCount, canPostAnnouncements, unreadMessages as unreadMessagesOf, msgReadId, knownReadIds } from './lib/inbox';
 import useAnnouncements from './hooks/useAnnouncements';
 import useInboxState from './hooks/useInboxState';
+import useInboxMessages from './hooks/useInboxMessages';
 import { recordSearchHits } from './lib/agentEvents';
 import { canAttachFileTo } from './lib/endpointFiles';
 import { useAgentStats } from './hooks/useAgentStats';
@@ -310,6 +311,19 @@ export default function App() {
     );
     return unsub;
   }, [role]);
+  // Assessment re-assessment reviews (2026-11-27): fourth queue. Only attached
+  // for roles the rules let list /assessmentReviews (approver-or-above) so
+  // nobody else gets a permission-denied listener.
+  const [assessmentReviews, setAssessmentReviews] = useState([]);
+  useEffect(() => {
+    if (!['approver', 'committee', 'admin'].includes(role)) { setAssessmentReviews([]); return undefined; }
+    const q = query(collection(db, 'assessmentReviews'), where('status', '==', 'pending'));
+    return onSnapshot(
+      q,
+      (snap) => setAssessmentReviews(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      () => setAssessmentReviews([]),
+    );
+  }, [role]);
   // Inbox (2026-11-17): announcements + read state. Called here, above every
   // early return, so hook order never changes. Both stay detached until the
   // role doc has resolved (and useAnnouncements also until the role has an
@@ -317,16 +331,23 @@ export default function App() {
   const { announcements } = useAnnouncements(role, roleReady);
   const { readIds, markRead, markAllRead } = useInboxState(user?.uid, roleReady);
   const activeAnns = useMemo(() => activeAnnouncements(announcements), [announcements]);
-  const activeAnnIds = useMemo(() => activeAnns.map((a) => a.id), [activeAnns]);
+  const { messages: inboxMessages, loaded: msgsLoaded } = useInboxMessages(roleReady ? user?.email : null);
+  // Known ids for pruning: announcements + messages (`msg:` ids), so reading a
+  // message is never pruned away.
+  const activeAnnIds = useMemo(
+    () => knownReadIds(activeAnns.map((a) => a.id), inboxMessages, msgsLoaded, readIds),
+    [activeAnns, inboxMessages, msgsLoaded, readIds],
+  );
+  const unreadMsgCount = useMemo(() => unreadMessagesOf(inboxMessages, readIds).length, [inboxMessages, readIds]);
   const unreadCount = useMemo(() => unreadAnnouncements(activeAnns, readIds).length, [activeAnns, readIds]);
   // Badge = unread announcements + the approval queue WITHOUT the base-user
   // own-items fallback (own items are listed under My requests, never counted).
   // The same queueCount is handed to InboxModal so badge and list cannot drift.
   const queueCount = useMemo(
-    () => inboxQueueCount(pending, parentDeployRequests, renameReqs, agents, queueViewerCtx),
-    [pending, parentDeployRequests, renameReqs, agents, queueViewerCtx]
+    () => inboxQueueCount(pending, parentDeployRequests, renameReqs, agents, queueViewerCtx, assessmentReviews),
+    [pending, parentDeployRequests, renameReqs, agents, queueViewerCtx, assessmentReviews]
   );
-  const inboxCount = inboxBadgeCount({ unreadCount, queueCount });
+  const inboxCount = inboxBadgeCount({ unreadCount, queueCount, unreadMessages: unreadMsgCount });
 
   const filtered = useMemo(() => {
     let pred = buildAgentFilter({ type, owner, role: role_, tier, reusable, hasEndpoint, category, stage, platformTools, externalSkills, search });
@@ -684,13 +705,17 @@ export default function App() {
           isAdmin={isAdmin}
           isCommittee={isCommittee}
           announcements={announcements}
+          messages={inboxMessages}
           readIds={readIds}
           onMarkRead={(id) => markRead(id, activeAnnIds)}
-          onMarkAllRead={() => markAllRead(activeAnnIds)}
+          onMarkAllRead={(scope) => (scope === 'msg'
+            ? markAllRead(inboxMessages.map((m) => msgReadId(m.id)), activeAnnIds)
+            : markAllRead(activeAnnIds))}
           allAgents={allAgents}
           pending={pending}
           deployRequests={parentDeployRequests}
           renameReqs={renameReqs}
+          assessmentReviews={assessmentReviews}
           queueViewerCtx={queueViewerCtx}
           queueCount={queueCount}
           onOpenAgent={(a) => { setShowInbox(false); setSelectedAgent(a); }}
@@ -715,6 +740,7 @@ export default function App() {
           pending={pending}
           deployRequests={parentDeployRequests}
           renameReqs={renameReqs}
+          assessmentReviews={assessmentReviews}
           onClose={() => setShowPending(false)}
           user={user}
           userRole={role}

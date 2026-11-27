@@ -76,5 +76,28 @@ eq('answerLabel', [A.answerLabel(A.answerDetail(CFG, a1.answers, q('C4'))), A.an
 const ac = A.agentCsv(CFG, rows);
 eq('agentCsv headers', ac.headers.slice(0, 9), ['Date', 'Owner', 'Agent/Skill', 'Level', 'Pre-assessment score', 'Deploy request score', 'Total score', 'Required fixes', 'Recommended fixes']);
 eq('agentCsv C cell carries the label', ac.rows.find((r) => r[2] === 'Flow')[ac.headers.indexOf('C4')], `${q('C4').options[3].th} (8)`);
+// ── Task 9: preAnswered from answers, clipText, full description in CSV
+eq('preAnswered: pre record with pre answers', [a1.preAnswered, a1.hasPre], [true, true]);
+const legacy = { ...mk('d9', 'Team A', ['QA'], '2026-11-22T05:00:00Z', 'deploy', P), agentId: 'L1', agentName: 'Legacy' };
+const lrow = A.combineByAgent(CFG, [legacy])[0];
+eq('preAnswered: deploy-only record with C1-C9 answers', [lrow.hasPre, lrow.preAnswered, lrow.preScore], [false, true, A.combineByAgent(CFG, [{ ...legacy, stage: 'pre' }])[0].preScore]);
+const noPre = { ...mk('d10', 'Team A', ['QA'], '2026-11-22T05:00:00Z', 'deploy', { C10: 'C10a', C11: 'C11c' }), agentId: 'L2', agentName: 'NoPre' };
+eq('preAnswered: deploy record without pre answers', A.combineByAgent(CFG, [noPre])[0].preAnswered, false);
+eq('clipText: 250 unchanged', A.clipText('x'.repeat(250)), 'x'.repeat(250));
+eq('clipText: 251 -> 250 + ellipsis', A.clipText('x'.repeat(251)), 'x'.repeat(250) + '…');
+eq('clipText: empty/undefined/null', [A.clipText(''), A.clipText(undefined), A.clipText(null)], ['', '', '']);
+const longDesc = 'd'.repeat(300);
+const lcsv = A.agentCsv(CFG, A.combineByAgent(CFG, [{ ...legacy, decl: { description: longDesc } }]));
+eq('agentCsv keeps the full description', lcsv.rows[0][lcsv.headers.indexOf('Description')], longDesc);
+eq('preAnswered: removed option id -> false', A.combineByAgent(CFG, [{ ...legacy, answers: { C1: 'C1x' } }])[0].preAnswered, false);
+eq('preAnswered: one valid pre answer -> true', A.combineByAgent(CFG, [{ ...legacy, answers: { C1: 'C1a' } }])[0].preAnswered, true);
+eq('agentCsv: pre score blank when not answered', A.agentCsv(CFG, A.combineByAgent(CFG, [noPre])).rows[0][4], '');
+const E250 = '😀'.repeat(250);
+eq('clipText: 250 emoji unchanged', A.clipText(E250), E250);
+const ce = A.clipText('😀'.repeat(251));
+eq('clipText: 251 emoji -> 250 + ellipsis, no lone surrogate', [ce === E250 + '…', !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(ce)], [true, true]);
+const th = 'กี่'.repeat(300);
+const ct = A.clipText(th);
+eq('clipText: Thai cluster not split', [ct.endsWith('…'), /[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]$/.test(ct.slice(0, -1)), ct.slice(0, -1).length % 3], [true, true, 0]);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

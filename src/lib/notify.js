@@ -1,4 +1,4 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from './callable';
 
 // Client side of email notifications (2026-08-20).
 //

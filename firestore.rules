@@ -170,7 +170,13 @@ service cloud.firestore {
             && resource.data.get('devProgress', 0) < 100
             && resource.data.get('deploymentStatus', 'none') in ['none', 'rejected', null]
             && request.resource.data.devProgress == 95
-            && request.resource.data.deploymentStatus == 'requested')
+            && request.resource.data.deploymentStatus == 'requested'
+            // 2026-11-27: a deploy request MUST carry the Deployment checklist and the assessment
+            // (screening) written in the same update — a stale browser tab running the pre-assessment
+            // form is refused instead of filing an unassessed request (Motion Principles incident).
+            && affectedKeys().hasAll(['deployChecklist', 'screening'])
+            && request.resource.data.screening.get('deployAt', null) is timestamp
+            && request.resource.data.deployChecklist.get('checked', null) is list)
         // Detail edit — Tier A (2026-07-xx): staff/committee may edit the
         // NON-sensitive detail set on a doc that isn't under deploy review.
         // This branch deliberately EXCLUDES creator/creatorEmails/launchDate/
@@ -194,7 +200,7 @@ service cloud.firestore {
             && affectedKeys().hasOnly([
                  'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing',
                  'internalUse', 'coreAbility', 'relatedRole', 'reusable', 'reuseCondition', 'hml',
-                 'humanJob', 'externalSource', 'updatedAt',
+                 'humanJob', 'externalSource', 'permittedDomains', 'prohibitedUses', 'requiredSkills', 'tool', 'llm', 'updatedAt',
                ])
             && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved']))
         // Detail edit — Tier B (2026-07-03, widened): the agent's owner
@@ -207,7 +213,8 @@ service cloud.firestore {
         || (affectedKeys().hasOnly([
               'agentName', 'description', 'input', 'output', 'compatibleAgents', 'customerFacing', 'internalUse',
               'coreAbility', 'relatedRole', 'creator', 'creatorEmails', 'reusable', 'reuseCondition', 'hml',
-              'humanJob', 'externalSource', 'launchDate', 'devProgress', 'developmentPhase', 'phaseSince', 'progressUpdatedAt', 'updatedAt',
+              'humanJob', 'externalSource', 'launchDate', 'devProgress', 'developmentPhase', 'phaseSince', 'progressUpdatedAt',
+              'permittedDomains', 'prohibitedUses', 'requiredSkills', 'tool', 'llm', 'updatedAt',
             ])
             && isOwnerCreatorOrApprover(resource.data)
             && !(resource.data.get('deploymentStatus', 'none') in ['requested', 'approved'])
@@ -248,7 +255,10 @@ service cloud.firestore {
         || (isApproverOrAbove()
             && affectedKeys().hasOnly(['deploymentStatus', 'deployDecidedBy', 'deployDecidedAt', 'updatedAt'])
             && resource.data.get('deploymentStatus', 'none') == 'requested'
-            && request.resource.data.deploymentStatus in ['approved', 'rejected'])
+            && request.resource.data.deploymentStatus in ['approved', 'rejected']
+            // 2026-11-27: approving needs a completed assessment on the doc (rejecting never does).
+            && (request.resource.data.deploymentStatus == 'rejected'
+                || resource.data.get('screening', {}).get('deployAt', null) is timestamp))
         // Archive / un-archive (2026-07-22): retiring an entry from the library
         // is a CURATION right, so unlike the detail tiers above it is granted by
         // role only — committee/approver/admin — and never by authorship
@@ -501,6 +511,22 @@ service cloud.firestore {
         && request.resource.data.answers.size() <= 60
         && (isAdmin() || isOwnerCreatorOrApprover(get(/databases/$(database)/documents/agents/$(request.resource.data.agentId)).data));
       allow update, delete: if false;
+    }
+    // Assessment backfill (2026-11-27). All three collections are written ONLY by callables
+    // (Admin SDK); clients never write. toEmail is stored lower-cased, so compare against
+    // the lower-cased token email (a list query must filter where('toEmail','==',lower)).
+    match /inboxMessages/{id} {
+      allow read: if isSignedIn() && resource.data.get('toEmail', '') == request.auth.token.email.lower();
+      allow write: if false;
+    }
+    match /assessmentCampaigns/{id} {
+      allow read: if isCommittee();
+      allow write: if false;
+    }
+    match /assessmentReviews/{id} {
+      allow read: if isApproverOrAbove()
+        || (isSignedIn() && resource.data.get('requestedByUid', '') == request.auth.uid);
+      allow write: if false;
     }
     // Frozen yearly archive — callables (Admin SDK) only.
     match /assessmentArchive/{document=**} {
