@@ -96,7 +96,7 @@ const E250 = '😀'.repeat(250);
 eq('clipText: 250 emoji unchanged', A.clipText(E250), E250);
 const ce = A.clipText('😀'.repeat(251));
 eq('clipText: 251 emoji -> 250 + ellipsis, no lone surrogate', [ce === E250 + '…', !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(ce)], [true, true]);
-const th = 'กี่'.repeat(200);
+const th = 'กี่'.repeat(300);
 const ct = A.clipText(th);
 eq('clipText: Thai cluster not split', [ct.endsWith('…'), /[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]$/.test(ct.slice(0, -1)), ct.slice(0, -1).length % 3], [true, true, 0]);
 console.log(`\n${pass} passed, ${fail} failed`);
