@@ -52,3 +52,23 @@ export function assessmentWarning(agent) {
 // Bulk send is paced 10 s per creator (user order 2026-11-27); estimate shown before confirming.
 export const SEND_GAP_SECONDS = 10;
 export const estimateSendMinutes = (creatorCount) => Math.ceil((Math.max(0, creatorCount) * SEND_GAP_SECONDS) / 60);
+
+// Row selection on the admin page (2026-11-27). Only not_done rows are selectable.
+const selectable = (r) => r.status === 'not_done';
+export const defaultSelection = (rows) => new Set((rows || []).filter(selectable).map((r) => r.id));
+export const toggleId = (set, id) => { const n = new Set(set); if (n.has(id)) n.delete(id); else n.add(id); return n; };
+export function selectAllFiltered(set, shown, checked) {
+  const n = new Set(set);
+  (shown || []).filter(selectable).forEach((r) => (checked ? n.add(r.id) : n.delete(r.id)));
+  return n;
+}
+export function selectionState(set, shown) {
+  const sel = (shown || []).filter(selectable);
+  const c = sel.filter((r) => set.has(r.id)).length;
+  return c === 0 ? 'none' : c === sel.length ? 'all' : 'some';
+}
+export function selectionCounts(rows, set) {
+  const chosen = (rows || []).filter((r) => selectable(r) && set.has(r.id));
+  return { items: chosen.length, creators: new Set(chosen.flatMap((r) => r.creators || [])).size };
+}
+export const pruneSelection = (set, rows) => new Set([...set].filter((id) => (rows || []).some((r) => r.id === id && selectable(r))));

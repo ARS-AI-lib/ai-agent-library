@@ -78,16 +78,53 @@ function notPassRecipients(agent, users, cfg) {
 
 const formatDueDate = (d) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Bangkok' }).format(d);
 
-function renderBackfillMessage({ displayName, items, dueDate, appUrl }) {
-  const subject = `ขอความร่วมมือทำ Assessment ของ Agent/Skill ภายใน ${dueDate}`;
+const REPLY = 'หากรายการใดไม่ได้อยู่ในความดูแลของคุณแล้ว ตอบกลับอีเมลนี้เพื่อแจ้งได้เลย';
+const DEFAULT_INTRO = 'AI Agent Library เพิ่มแบบประเมินความเสี่ยง (Assessment) สำหรับ Agent/Skill ทุกตัว งานที่ใช้งานอยู่แล้วก่อนมีแบบประเมินนี้จึงต้องประเมินย้อนหลังหนึ่งครั้ง คุณเป็น Creator ของรายการต่อไปนี้:';
+const DEFAULT_OUTRO = `${REPLY}\n\nขอบคุณครับ\nทีม AI Agent Library`;
+const subjectFor = (dueDate) => `ขอความร่วมมือทำ Assessment ของ Agent/Skill ภายใน ${dueDate}`;
+
+/** Editable parts with their default copy (page pre-fills from this). */
+const defaultMessageParts = (dueDate) => ({ subject: subjectFor(dueDate), intro: DEFAULT_INTRO, outro: DEFAULT_OUTRO });
+
+// eslint-disable-next-line no-control-regex
+const stripCtl = (t) => String(t).replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, '').trim();
+/** Validate + clean the admin's message overrides. Empty string = use default. Throws invalid-argument. */
+function validateMessage(m) {
+  if (m == null) return {};
+  if (typeof m !== 'object' || Array.isArray(m)) throw err('invalid-argument', 'message ไม่ถูกต้อง');
+  const limits = { subject: 200, intro: 2000, outro: 2000 };
+  const out = {};
+  Object.entries(limits).forEach(([k, max]) => {
+    if (m[k] == null) return;
+    if (typeof m[k] !== 'string') throw err('invalid-argument', `message.${k} ไม่ถูกต้อง`);
+    if (m[k].length > max) throw err('invalid-argument', `message.${k} ยาวเกิน ${max} ตัวอักษร`);
+    out[k] = stripCtl(m[k]);
+  });
+  return out;
+}
+
+/** Optional list of agent ids chosen on the admin page (never trusted for scope/status). */
+function validateAgentIds(ids) {
+  if (ids == null) return null;
+  if (!Array.isArray(ids) || ids.length > 1000 || ids.some((x) => typeof x !== 'string' || !x || x.length > 128)) throw err('invalid-argument', 'agentIds ไม่ถูกต้อง');
+  return ids;
+}
+const selectRows = (rows, ids) => (ids ? rows.filter((r) => ids.includes(r.agent.id)) : rows);
+
+const paras = (t) => String(t).split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px">${esc(p).replace(/\n/g, '<br/>')}</p>`).join('');
+
+function renderBackfillMessage({ displayName, items, dueDate, appUrl, overrides }) {
+  const o = overrides || {};
+  const pick = (k, d) => (typeof o[k] === 'string' && o[k].trim() ? o[k].trim() : d);
+  const subject = pick('subject', subjectFor(dueDate));
+  const intro = pick('intro', DEFAULT_INTRO);
+  const outro = pick('outro', DEFAULT_OUTRO);
   const lines = items.map((i, n) => `${n + 1}. ${i.name} · ${i.phase} → ${appUrl}/assess?agent=${i.id}`);
-  const intro = 'AI Agent Library เพิ่มแบบประเมินความเสี่ยง (Assessment) สำหรับ Agent/Skill ทุกตัว งานที่ใช้งานอยู่แล้วก่อนมีแบบประเมินนี้จึงต้องประเมินย้อนหลังหนึ่งครั้ง คุณเป็น Creator ของรายการต่อไปนี้:';
   const dur = `ใช้เวลาประมาณ 5 นาทีต่อรายการ (11 ข้อ แบบเลือกตอบ) กรุณาทำให้เสร็จภายใน ${dueDate}`;
-  const reply = 'หากรายการใดไม่ได้อยู่ในความดูแลของคุณแล้ว ตอบกลับอีเมลนี้เพื่อแจ้งได้เลย';
   const first = String(displayName || '').trim();
-  const text = [`เรียน ${salutation(first)}`, intro, ...lines, dur, reply, 'ขอบคุณครับ', 'ทีม AI Agent Library'].join('\n');
+  const text = [`เรียน ${salutation(first)}`, intro, ...lines, dur, outro].join('\n');
   const list = items.map((i, n) => `<li>${esc(i.name)} · ${esc(i.phase)} → <a href="${esc(`${appUrl}/assess?agent=${i.id}`)}">${esc(`${appUrl}/assess?agent=${i.id}`)}</a></li>`).join('');
-  const html = frameHtml(`<p style="margin:0 0 14px">${esc(intro)}</p><ol>${list}</ol><p>${esc(dur)}</p><p>${esc(reply)}</p><p>ขอบคุณครับ<br/>ทีม AI Agent Library</p>`).replace('{{name}}', esc(salutation(first)));
+  const html = frameHtml(`${paras(intro)}<ol>${list}</ol><p>${esc(dur)}</p>${paras(outro)}`).replace('{{name}}', esc(salutation(first)));
   return { subject, text, html, cardLines: lines, link: `${appUrl}/assess?agent=${items[0]?.id || ''}` };
 }
 
@@ -229,6 +266,7 @@ function summarizeSend({ inbox = 0, sent = 0, held = 0, skipped = 0, dryRun = 0,
 const shouldStopSending = (elapsedMs, limitMs) => elapsedMs >= limitMs;
 
 module.exports = {
+  defaultMessageParts, validateMessage, validateAgentIds, selectRows,
   shouldStopSending,
   validateDueDate, sanitizeSubmitInput, summarizeSend,
   evaluateAnswers, backfillVerdict, backfillStatus, inBackfillScope, creatorDigests,
