@@ -81,6 +81,13 @@ function businessDaysBetween(from, to) {
 function getType(a) {
   return (a?.aiAgent === false && a?.skillMd === true) ? 'skill' : 'agent';
 }
+// Port of getTier() in src/lib/tier.js (verified by verify-assessment-backfill.cjs).
+function getTier(a) {
+  const skill = getType(a) === 'skill';
+  const external = a?.customerFacing === true;
+  if (skill) return external ? 'T3' : 'T1';
+  return external ? 'T4' : 'T2';
+}
 function matchingAgentNames(s) {
   const m = s?.matchingAgent;
   if (!m) return [];
@@ -291,5 +298,5 @@ function renderDigest(digest, { forEmail = '', displayName = '' } = {}) {
 module.exports = {
   TZ, RANK, CATEGORY_LABEL, STUCK_DAYS, calendarDaysBetween,
   normalizeProgress, phaseForProgress, toDate, bkkDay, businessDaysBetween,
-  getType, isPairedSubSkill, isLive, autoFitStart, timelineStatus, classify, buildDigests, renderDigest,
+  getType, getTier, isPairedSubSkill, isLive, autoFitStart, timelineStatus, classify, buildDigests, renderDigest,
 };
