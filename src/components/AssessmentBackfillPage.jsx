@@ -3,7 +3,7 @@ import PageHeader from './PageHeader';
 import { useAuth } from '../hooks/useAuth';
 import { getFunctions, httpsCallable } from '../lib/callable';
 import { goToField } from '../lib/formFocus';
-import { backfillCsv, summarize, matchesStatus, STATUS_LABEL } from '../lib/assessmentBackfill';
+import { estimateSendMinutes, backfillCsv, summarize, matchesStatus, STATUS_LABEL } from '../lib/assessmentBackfill';
 import { bangkokDay } from '../lib/assessments';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';
@@ -14,7 +14,8 @@ import '../styles/AssessBackfill.css';
  * Admin/committee only. Sends ONE digest per creator who still has not-done items (the server
  * decides the real recipients); no per-row reminders and no automatic scheduling by design.
  */
-const call = (name, payload) => httpsCallable(getFunctions(undefined, 'asia-southeast1'), name)(payload).then((r) => r.data);
+// backfillSend paces 10 s per creator (can run ~55 min), so it needs a long client timeout.
+const call = (name, payload) => httpsCallable(getFunctions(undefined, 'asia-southeast1'), name, name === 'backfillSend' ? { timeout: 3600000 } : undefined)(payload).then((r) => r.data);
 const ROLES = ['admin', 'committee'];
 const CHANNELS = [['inbox', 'Inbox'], ['teams', 'Teams'], ['email', 'Email']];
 const FIELDS = [['Due date', /^Due date/], ['Channels', /^Channels/]];
@@ -145,6 +146,8 @@ export default function AssessmentBackfillPage() {
               {confirming && (
                 <div className="abf-note">
                   Send the assessment request to <b>{targets}</b> creators, due <b>{dueDate}</b>, via {channels.join(', ')}? ส่งแล้วย้อนกลับไม่ได้
+                  <div style={{ marginTop: 6 }}>ระบบจะส่งทีละคนเว้นระยะ 10 วินาที ใช้เวลาประมาณ {estimateSendMinutes(targets)} นาที — กรุณาอย่าปิดหน้านี้จนกว่าจะเสร็จ</div>
+                  {busy && <div style={{ marginTop: 6, fontWeight: 600 }}>กำลังส่ง… ประมาณ {estimateSendMinutes(targets)} นาที อย่าปิดหน้านี้</div>}
                   <div className="abf-actions">
                     <button className="btn btn-primary" disabled={busy} onClick={doSend}>Confirm send</button>
                     <button className="btn" onClick={() => setConfirming(false)}>Cancel</button>

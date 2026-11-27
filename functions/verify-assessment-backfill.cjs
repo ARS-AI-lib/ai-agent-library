@@ -230,9 +230,13 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   eq('self accept refused', thrown(() => R.applyDecision(pr, rv, { decision: 'accept', config: CFG, now: NOW, deciderUid: 'u1' })), 'permission-denied');
   eq('self reject refused', thrown(() => R.applyDecision(pr, rv, { decision: 'reject', reason: 'because', config: CFG, now: NOW, deciderUid: 'u1' })), 'permission-denied');
   eq('other accept ok', R.applyDecision(pr, rv, { decision: 'accept', config: CFG, now: NOW, deciderUid: 'u2' }).status, 'pass');
-  eq('stop below limit', R.shouldStopSending(449999, 450000), false);
-  eq('stop at limit', R.shouldStopSending(450000, 450000), true);
+  eq('stop below limit', R.shouldStopSending(3299999, 3300000), false);
+  eq('stop at limit', R.shouldStopSending(3300000, 3300000), true);
   eq('summary truncated', R.summarizeSend({ inbox: 0, sent: 10, remaining: 5 }), 'Teams/Email: ส่งแล้ว 10 · ยังไม่ได้ส่งถึง 5 คน (หมดเวลาต่อครั้ง) กด Send อีกครั้งเพื่อส่งต่อ (ส่งเฉพาะคนที่ยังมีรายการ not done; คนที่ได้รับแล้วจะได้รับเตือนซ้ำ)');
+  eq('estimate 145 creators', B.estimateSendMinutes(145), 25);
+  eq('estimate 6', B.estimateSendMinutes(6), 1);
+  eq('estimate 0', B.estimateSendMinutes(0), 0);
+  eq('estimate 1', B.estimateSendMinutes(1), 1);
   // F2 wording
   const T = { sent: 0, held: 0, skipped: 0, dryRun: 0, disabled: 0, failed: 0 };
   eq('summary inbox + dry run', R.summarizeSend({ inbox: 12, ...T, dryRun: 12 }), 'ส่ง Inbox แล้ว 12 ข้อความ · Teams/Email: ไม่ได้ส่งจริง (dry run 12)');

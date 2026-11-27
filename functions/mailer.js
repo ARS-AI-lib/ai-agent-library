@@ -115,6 +115,7 @@ async function sendViaGmailOAuth({ from, replyTo, to, subject, text, html }) {
   }
 
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    signal: AbortSignal.timeout(30000),
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -129,6 +130,7 @@ async function sendViaGmailOAuth({ from, replyTo, to, subject, text, html }) {
 
   const raw = buildRawMessage({ from, replyTo, to, subject, text, html });
   const sendRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    signal: AbortSignal.timeout(30000),
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ raw }),
@@ -213,6 +215,7 @@ async function sendViaTeamsFlow({ deliveries, subject, title, html, link, endpoi
     try {
       const who = names[String(recipient).toLowerCase()] || '';
       const r = await fetch(url, {
+        signal: AbortSignal.timeout(30000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // teams/email tell the Flow which branch to run for this person.

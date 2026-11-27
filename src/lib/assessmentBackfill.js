@@ -48,3 +48,7 @@ export function assessmentWarning(agent) {
   const st = agent?.assessment?.status;
   return normalizeProgress(agent?.devProgress) >= 100 && (st === 'fail' || st === 'pending_review') ? ASSESSMENT_WARNING : null;
 }
+
+// Bulk send is paced 10 s per creator (user order 2026-11-27); estimate shown before confirming.
+export const SEND_GAP_SECONDS = 10;
+export const estimateSendMinutes = (creatorCount) => Math.ceil((Math.max(0, creatorCount) * SEND_GAP_SECONDS) / 60);

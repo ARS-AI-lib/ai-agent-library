@@ -2406,7 +2406,7 @@ exports.backfillList = onCall({ cors: true, timeoutSeconds: 120 }, async (reques
   return { rows, campaign: camp.exists ? camp.data() : null };
 });
 
-exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540, secrets: [TEAMS_FLOW_URL] }, async (request) => {
+exports.backfillSend = onCall({ cors: true, timeoutSeconds: 3600, secrets: [TEAMS_FLOW_URL] }, async (request) => {
   const t0 = Date.now();
   const { uid, email } = await bfPrep(request, 'backfillSend', ['admin', 'committee']);
   const { dueDate, channels, testOnly, preview } = request.data || {};
@@ -2426,7 +2426,8 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540, secrets: [TEAMS
     return { preview: { subject: m.subject, text: m.text, html: m.html }, count: digests.length };
   }
   const allTargets = testOnly ? [digests.find((d) => d.email === email) || digests[0]].filter(Boolean).map((d) => ({ ...d, to: email })) : digests.map((d) => ({ ...d, to: d.email }));
-  // ~1 s pacing between creators; 400 keeps the loop well inside the 540 s timeout.
+  // 10 s between creators (user order); the 3300 s deadline guard (timeout 3600) truncates first for large batches.
+  const SEND_GAP_MS = 10000; const SEND_DEADLINE_MS = 3300000;
   const MAX_SEND = 400;
   const targets = allTargets.slice(0, MAX_SEND);
   const truncated = allTargets.length - targets.length;
@@ -2438,10 +2439,10 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540, secrets: [TEAMS
   }
   const results = []; const failedRecipients = []; let inboxCount = 0; let attempted = 0;
   for (let i = 0; i < targets.length; i += 1) {
-    if (BF.shouldStopSending(Date.now() - t0, 450000)) break;
+    if (BF.shouldStopSending(Date.now() - t0, SEND_DEADLINE_MS)) break;
     attempted += 1;
     const d = targets[i];
-    if (i > 0) await new Promise((r) => setTimeout(r, 1000));
+    if (i > 0) await new Promise((r) => setTimeout(r, SEND_GAP_MS));
     try {
       const m = render(d);
       if (chans.includes('inbox')) {
