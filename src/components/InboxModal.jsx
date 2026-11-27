@@ -82,11 +82,6 @@ function MessageRow({ m, unread, open, onToggle }) {
         <span className="v7-ann-meta">{m.createdAt && <span>{fmtDate(m.createdAt)}</span>}</span>
       </button>
       {open && <AnnouncementBody text={m.body} />}
-      {open && safeHttpUrl(m.link) && (
-        <div className="v7-ann-rowact">
-          <a className="v7-sub-btn pri" href={safeHttpUrl(m.link)} target="_blank" rel="noopener noreferrer">Open</a>
-        </div>
-      )}
     </div>
   );
 }

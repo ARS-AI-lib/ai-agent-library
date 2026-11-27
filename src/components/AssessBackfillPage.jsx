@@ -117,6 +117,10 @@ export default function AssessBackfillPage() {
   if (!roleReady) return <div className="tl-center"><div className="spin" /><span>กำลังตรวจสอบสิทธิ์…</span></div>;
 
   const allDone = data && !items.some((x) => isAssessable(x, mode));
+  // What is left OUTSIDE the current mode: in review mode the untouched items still need a first assessment;
+  // in normal mode failed items can be re-assessed. "Everything assessed" is only said when nothing is left.
+  const todoFirst = items.filter((x) => x.status === 'not_done');
+  const failed = items.filter((x) => x.status === 'fail');
   const doneCard = cur && !isAssessable(cur, mode) && (review && cur.status === 'not_done' ? (
     <div className="abf-note">รายการนี้ยังไม่ได้ประเมิน — ขอประเมินใหม่ได้เฉพาะรายการที่ไม่ผ่าน</div>
   ) : (
@@ -145,7 +149,23 @@ export default function AssessBackfillPage() {
             </div>
             {notMine && <div className="abf-note bad">ไม่พบรายการนี้ในความรับผิดชอบของคุณ</div>}
             {items.length === 0 && <div className="empty-state">ไม่มีรายการที่ต้องประเมิน</div>}
-            {allDone && !result && <div className="abf-note ok">ประเมินครบทุกรายการแล้ว</div>}
+            {allDone && !result && review && todoFirst.length > 0 && (
+              <div className="abf-note ok">
+                ส่งคำขอประเมินใหม่แล้ว — รอ Approver ยืนยัน · ยังมี {todoFirst.length} รายการที่ยังไม่ได้ประเมิน
+                <div style={{ marginTop: 8 }}><button className="btn btn-primary btn-sm" onClick={() => { window.location.href = '/assess'; }}>ทำรายการที่เหลือ ({todoFirst.length})</button></div>
+              </div>
+            )}
+            {allDone && !result && !(review && todoFirst.length > 0) && (
+              <div className="abf-note ok">
+                {todoFirst.length === 0 ? 'ประเมินครบทุกรายการแล้ว' : ''}
+                {!review && failed.length > 0 && (
+                  <div style={{ marginTop: todoFirst.length === 0 ? 8 : 0 }}>
+                    มี {failed.length} รายการที่ไม่ผ่าน — ขอประเมินใหม่ได้
+                    <div style={{ marginTop: 8 }}><button className="btn btn-secondary btn-sm" onClick={() => { window.location.href = '/assess?review=1'; }}>ขอประเมินใหม่ ({failed.length})</button></div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {cur && (
               <>

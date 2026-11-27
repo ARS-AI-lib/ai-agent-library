@@ -2,8 +2,9 @@
 .abf-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 0; }
 .abf-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
 .abf-chip { border: 1px solid var(--bd, #e5e7eb); background: transparent; color: inherit; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
-.abf-chip.done { color: var(--mu); }
+.abf-chip.done { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, var(--sf)); border-color: color-mix(in srgb, var(--ok) 35%, var(--sf)); }
 .abf-chip.cur { border-color: var(--accent); background: var(--accent-tint, rgba(0, 78, 133, .08)); font-weight: 600; }
+.abf-chip.done.cur { background: color-mix(in srgb, var(--ok) 18%, var(--sf)); border-color: var(--accent); }
 .abf-cap { color: var(--mu); font-size: 12.5px; margin-left: auto; }
 .abf-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px; }
 .abf-title h2 { margin: 0; font-size: 20px; }
