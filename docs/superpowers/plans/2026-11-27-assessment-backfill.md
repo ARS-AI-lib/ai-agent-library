@@ -154,3 +154,39 @@
 - [ ] **Step 1:** CLAUDE.md §41: scope, verdict rule, switch `assessmentApproverOverride` (currently `['tinnapat.p@arise.tech']`; remove to reach real approvers), routes, callables, release order
 - [ ] **Step 2:** Run every `verify-*.cjs` touched + `npm run build`; `scripts/deploy-test.sh all`; full walk-through on the test site
 - [ ] **Step 3:** Commit `docs: assessment backfill`; then ask the user before production: Console rules publish → `firebase deploy --only functions:backfillList,backfillSend,backfillMyItems,backfillSubmit,decideReassessment,notifyEvent` → set `/config/mail.assessmentApproverOverride = ['tinnapat.p@arise.tech']` → hosting
+
+---
+
+## Addendum (user requests 2026-11-27, after Task 2) — execute order: 3, 4, **9, 10**, 5, 6, 7, 8
+
+### Task 9: Results display fixes
+
+**Files:** Modify `src/lib/assessments.js`, `src/components/AssessmentResultsPage.jsx`, `functions/verify-assessments.cjs`
+
+**Interfaces:**
+- `combineByAgent` rows gain `preAnswered:boolean` = at least one `stage==='pre'` question has an answer (from the merged answers, not from the existence of a `pre` record). `hasPre` stays (record exists).
+- `clipText(text, max = 250) -> string` exported from `src/lib/assessments.js`: trims; when longer than `max`, returns first `max` characters + `…`; otherwise unchanged.
+- Results table "Pre-assessment" cell shows `preScore` when `preAnswered`, else `—`. Declaration block in the expanded row shows `clipText(description, 250)`. CSV (`agentCsv`) keeps the FULL description.
+- Reason: items registered before the assessment existed answer C1–C11 in one go at deploy, so only a `deploy` record exists; their Pre column wrongly showed `—` although C1–C9 were answered.
+
+- [ ] **Step 1:** tests: record set with only a deploy record containing C1–C9 answers → `preAnswered === true` and `preScore` equals the pre-stage total; deploy record with no pre answers → `preAnswered === false`; `clipText` 250 chars unchanged, 251 → 250 chars + `…`, empty/undefined → `''`; CSV description not clipped.
+- [ ] **Step 2:** FAIL → implement → PASS; `npm run build`
+- [ ] **Step 3:** Commit `fix(assessment): pre score from answers, clip long description`
+
+### Task 10: Declaration fields always required, with a "none" checkbox
+
+**Files:** Create `src/components/DeclField.jsx`; Modify `src/lib/declaration.js`, `src/components/PreRegModal.jsx`, `src/components/EditAgentModal.jsx`, `src/components/AgentDetailModal.jsx` (deploy dialog missing-declaration inputs), `firestore.rules`, `functions/verify-declaration.cjs`, `functions/verify-screening-rules.cjs`
+
+**Interfaces:**
+- `DECL_FIELDS` entries all `required: true`, each with `none` (exact phrases, user-approved "short phrase per field"): `permittedDomains` → `ไม่จำกัด domain`; `prohibitedUses` → `ไม่มีข้อห้าม`; `tool` → `ไม่ใช้ tool`; `requiredSkills` → `ไม่ต้อง`; `llm` → `ยังไม่ได้ทดสอบ`.
+- `isNoneValue(key, value) -> boolean` (trim + exact match to that field's `none`); `missingDeclaration(agent)` now lists any of the five that is empty (so older items are forced to fill them wherever it is used: deploy request, `/assess`, Edit Save).
+- `DeclField({ field, value, onChange, error })`: label with red `*`, a checkbox labelled with the field's `none` phrase, and a text input. Checked → value = `none` phrase and the input is hidden; unchecked → input shown, and if the value was the none phrase it is cleared; empty + unchecked is invalid. Checkbox state is derived from `isNoneValue`, nothing extra is stored.
+- New and Edit forms: all four fields (Permitted Domains, Prohibited Uses, Permitted Tools, Models Tested) use `DeclField` and are validated required (message `ใส่ {label} (หรือติ๊ก "{none}")`; add the labels to the `goToField` mapping in each form). Required Skills keeps its current behaviour (derived for Workflow) but is also required in Edit.
+- Edit form: shows the five fields for roles that may edit the agent's details; Save is blocked while any is empty ("forced at the next step they touch" — user ruling). Sub-skills inherit from the parent as today.
+- Deploy dialog: the missing-declaration inputs use `DeclField`.
+- `firestore.rules`: add `permittedDomains`, `prohibitedUses`, `requiredSkills`, `tool`, `llm` to the Tier A and Tier B detail-edit `hasOnly` lists (they already exist in the deploy-request branch). ⚠️ needs a Console publish at release (named DB `ai-agent-lib`).
+
+- [ ] **Step 1:** tests: `isNoneValue` per field; `missingDeclaration` returns all five when empty and none when each holds either text or its none phrase; rules emulator cases: creator Tier B edit of `tool`+`llm`+`permittedDomains`+`prohibitedUses`+`requiredSkills` allowed, other field combined → denied, non-owner denied
+- [ ] **Step 2:** FAIL → implement helpers + component + rules → PASS (`verify-declaration.cjs`, rules suite on the emulator per CLAUDE.md §36)
+- [ ] **Step 3:** wire the forms; `npm run build`; browser check on the test site: tick/untick hides/shows input, empty submit scrolls to the field, Edit Save blocked on an old item until filled
+- [ ] **Step 4:** Commit `feat(declaration): all five fields required with none checkbox`
