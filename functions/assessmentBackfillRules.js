@@ -154,12 +154,13 @@ function applyDecision(agent, review, { decision, reason, config, now }) {
 
 /** Count real outcomes of a send loop. Each result is a sendMail result ({status}) or {error:true}. */
 function tallyDeliveries(results) {
-  const t = { sent: 0, held: 0, skipped: 0, dryRun: 0, failed: 0 };
+  const t = { sent: 0, held: 0, skipped: 0, dryRun: 0, disabled: 0, failed: 0 };
   (results || []).forEach((r) => {
     if (!r || r.error) t.failed += 1;
     else if (r.status === 'sent') t.sent += 1;
     else if (r.status === 'held') t.held += 1;
-    else if (r.status === 'skippedDomain') t.skipped += 1;
+    else if (r.status === 'skipped-domain') t.skipped += 1;
+    else if (r.status === 'disabled') t.disabled += 1;
     else if (r.status === 'dry-run') t.dryRun += 1;
     else t.failed += 1;
   });

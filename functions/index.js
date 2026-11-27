@@ -2452,7 +2452,7 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540 }, async (reques
       testSends: FieldValue.arrayUnion({ at: new Date().toISOString(), by: email || uid, count: tally.sent }),
     }, { merge: true });
   }
-  return { sent: tally.sent, held: tally.held, skipped: tally.skipped, dryRun: tally.dryRun, failed: tally.failed, skippedNoEmail: noEmail.length, recipients: targets.map((d) => d.to) };
+  return { sent: tally.sent, held: tally.held, skipped: tally.skipped, dryRun: tally.dryRun, disabled: tally.disabled, failed: tally.failed, skippedNoEmail: noEmail.length, recipients: targets.map((d) => d.to) };
 });
 
 exports.backfillMyItems = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {

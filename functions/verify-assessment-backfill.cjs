@@ -131,9 +131,12 @@ const rej = dec('reject', 'ข้อมูลไม่เพียงพอ');
 eq('reject → fail, no screening change', [rej.status, Object.keys(rej.patch), rej.patch.assessment.status, rej.records.length], ['fail', ['assessment'], 'fail', 0]);
 eq('accept failing verdict → failed-precondition', thr(() => R.applyDecision(pend, { ...rvw, answers: { ...PASS, C7: 'C7b' } }, { decision: 'accept', config: CFG, now: NOW })), 'failed-precondition');
 eq('decide when not pending_review → failed-precondition', thr(() => dec('accept', '', failAg)), 'failed-precondition');
-// tallyDeliveries
-const tl = R.tallyDeliveries([{ status: 'sent' }, { status: 'held' }, { status: 'skippedDomain' }, { status: 'dry-run' }, { error: true }, { status: 'sent', inbox: true }]);
-eq('tally counts', tl, { sent: 2, held: 1, skipped: 1, dryRun: 1, failed: 1 });
-eq('tally empty', R.tallyDeliveries([]), { sent: 0, held: 0, skipped: 0, dryRun: 0, failed: 0 });
+// tallyDeliveries — inputs are the real sendMail statuses (mailer.js): sent, held, dry-run, skipped-domain, disabled, error
+const Z = { sent: 0, held: 0, skipped: 0, dryRun: 0, disabled: 0, failed: 0 };
+[['sent', 'sent'], ['held', 'held'], ['skipped-domain', 'skipped'], ['dry-run', 'dryRun'], ['disabled', 'disabled'], ['error', 'failed'], ['weird', 'failed']]
+  .forEach(([st, k]) => eq(`tally ${st} → ${k}`, R.tallyDeliveries([{ status: st }]), { ...Z, [k]: 1 }));
+eq('tally thrown', R.tallyDeliveries([{ error: true }]), { ...Z, failed: 1 });
+eq('tally mix keeps sent accurate', R.tallyDeliveries([{ status: 'sent' }, { status: 'sent' }, { status: 'held' }]), { ...Z, sent: 2, held: 1 });
+eq('tally empty', R.tallyDeliveries([]), Z);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
