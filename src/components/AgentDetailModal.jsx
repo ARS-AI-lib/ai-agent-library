@@ -13,6 +13,7 @@ import { assessmentRecord } from '../lib/assessments';
 import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
 import { assessmentWarning } from '../lib/assessmentBackfill';
+import RiskIcon from './RiskIcon';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames, typeBadgeName, isWorkflow, workflowMembers, workflowOf } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
@@ -847,7 +848,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 target="_blank"
                 rel="noopener noreferrer"
                 className={riskWarning ? 'abf-risk' : undefined}
-                style={{ color: riskWarning ? 'var(--late)' : 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
+                style={{ color: riskWarning ? undefined : 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
                 title={riskWarning || endpointHref}
                 aria-label={riskWarning ? `${endpointLabel(agent.endpoint)} — ${riskWarning}` : undefined}
                 onClick={(e) => {
@@ -860,7 +861,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
                 </svg>
                 {endpointLabel(agent.endpoint)}
-                {riskWarning && <span aria-hidden="true">⚠</span>}
+                {riskWarning && <RiskIcon />}
               </a>
               {/* "ลิงก์ภายนอก" tag removed entirely (2026-08-26, user
                   request) — the §24/§25 requirement to distinguish our own

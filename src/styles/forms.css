@@ -78,3 +78,7 @@ body.v7 .usage-table tbody tr.usage-group:hover td { background: var(--sf2); }
 .dash-tbl tbody tr:hover td { background: var(--row-hover); }
 .asr-row.open td, .asr-row.open:hover td { background: var(--row-sel); }
 .asr-detail-cell { background: color-mix(in srgb, var(--tint) 30%, var(--sf)) !important; }
+
+/* Library link of an item whose assessment did not pass (card arrow + detail modal link). */
+.abf-risk, .v7-open.abf-risk, .v7-open.abf-risk:hover { color: var(--late); }
+.v7-open.abf-risk { width: auto; padding: 0 6px; gap: 4px; }

@@ -21,17 +21,13 @@ const FIELDS = [['Due date', /^Due date/], ['Channels', /^Channels/]];
 const fmtDate = (ms) => (ms ? bangkokDay(new Date(ms)) : '—');
 const plusDays = (n) => bangkokDay(new Date(Date.now() + n * 86400000));
 
+// The server states what really happened (inbox written vs Teams/Email outcome) in r.summary.
 function tally(r) {
-  const p = [];
-  if (r.sent != null) p.push(`${r.sent} sent`);
-  if (r.held) p.push(`${r.held} held`);
-  if (r.skipped) p.push(`${r.skipped} skipped`);
+  const p = [r.summary || 'ไม่มีข้อความที่ส่งออก'];
   if (r.skippedNoEmail) p.push(`${r.skippedNoEmail} skipped (no email)`);
-  if (r.failed) p.push(`${r.failed} failed`);
-  let t = p.join(' · ') || 'Nothing to send';
-  if (r.dryRun) t += ' (dry run — nothing was really delivered)';
-  if (r.disabled) t += ' (sending is switched off)';
-  return t;
+  if (r.truncated) p.push(`${r.truncated} not sent (batch limit — send again)`);
+  if ((r.failedRecipients || []).length) p.push(`failed: ${r.failedRecipients.join(', ')}`);
+  return p.join(' · ');
 }
 
 export default function AssessmentBackfillPage() {

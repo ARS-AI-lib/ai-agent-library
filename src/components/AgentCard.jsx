@@ -3,6 +3,8 @@ import { agentStatus, ST_DEF, progressBucket } from '../lib/status';
 import { fmtDate, safeEndpointUrl, typeBadgeName, workflowMembers } from '../lib/agentUtils';
 import { recordAgentEvent } from '../lib/agentEvents';
 import { handleEndpointClick } from '../lib/endpointFiles';
+import { assessmentWarning } from '../lib/assessmentBackfill';
+import RiskIcon from './RiskIcon';
 import { readStats, ratingDisplay } from '../lib/agentStats';
 
 // Card anatomy (2026-08-08 redesign): eyebrow (type + tier + scope) → title
@@ -32,6 +34,7 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
   const scope = isInternalOrExternal(agent);
   const ability = Array.isArray(agent.coreAbility) ? agent.coreAbility.join(', ') : agent.coreAbility;
   const endpointHref = safeEndpointUrl(agent.endpoint);
+  const riskWarning = assessmentWarning(agent);
   const isReady = st === 'ru';
   const memberCount = workflowMembers(agent, allAgents).length;
 
@@ -70,12 +73,12 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
         </span>
         {isReady && endpointHref && (
           <a
-            className="v7-open"
+            className={riskWarning ? 'v7-open abf-risk' : 'v7-open'}
             href={endpointHref}
             target="_blank"
             rel="noopener noreferrer"
-            title={endpointHref}
-            aria-label={`Open ${agent.agentName}`}
+            title={riskWarning || endpointHref}
+            aria-label={riskWarning ? `Open ${agent.agentName} — ${riskWarning}` : `Open ${agent.agentName}`}
             onClick={(e) => {
               e.stopPropagation();
               recordAgentEvent(agent.id, 'endpoint');
@@ -86,6 +89,7 @@ export default function AgentCard({ agent, allAgents, onClick, stats }) {
             onKeyDown={(e) => e.stopPropagation()}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" /></svg>
+            {riskWarning && <RiskIcon />}
           </a>
         )}
       </div>
