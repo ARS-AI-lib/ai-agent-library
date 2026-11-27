@@ -655,6 +655,9 @@ const RATE_LIMITS = {
   // One call per approve click (parent + siblings batched); runaway guard only.
   classifyRoleGroup: 30,
   manageRoleGroups: 60,
+  manageScreeningConfig: 60,
+  archiveAssessmentYear: 30,
+  listArchivedAssessments: 60,
 };
 
 async function enforceRateLimit(uid, fnName) {
@@ -2116,6 +2119,88 @@ exports.manageRoleGroups = onCall(
       history: history(action.type, action.type === 'deleteGroup' ? `${action.key} → ${action.moveTo}` : (action.group?.label || action.keys?.join(', ') || '')),
     }, { merge: true });
     return { ok: true, groups: res.groups };
+  },
+);
+
+// ── Assessment Settings (2026-11-26) ─────────────────────────────────
+// The screening questionnaire lives in /config/screening and is edited here (committee/admin) —
+// clients cannot write /config directly. Validation: screeningConfigRules.js (verify-screening-config.cjs).
+const { validateScreeningConfig } = require('./screeningConfigRules');
+
+function cleanScreeningConfig(cfg) {
+  const s = (v) => String(v ?? '').trim();
+  return {
+    thresholds: { md: cfg.thresholds.md, hi: cfg.thresholds.hi },
+    questions: cfg.questions.map((q) => ({
+      id: s(q.id), code: s(q.code), stage: q.stage, group: s(q.group), th: s(q.th), en: s(q.en), advice: s(q.advice),
+      options: q.options.map((o) => ({
+        id: s(o.id), th: s(o.th), en: s(o.en), score: o.score, fix: o.fix, blocksPre: o.blocksPre, blocksDeploy: o.blocksDeploy,
+      })),
+    })),
+  };
+}
+
+exports.manageScreeningConfig = onCall(
+  { cors: true, timeoutSeconds: 60 },
+  async (request) => {
+    requireCompanyUser(request);
+    await roleGroupCaller(request, ROLE_GROUP_MANAGER_ROLES);
+    await enforceRateLimit(request.auth.uid, 'manageScreeningConfig');
+    const { action, config } = request.data || {};
+    if (action !== 'save') throw new HttpsError('invalid-argument', 'Unknown action.');
+    const err = validateScreeningConfig(config);
+    if (err) throw new HttpsError('invalid-argument', err);
+    const ref = db.doc('config/screening');
+    const version = ((await ref.get()).data()?.version || 0) + 1;
+    const by = request.auth.token?.email || request.auth.uid;
+    const clean = cleanScreeningConfig(config);
+    await ref.set({
+      ...clean,
+      version,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: by,
+      history: FieldValue.arrayUnion({ by, at: new Date().toISOString(), version, summary: `${clean.questions.length} questions` }),
+    }, { merge: true });
+    return { ok: true, version };
+  },
+);
+
+// ── Assessment archive (2026-11-26) ──────────────────────────────────
+// Admin moves a PAST year's /assessments into /assessmentArchive/{year}/items together with the
+// questionnaire config of that moment (so the archived view evaluates exactly as it did). Clients
+// cannot read the archive at all (firestore.rules) — they go through these callables.
+const { checkArchiveYear } = require('./assessmentArchiveRules');
+const { archiveYear, listArchivedYears, loadArchivedYear } = require('./assessmentArchive');
+
+exports.archiveAssessmentYear = onCall(
+  { cors: true, timeoutSeconds: 300 },
+  async (request) => {
+    requireCompanyUser(request);
+    await roleGroupCaller(request, ['admin']);
+    await enforceRateLimit(request.auth.uid, 'archiveAssessmentYear');
+    const year = (request.data || {}).year;
+    const err = checkArchiveYear(year);
+    if (err) throw new HttpsError('invalid-argument', err);
+    const cfgSnap = await db.doc('config/screening').get();
+    if (!cfgSnap.exists) throw new HttpsError('failed-precondition', 'ยังไม่ได้ seed /config/screening');
+    const by = request.auth.token?.email || request.auth.uid;
+    const res = await archiveYear({ db, FieldValue, year, by, cfg: cfgSnap.data() });
+    return { ok: true, ...res };
+  },
+);
+
+exports.listArchivedAssessments = onCall(
+  { cors: true, timeoutSeconds: 120 },
+  async (request) => {
+    requireCompanyUser(request);
+    await roleGroupCaller(request, ['admin']);
+    await enforceRateLimit(request.auth.uid, 'listArchivedAssessments');
+    const year = (request.data || {}).year;
+    if (year === undefined || year === null) return { years: await listArchivedYears(db) };
+    if (!Number.isInteger(year)) throw new HttpsError('invalid-argument', 'ปีไม่ถูกต้อง');
+    const data = await loadArchivedYear(db, year);
+    if (!data) throw new HttpsError('not-found', 'ไม่พบข้อมูลที่ archive ของปีนี้');
+    return data;
   },
 );
 

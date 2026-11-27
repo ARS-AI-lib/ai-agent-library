@@ -12,6 +12,7 @@ import TagMultiSelect from './TagMultiSelect';
 import AgentMultiSelect from './AgentMultiSelect';
 import ComboInput from './ComboInput';
 import CreatorPicker from './CreatorPicker';
+import { goToField, goToSkillRowError } from '../lib/formFocus';
 import SkillRow, { emptySkillRow, validateSkillRows } from './SkillRow';
 import { isInternalToolName } from '../lib/internalTool';
 import useCloseGuard from '../hooks/useCloseGuard';
@@ -268,31 +269,47 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
     });
   }
 
+  // Show the message and take the user to the field it is about (src/lib/formFocus.js).
+  const EDIT_FIELDS = [
+    ['Agent / Skill Name', /^ใส่ชื่อ/], ['Description', /Description/], ['Input', /^ใส่ Input/], ['Output', /^ใส่ Output/],
+    ['Core Ability', /Core Ability/], ['Related Role', /Related Role/], ['Reuse Conditions', /Reuse Conditions/],
+    ['Reusable', /^เลือก Reusable/], ['Owner', /Owner team/],
+  ];
+  function fail(msg) {
+    setError(msg);
+    if (!goToSkillRowError('.mbox', msg)) goToField('.mbox', msg, EDIT_FIELDS);
+  }
+
   async function handleSave() {
     if (canSeeOwner && form.owner.trim() !== (agent.owner || '') && !isValidTeamName(form.owner)) {
-      setError('ชื่อ Owner team ต้องมีอย่างน้อย 2 ตัวอักษร');
+      fail('ชื่อ Owner team ต้องมีอย่างน้อย 2 ตัวอักษร');
       return;
     }
     // Validate the Tier A required set only when the user can actually edit it
     // (a pure approver-role edits SDLC only and leaves Tier A untouched).
     if (canEditTierA) {
-      const agentName = form.agentName.trim();
-      if (!agentName || !form.description.trim() || !form.input.trim() || !form.output.trim() || form.coreAbility.size === 0 || form.relatedRole.size === 0 || !form.reusable) {
-        setError('กรอกข้อมูลที่จำเป็น (ชื่อ, Description, Input, Output, Core Ability, Related Role, Reusable) ให้ครบ');
-        return;
-      }
+      const missing = [
+        [!form.agentName.trim(), 'ใส่ชื่อ Agent/Skill'],
+        [!form.description.trim(), 'ใส่ Description'],
+        [!form.input.trim(), 'ใส่ Input'],
+        [!form.output.trim(), 'ใส่ Output'],
+        [form.coreAbility.size === 0, 'เลือก Core Ability อย่างน้อย 1 อย่าง'],
+        [form.relatedRole.size === 0, 'เลือก Related Role อย่างน้อย 1 อย่าง'],
+        [!form.reusable, 'เลือก Reusable'],
+      ].find(([bad]) => bad);
+      if (missing) { fail(missing[1]); return; }
       if (form.reusable === 'Reusable with Conditions' && !form.reuseCondition.trim()) {
-        setError('ระบุ Reuse Conditions');
+        fail('ใส่ Reuse Conditions');
         return;
       }
     }
     if (!canEditTierA && canEditRTU && !form.description.trim()) {
-      setError('ใส่ Description');
+      fail('ใส่ Description');
       return;
     }
     if (canEditType && typePick === 'Agent+Skill') {
       const skErr = validateSkillRows(skillRows, allAgents);
-      if (skErr) { setError(skErr); return; }
+      if (skErr) { fail(skErr); return; }
     }
     setSaving(true);
     setError('');
@@ -868,9 +885,12 @@ export default function EditAgentModal({ agent, onClose, onSaved, user, userRole
         </>
         )}
 
-        <div className="btn-row" style={{ marginTop: 12 }}>
-          <button className="btn btn-secondary" disabled={saving} onClick={requestClose}>Cancel</button>
-          <button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'Saving…' : 'Save Changes'}</button>
+        <div className="fsticky">
+          <span className="fmeta" />
+          <div className="fbtns">
+            <button className="btn btn-secondary" disabled={saving} onClick={requestClose}>Cancel</button>
+            <button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'Saving…' : 'Save Changes'}</button>
+          </div>
         </div>
       </div>
       {confirmDialog}

@@ -35,6 +35,7 @@ export default function MultiSelect({ label, options, selected, onChange, pill, 
     if (next.has(v)) next.delete(v);
     else next.add(v);
     onChange(next);
+    setQ('');
   }
 
   const shown = pill && q.trim()

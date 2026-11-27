@@ -1,0 +1,80 @@
+/* Form primitives (2026-11-26 redesign). Loaded after v7.css. Same V7 look — pills, tint selection,
+   36px/8px fields — organised into sections with visible help text and a sticky action bar.
+   Prefixes: .fsec .fhelp .fopt .ftype .fsticky .fgrid .fcount. Used by PreRegModal, the deploy
+   dialog, the Edit form and the Assessment screens. Tokens only (dark mode follows the vars). */
+
+/* ── Section: title + muted note + hairline ── */
+.fsec { margin-top: 24px; }
+.fsec:first-child { margin-top: 4px; }
+.fsec-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.fsec-h h4 { margin: 0; font-size: 13px; font-weight: 700; color: var(--tx); }
+.fsec-h span { font-size: 11.5px; color: var(--mu); }
+.fsec-h::after { content: ""; flex: 1; height: 1px; background: var(--bd-soft); transform: translateY(-3px); }
+
+/* ── Two-column grid; .full spans ── */
+.fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.fgrid > .full { grid-column: 1 / -1; }
+@media (max-width: 720px) { .fgrid { grid-template-columns: 1fr; } }
+
+/* ── Labels, help, optional ── */
+.mform .fg label { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.mform .fg label .req { margin-left: -2px; }
+.fopt { font-weight: 600; font-size: 10.5px; color: var(--tint-fg); background: var(--tint); border: 1px solid var(--tint-bd); border-radius: 99px; padding: 0 8px; line-height: 18px; }
+.fhelp { font-size: 11.5px; color: var(--mu); margin-top: 5px; line-height: 1.5; }
+.fcount { margin-left: auto; font-size: 11px; font-weight: 500; color: var(--mu2); font-family: 'IBM Plex Mono', monospace; }
+
+/* ── Type cards (replace the toggle2 for the 4 registration types) ── */
+.ftype { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 720px) { .ftype { grid-template-columns: 1fr 1fr; } }
+.ftype-card { text-align: left; font-family: inherit; border: 1px solid var(--bd-soft); border-radius: 12px; background: var(--sf); padding: 10px 12px; cursor: pointer; transition: border-color .15s, background .15s; color: var(--tx); }
+.ftype-card b { display: block; font-size: 13px; font-weight: 600; }
+.ftype-card small { display: block; color: var(--mu); font-size: 11px; line-height: 1.45; margin-top: 2px; }
+.ftype-card:hover { border-color: var(--bd2); }
+.ftype-card.on { background: var(--tint); border-color: var(--tint-bd); }
+.ftype-card.on b { color: var(--tint-fg); }
+.ftype-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Sticky action bar, full-bleed inside a padded .mbox / .tab-panel ── */
+.fsticky { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px -26px -22px; padding: 12px 26px; background: var(--sf); border-top: 1px solid var(--bd-soft); }
+.tab-panel .fsticky { margin: 22px -26px -22px; }
+.fsticky .fmeta { font-size: 12px; color: var(--mu); }
+.fsticky .fbtns { display: flex; gap: 8px; margin-left: auto; }
+
+/* ── Checklist cards (deploy dialog) ── */
+.fcheck { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 560px) { .fcheck { grid-template-columns: 1fr; } }
+.fcheck-item { position: relative; display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--bd-soft); border-radius: 12px; font-size: 13px; font-weight: 600; cursor: pointer; background: var(--sf); color: var(--tx); }
+.fcheck-item:hover { border-color: var(--bd2); }
+.fcheck-item input { position: absolute; opacity: 0; pointer-events: none; }
+.fcheck-item .box { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--bd2); display: grid; place-items: center; flex-shrink: 0; font-size: 12px; color: #fff; }
+.fcheck-item.on { background: var(--tint); border-color: var(--tint-bd); color: var(--tint-fg); }
+.fcheck-item.on .box { background: #2f6bff; border-color: #2f6bff; }
+.fcheck-item:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.freq { margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--tint-fg); background: var(--sf); border: 1px solid var(--tint-bd); border-radius: 99px; padding: 0 8px; line-height: 18px; }
+
+/* narrow: meta on its own line, buttons never wrap their text */
+.fsticky .btn { white-space: nowrap; }
+@media (max-width: 560px) {
+  .fsticky { flex-wrap: wrap; }
+  .fsticky .fmeta { width: 100%; }
+  .fsticky .fbtns { width: 100%; }
+  .fsticky .fbtns .btn:last-child { flex: 1; }
+}
+
+/* the Edit form's .mbox drops to 16px/12px padding on phones — keep the bar flush with the box edge */
+@media (max-width: 480px) { .mbox > .fsticky { margin: 22px -12px -16px; padding: 12px; } }
+
+/* ── Large report popup (Usage, Assessment Results) ── */
+body.v7 .mbox.xl { max-width: min(1360px, 96vw); width: 100%; height: 92vh; max-height: 92vh; padding: 0; overflow: auto; }
+.mbox.xl .usage-page { max-width: none; padding: 22px 26px 40px; }
+.mbox.xl .usage-head { padding-right: 44px; }
+
+/* ── Row states (2026-11-27): hover / selected / expanded rows must never share the header colour
+   (--sf2). Headers stay grey; rows use the tint blue that marks "selected" everywhere in V7. ── */
+:root { --row-hover: color-mix(in srgb, var(--tint) 55%, var(--sf)); --row-sel: var(--tint); }
+body.v7 .usage-table tbody tr:hover td { background: var(--row-hover); }
+body.v7 .usage-table tbody tr.usage-group:hover td { background: var(--sf2); }
+.v7-list-row:not(.v7-list-head):hover { background: var(--row-hover); }
+.dash-tbl tbody tr:hover td { background: var(--row-hover); }
+.asr-row.open td, .asr-row.open:hover td { background: var(--row-sel); }
+.asr-detail-cell { background: color-mix(in srgb, var(--tint) 30%, var(--sf)) !important; }

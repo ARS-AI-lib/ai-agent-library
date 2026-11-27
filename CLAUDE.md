@@ -1638,3 +1638,63 @@ Sidebar จัดกลุ่ม 26 category (จาก `/config/schema.category
 
 ### Commits
 `9b486c0` (logic + verify) · `a7afe23` (rules + rules test) · `bdcec71` (Inbox modal + hooks + wiring + seed) · `d79b938` (composer) · `e01d264`/`c84df20` (docs) · `25aafe9` (fix wave: past expiry, ✕ guard, aria-label, createdByName freeze) · `5f95f64` (ย้าย New announcement ไป ☰ menu)
+
+---
+
+## 37. Screening assessment + deploy package checklist (2026-11-26)
+
+Spec `docs/superpowers/specs/2026-11-26-screening-assessment-design.md` · plan `docs/superpowers/plans/2026-11-26-screening-assessment.md`. From the bank's screening questionnaire (`Skill_Library_Screening`).
+
+- **Registration:** Fill in details → **Assessment** (C1–C9) → Analysis (duplicate check). The duplicate check only starts from the Assessment step. **Only C7 blocks** (embedded real data / not checked). C6/C8/C9 that are not "ผ่าน" are saved and asked again at deploy.
+- **D1–D6 are form fields, not assessment questions** (`src/lib/declaration.js`): D1 purpose = `description`, D4 = `tool` ("Permitted Tools"), D6 = `llm` ("Models Tested") — existing fields; **new top-level fields** `permittedDomains`, `prohibitedUses`, `requiredSkills`. **Required: Permitted Tools and Required Skills only** — Permitted Domains, Prohibited Uses, Models Tested are optional (user 2026-11-26) and sit before Business Value (Domains/Prohibited) / with Tool. Sub-skills inherit them from the parent.
+- **Request deploy** (AgentDetailModal) is 2 steps: **(1) Package checklist** per Tier (`src/lib/deployChecklist.js`; items marked required must be ticked) → **(2) Assessment**: C10–C11 + re-ask C6/C8/C9 that failed. **Blocks** when C10 is not "ผ่าน" or C11 is "ต้องแก้" (C4 reads documents/web and C11 not passed). Items with no stored `screening` (all that predate this) answer C1–C11 here, and fill any empty declaration field.
+- **Stored:** `agent.screening = { v, answers{C1..C11 index}, level, total, must[], should[], preAt, deployAt }`, `agent.deployChecklist = { tier, checked[], at }`. Both cascade to paired sub-skills with the parent's values. Approvers see level + must/should + ticked package items in the Pending queue; the detail modal shows the declaration fields.
+- **Level:** sum of option scores, Low 0–6 · Medium 7–13 · High ≥14 (from the HTML tool). ⛔ questions/scores/gates live only in `src/lib/screening.js` — don't copy.
+- **Client-side gates**, same trust model as the duplicate block and the deploy request. `firestore.rules`: the creator deploy-request `hasOnly` now also allows `deployChecklist`, `screening`, `permittedDomains`, `prohibitedUses`, `requiredSkills`, `tool`, `llm` → **publish rules via Console (named DB `ai-agent-lib`) before the hosting deploy.**
+- Verify: `node functions/verify-screening.cjs` (31, replays xlsx sheet 3) · `node functions/verify-deploy-checklist.cjs` (15) · rules: `firebase emulators:exec --config firebase.rules-test.json --only auth,firestore --project wolfy-481609 "node functions/verify-screening-rules.cjs"`.
+- Not done: Questionnaire 2 (user confirmation at adoption); editing the 3 new declaration fields from the Edit form (existing items fill them at deploy request); server-side enforcement.
+
+---
+
+## 38. Workflow skills (2026-11-26)
+
+Spec `docs/superpowers/specs/2026-11-26-workflow-skills-design.md` · plan `docs/superpowers/plans/2026-11-26-workflow-skills.md`. Third registration Type next to Agent / Skill / Agent+Skill.
+
+- **Model:** a workflow is a **Skill** (`aiAgent:false, skillMd:true`) with `isWorkflow: true` and ordered `childSkillIds` (index 0 = Starter skill). **The main registration form IS the Starter skill** (a plain Skill, `matchingAgent` = workflow name); the form adds one field, **Workflow Name**, and the submit creates the Starter, the additional member skills, then the wrapping workflow doc (`buildWorkflowDoc` in `src/lib/registrationType.js`, inherits the form's shared fields, copies the dup-check result for the queue). `getType()`/`getTier()` unchanged → Tier is T1/T3 by scope. Members are normal Skill docs (new ones also get `matchingAgent = <workflow name>` so approval and rename paths still work).
+- **One place for the logic:** `src/lib/agentUtils.js` — `isWorkflow`, `workflowMembers` (step order), `workflowOf`, `typeBadgeName`; `pairedSubSkills`/`isPairedSubSkill`/`agentTypeLabel`/`agentsOfSkill`/`buildAgentFilter` know workflows. ⛔ Membership is by **id only** (no name/submitter heuristic) and a workflow is never a member. Port in `functions/delayAlertRules.js` (`verify-delay-alerts.cjs --live` fails on drift → **scoped functions deploy `delayAlertsMon,sendDelayDigest` at release**).
+- **Form:** Type "Workflow skills" → main form = Starter skill (label "Starter Skill Name") + **Workflow Name**; the bottom panel "Additional Skills" needs ≥1 row (1 seeded, cannot remove below 1); existing approved skills can be picked unless already in a workflow / paired under an Agent. **Required Skills** (screening D5) is read-only and derived: Starter + additional skill names. Workflow Name must be unique in the library and differ from the Starter name. Pending queue/notification use the workflow doc; approving it approves the Starter + members (matchingAgent cascade).
+- **Display:** card `T1/T3 Workflow skills` + "N skills"; workflow detail "Skills: 1. X (Starter) → 2. Y"; member detail "Workflow: …" with locked progress ("ปรับตาม Workflow"); TYPE filter has "Workflow skills" and "Skill" excludes workflows; export type = `typeBadgeName`.
+- **Progress / deploy:** exactly the Agent+Skill cascade (`cascadeTargets` guard included). Pending/deploy queues show only the workflow (members de-duplicated by `isPairedSubSkill`).
+- **Not done:** editing members/order from the Edit form, drag-to-reorder, converting existing items, nested workflows. KPI/Dashboard count workflows as Skills (via `getType`).
+- Verify: `node functions/verify-workflow.cjs` (19). No `firestore.rules` change.
+
+---
+
+## 39. Assessment menu — settings, results, archive (2026-11-26)
+
+Spec `docs/superpowers/specs/2026-11-26-assessment-menu-design.md` · plan `docs/superpowers/plans/2026-11-26-assessment-menu.md`. ☰ **Assessment** (admin/committee/approver) → **Assessment Results** (everyone allowed) and **Assessment Settings** (admin/committee).
+
+- **Questionnaire = config, not code.** `src/lib/screening.js` is an engine over a config object; `DEFAULT_CONFIG` (the bank's questionnaire) is the seed and the fallback. Live config = Firestore `/config/screening` (`useScreeningConfig()`); edit it in Assessment Settings → callable `manageScreeningConfig` (admin/committee, validated by `functions/screeningConfigRules.js`). Clients cannot write `/config` directly.
+- **Answers are `{questionId: optionId}`** (stable ids, never reused); v1 records stored option *indexes* — `normalizeAnswers()` converts. A deleted option shows "(removed option)" and scores 0.
+- **Gates are per option:** `blocksPre` (blocks registration) / `blocksDeploy` (blocks the deploy request), `fix` = none/should/must. Seed: C7 b/c block both; C10 b/c/d and C11 b/c block deploy. ⚠ The old "C11 only blocks when C4 reads documents/web" rule is gone.
+- **Records:** one immutable `/assessments` doc per registration (`pre`) and per deploy request (`deploy`) — answers + a snapshot of the declaration fields + `approveArea` + `year` (Asia/Bangkok). Rules: the record must be for an agent the writer owns (admin: any), `year` ∈ {current UTC year, +1}, ≤ 60 answers. A stored result shows its level even if the questionnaire gained a question later (`partial` evaluation); the deploy dialog asks any pre question not answered yet (`questionsToAsk`) so a new question never locks old agents. CSV cells starting with `= + - @` are quote-prefixed. Results are re-evaluated from the **live** config, so editing the questionnaire changes every non-archived result (never re-blocks/un-approves an item). `agent.screening` (v2) stays as the latest answers for the gates and the approval queue.
+- **Results page `/assessments`** (same classes as `/usage`): **one row per Agent/Skill** (`combineByAgent()` merges the latest pre + deploy record; deploy answers win) with columns Level · Pre-assessment score · Deploy request score · Total; the detail shows Declaration (D) on top and the answers (C) per stage with `answer (points)` / `(… · ยังไม่ผ่าน)` / `(ยังไม่ตอบ)` (`answerDetail()`/`answerLabel()`); CSV = `agentCsv()`. Grouped by owner, newest first, filters Year / Period (start–end date, inclusive, Bangkok day) / Owner / Area, expandable row = D + C answers, CSV. Approver is limited to own Approve Areas **UI-side** (rules let approver-or-above read all — Firestore cannot prove an `array-contains-any` query satisfies a `hasAny` rule).
+- **Archive (admin, Archived tab):** past years only (`checkArchiveYear`); callable `archiveAssessmentYear` moves the year into `/assessmentArchive/{year}/items` with the config of that moment (stored once); `listArchivedAssessments` reads it back (clients cannot read the archive). Archived rows disappear from Results; the Archived tab evaluates them with the frozen config and exports CSV.
+- **Release order:** user publishes `firestore.rules` (Console, named DB `ai-agent-lib`) → scoped functions deploy `manageScreeningConfig,archiveAssessmentYear,listArchivedAssessments` → `node functions/seed-screening-config.cjs --apply` (writes `/config/screening` only if missing; archive refuses until it exists) → hosting.
+- Verify: `verify-screening.cjs` · `verify-screening-config.cjs` · `verify-assessments.cjs` · `verify-assessment-archive.cjs` · emulator: `verify-assessment-rules.cjs`, `verify-assessment-archive-run.cjs`.
+- Not done: edit-history UI for the questionnaire; the three callables and the Archived-tab buttons were not clicked end-to-end before release (no functions emulator) — check after deploy.
+
+---
+
+## 40. Forms & Assessment redesign (2026-11-26, not deployed yet)
+
+Plan `docs/superpowers/plans/2026-11-26-forms-redesign.md` · mockup `mockup-redesign.html` (repo root, 4 screens). Same V7 look (pill buttons, tint-blue selection, 36px/8px fields) — only structure changed; no behaviour, data or rules change.
+
+- **Primitives** `src/styles/forms.css` (loaded after `v7.css`): `.fsec`/`.fsec-h` (section title + muted note + hairline), `.fgrid` (+`.full`), `.fhelp` (visible help under a field), `.fopt` (Optional pill — defined but NOT used: a field without the red * is optional), `.fcount`, `.ftype`/`.ftype-card` (type cards), `.fcheck`/`.fcheck-item`/`.freq` (checklist cards, Required pill), `.fsticky` (sticky bottom action bar: `.fmeta` left, `.fbtns` right; full-bleed inside a 22px/26px-padded `.mbox` or `.tab-panel`). Required stars stay visible; optional fields simply have no star (no Optional pill — user 2026-11-27). The 100-char counter on Description is intentionally NOT shown (earlier decision: validate at submit only).
+- **Registration form** (`PreRegModal`): sections *What are you registering? / What it does / Scope of use / Ownership & reuse / Tools & dependencies*, type cards, help text instead of ⓘ, "Required fields n of N" (`requiredFieldStatus()` in `src/lib/registrationType.js`) in the sticky bar.
+- **Assessment questions** (`ScreeningQuestions.jsx` + `Screening.css` `.as-*`): option tiles (2 columns, points at the right, red + advice when the option blocks — `blockKey` = `blocksPre`/`blocksDeploy`), live `ScreeningSide` (score, level on a Low|Medium|High bar via `meterPosition()`, progress, Blocks / Must / Should list). Used by the registration Assessment step and the deploy dialog step 2.
+- **Request deploy dialog:** checklist cards with a Required pill and "n of m required ticked"; sticky footer; step 2 widens to 880px.
+- **Assessment Settings:** question list (search, Pre / Deploy groups, "blocks" tail) + editor for the selected question (thresholds band, option cards: stepper, Needs fixing pills, block switches) + save bar counting unsaved changes (`countChanges()`, `nextSelected()` in `src/lib/screeningConfigEdit.js`).
+- **Adopting in another form:** wrap blocks in `.fsec` headings, use `.fgrid`/`.fg`, leave optional labels without a star, replace the bottom `btn-row` with `.fsticky`.
+- Not done: the other modals (announcement composer, user management, …) only inherit the global V7 styles; drag-to-reorder in Settings; the pre-registration Assessment tab and the Settings *Save* callable were not clicked end-to-end.
+

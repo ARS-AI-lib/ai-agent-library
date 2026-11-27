@@ -31,6 +31,7 @@ export default function AgentMultiSelect({ label, agents = [], selected, onChang
     const next = new Set(selected);
     if (next.has(id)) next.delete(id); else next.add(id);
     onChange(next);
+    setQuery('');
   }
 
   function removeTag(id) {

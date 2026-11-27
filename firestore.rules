@@ -165,7 +165,7 @@ service cloud.firestore {
         // 95 AND files the request, no separate "save to 95 first" step
         // required. Only while no request is already in flight (re-request
         // allowed after a rejection).
-        || (affectedKeys().hasOnly(['devProgress', 'deploymentStatus', 'deployRequestedBy', 'deployRequestedAt', 'phaseSince', 'progressUpdatedAt', 'updatedAt'])
+        || (affectedKeys().hasOnly(['devProgress', 'deploymentStatus', 'deployRequestedBy', 'deployRequestedAt', 'deployChecklist', 'screening', 'permittedDomains', 'prohibitedUses', 'requiredSkills', 'tool', 'llm', 'phaseSince', 'progressUpdatedAt', 'updatedAt'])
             && (isCreatorEmail(resource.data) || resource.data.createdBy == request.auth.uid || resource.data.approvedBy == request.auth.uid)
             && resource.data.get('devProgress', 0) < 100
             && resource.data.get('deploymentStatus', 'none') in ['none', 'rejected', null]
@@ -481,6 +481,30 @@ service cloud.firestore {
       allow read: if isAdmin()
         || (isSignedIn() && resource.data.get('uid', '') == request.auth.uid);
       allow write: if false;
+    }
+
+    // Assessment records (2026-11-26): one immutable doc per registration ('pre') and per deploy
+    // request ('deploy'). Anyone known may CREATE their own; approver-or-above may READ all —
+    // per-Area scoping for approvers is UI-side (Firestore cannot prove an array-contains-any
+    // query satisfies a hasAny rule). No update/delete: archiving moves docs via the Admin SDK.
+    match /assessments/{id} {
+      allow read: if isApproverOrAbove();
+      allow create: if isKnownUser()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.keys().hasOnly(['agentId', 'agentName', 'owner', 'approveArea', 'stage', 'answers', 'decl', 'createdBy', 'year', 'createdAt'])
+        && request.resource.data.stage in ['pre', 'deploy']
+        && request.resource.data.createdAt == request.time
+        // The record must belong to an agent the writer owns (admin: any), carry a plausible
+        // year (current UTC year or the next — Bangkok runs 7 h ahead) so it cannot dodge the
+        // archive guard, and stay small.
+        && request.resource.data.year in [request.time.year(), request.time.year() + 1]
+        && request.resource.data.answers.size() <= 60
+        && (isAdmin() || isOwnerCreatorOrApprover(get(/databases/$(database)/documents/agents/$(request.resource.data.agentId)).data));
+      allow update, delete: if false;
+    }
+    // Frozen yearly archive — callables (Admin SDK) only.
+    match /assessmentArchive/{document=**} {
+      allow read, write: if false;
     }
 
     // Dedup markers: {agentId}__{uid}__{YYYY-MM-DD}__{kind}. Their existence

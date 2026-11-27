@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toJsDate } from '../lib/agentUtils';
+import { goToField } from '../lib/formFocus';
 import { AUDIENCES, AUDIENCE_LABEL, validateAnnouncement } from '../lib/inbox';
 import { createAnnouncement, updateAnnouncement, deleteAnnouncement } from '../lib/announcements';
 import { failMsg } from '../lib/copy';
@@ -41,13 +42,17 @@ export default function AnnouncementComposer({ user, announcement, onClose }) {
 
   const fields = () => ({ title, body, audience, pinned, expiresAt: expires ? new Date(expires) : null });
 
+  // Show the message and take the user to the field it is about (src/lib/formFocus.js).
+  const FIELDS = [['Title', /หัวข้อ/], ['Message', /เนื้อหา/], ['Audience', /กลุ่มผู้รับ/], ['Expires', /วันหมดอายุ/]];
+  const fail = (msg) => { setError(msg); goToField('.v7-ann-composer', msg, FIELDS); };
+
   const submit = async (e) => {
     e.preventDefault();
     const f = fields();
     const bad = validateAnnouncement(f);
-    if (bad) { setError(bad); return; }
-    if (f.expiresAt && Number.isNaN(f.expiresAt.getTime())) { setError('วันหมดอายุไม่ถูกต้อง'); return; }
-    if (f.expiresAt && f.expiresAt.getTime() <= Date.now()) { setError('วันหมดอายุต้องเป็นเวลาในอนาคต — ประกาศที่หมดอายุแล้วจะถูกซ่อนทันที'); return; }
+    if (bad) { fail(bad); return; }
+    if (f.expiresAt && Number.isNaN(f.expiresAt.getTime())) { fail('วันหมดอายุไม่ถูกต้อง'); return; }
+    if (f.expiresAt && f.expiresAt.getTime() <= Date.now()) { fail('วันหมดอายุต้องเป็นเวลาในอนาคต — ประกาศที่หมดอายุแล้วจะถูกซ่อนทันที'); return; }
     setError('');
     setSaving(true);
     try {

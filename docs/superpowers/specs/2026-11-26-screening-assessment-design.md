@@ -86,3 +86,9 @@ with the parent's values; shown to the approver. Rules: add `deployChecklist` ne
 `screening` in the deploy-request `hasOnly`. UI reuses the existing `mov`/`mbox` dialog and the
 `v7-step` stepper. Checklist ("what is in the package") and C7/C11 ("was it tested") are
 separate on purpose; overlapping items are not merged.
+
+## Change 2026-11-26 (user, mid-implementation): D1–D6 move into the registration form
+D1–D6 are no longer assessment questions. They are form fields: D1 = `description`, D4 = `tool`,
+D6 = `llm` (existing, relabelled Permitted Tools / Models Tested); D2/D3/D5 = new `permittedDomains`,
+`prohibitedUses`, `requiredSkills`. All required. `screening.decl` is removed. Existing items that lack
+the empty ones fill them in the Request-deploy dialog (rules `hasOnly` widened accordingly).

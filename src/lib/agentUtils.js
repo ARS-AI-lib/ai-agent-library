@@ -378,7 +378,8 @@ export function skillsOfAgent(agent, allAgents) {
 export function agentsOfSkill(skill, allAgents) {
   const names = matchingAgentNames(skill);
   if (!Array.isArray(allAgents) || !allAgents.length) return names;
-  const live = new Set(allAgents.map((a) => a.agentName));
+  // A workflow is not an "Agent" parent — its members show a separate Workflow row.
+  const live = new Set(allAgents.filter((a) => !isWorkflow(a)).map((a) => a.agentName));
   const byId = allAgents.filter((a) => getType(a) === 'agent' && childSkillIdList(a).includes(skill?.id)).map((a) => a.agentName);
   return [...new Set([...names.filter((n) => live.has(n)), ...byId])];
 }
@@ -433,6 +434,28 @@ export function childSkillIdList(agent) {
   return Array.isArray(agent?.childSkillIds) ? agent.childSkillIds.filter(Boolean) : [];
 }
 
+// ── Workflow skills (2026-11-26) ─────────────────────────────────────
+// A workflow is a Skill (getType() stays 'skill', so tier is T1/T3) carrying
+// isWorkflow:true. Its members are listed, IN STEP ORDER, in childSkillIds —
+// index 0 is the Starter skill. Membership is by id only: no matchingAgent /
+// submitter heuristic, so an unrelated skill can never slip into a workflow.
+export function isWorkflow(agent) {
+  return agent?.isWorkflow === true && getType(agent) === 'skill';
+}
+
+// Member skill docs in step order (ids that no longer resolve are skipped).
+export function workflowMembers(workflow, allAgents) {
+  if (!isWorkflow(workflow)) return [];
+  const byId = new Map((allAgents || []).map((a) => [a.id, a]));
+  return childSkillIdList(workflow).map((id) => byId.get(id)).filter((a) => a && a.id !== workflow.id && getType(a) === 'skill' && !isWorkflow(a));
+}
+
+// The workflow that lists this skill, if any.
+export function workflowOf(skill, allAgents) {
+  if (!skill?.id) return null;
+  return (allAgents || []).find((a) => isWorkflow(a) && a.id !== skill.id && childSkillIdList(a).includes(skill.id)) || null;
+}
+
 // The full skill docs that are paired sub-skills of `agent` (for cascading
 // writes from the parent). `agent` is expected to be an Agent, not a Skill.
 //
@@ -440,6 +463,7 @@ export function childSkillIdList(agent) {
 // replacement. 51 existing pairings across 20 parents predate childSkillIds
 // and have none, so dropping the heuristic would detach every one of them.
 export function pairedSubSkills(agent, allAgents) {
+  if (isWorkflow(agent)) return workflowMembers(agent, allAgents);
   if (!agent || getType(agent) !== 'agent') return [];
   const linked = new Set(childSkillIdList(agent));
   return allAgents.filter((s) =>
@@ -455,6 +479,8 @@ export function pairedSubSkills(agent, allAgents) {
 // Is THIS skill a locked paired sub-skill of some Agent in the library?
 export function isPairedSubSkill(skill, allAgents) {
   if (!skill || getType(skill) !== 'skill') return false;
+  if (isWorkflow(skill)) return false;
+  if (workflowOf(skill, allAgents)) return true;
   const parents = matchingAgentNames(skill);
   return allAgents.some((a) => {
     if (getType(a) !== 'agent') return false;
@@ -475,8 +501,16 @@ export function isPairedSubSkill(skill, allAgents) {
 // sets. getType()/getTier() keep their two-value meaning on purpose: tier
 // must not shift for those 22 docs.
 export function agentTypeLabel(agent, allAgents = []) {
+  if (isWorkflow(agent)) return 'Workflow skills';
   if (getType(agent) === 'skill') return 'Skill';
   return pairedSubSkills(agent, allAgents).length > 0 ? 'Agent+Skill' : 'Agent';
+}
+
+// Short type name for badges ("T1 Skill"): workflows get their own name, everything else keeps
+// the two-value Agent/Skill reading the badges always had.
+export function typeBadgeName(agent) {
+  if (isWorkflow(agent)) return 'Workflow skills';
+  return getType(agent) === 'agent' ? 'Agent' : 'Skill';
 }
 
 // ── Cascade guard (2026-08-20) ───────────────────────────────────────
@@ -515,7 +549,9 @@ export function relationshipLabel(agent, allAgents) {
  */
 export function buildAgentFilter({ type, owner, role, tier, reusable, hasEndpoint, category, stage, platformTools, externalSkills, search }) {
   return (agent) => {
-    if (type !== 'all' && getType(agent) !== type) return false;
+    if (type === 'workflow') { if (!isWorkflow(agent)) return false; }
+    // 'Skill' means a plain skill: workflows have their own filter value.
+    else if (type !== 'all' && (getType(agent) !== type || (type === 'skill' && isWorkflow(agent)))) return false;
     // Platform Tools shortcut (2026-08 sidebar) reuses the existing
     // internalTool flag (flag-internal.cjs) rather than a new field.
     if (platformTools && agent.internalTool !== true) return false;

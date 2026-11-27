@@ -1,3 +1,4 @@
+import { goToField } from '../lib/formFocus';
 import { useState } from 'react';
 import { failMsg } from '../lib/copy';
 
@@ -42,11 +43,14 @@ export default function MilestoneEditor({ milestones, defaultColors, onSave, onC
     setRows((rs) => rs.filter((r) => r.id !== id));
   }
 
+  // Show the message and take the user to the milestone row it is about (src/lib/formFocus.js).
+  function failRow(msg, id) { setError(msg); goToField('.mbox', msg, [], `[data-row="${id}"]`); }
+
   async function handleSave() {
     for (const r of rows) {
-      if (!r.name.trim()) { setError('ทุก milestone ต้องมีชื่อ'); return; }
-      if (!r.start || !r.end) { setError(`"${r.name}" ต้องมีวันเริ่มและวันสิ้นสุด`); return; }
-      if (new Date(r.start) > new Date(r.end)) { setError(`"${r.name}" วันเริ่มต้องไม่เกินวันสิ้นสุด`); return; }
+      if (!r.name.trim()) { failRow('ทุก milestone ต้องมีชื่อ', r.id); return; }
+      if (!r.start || !r.end) { failRow(`"${r.name}" ต้องมีวันเริ่มและวันสิ้นสุด`, r.id); return; }
+      if (new Date(r.start) > new Date(r.end)) { failRow(`"${r.name}" วันเริ่มต้องไม่เกินวันสิ้นสุด`, r.id); return; }
     }
     setSaving(true);
     setError('');
@@ -85,7 +89,7 @@ export default function MilestoneEditor({ milestones, defaultColors, onSave, onC
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
           {rows.length === 0 && <div className="empty-state" style={{ padding: 24 }}>ยังไม่มี milestone — กด "+ เพิ่ม" เพื่อสร้าง</div>}
           {rows.map((r) => (
-            <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 130px 40px 32px', gap: 8, alignItems: 'end', padding: '10px 12px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf2)' }}>
+            <div key={r.id} data-row={r.id} style={{ display: 'grid', gridTemplateColumns: '1fr 130px 130px 40px 32px', gap: 8, alignItems: 'end', padding: '10px 12px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf2)' }}>
               <div>
                 <div style={LB}>ชื่อ</div>
                 <input value={r.name} onChange={(e) => setRow(r.id, { name: e.target.value })} style={CTRL} placeholder="เช่น M1 / Sprint 1" />

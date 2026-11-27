@@ -5,10 +5,16 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';
+import { questionsFor, preGate, buildScreening } from '../lib/screening';
+import { useScreeningConfig } from '../hooks/useScreeningConfig';
+import { assessmentRecord } from '../lib/assessments';
+import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills, requiredFieldStatus } from '../lib/registrationType';
+import { DECL_FIELDS } from '../lib/declaration';
+import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
-import { uniq, splitRoles, extractProcessId, processLabel, agentUseCaseNames, isValidTeamName } from '../lib/agentUtils';
+import { uniq, splitRoles, extractProcessId, processLabel, agentUseCaseNames, isValidTeamName, isPairedSubSkill, isWorkflow } from '../lib/agentUtils';
 import { notifyEvent } from '../lib/notify';
 import { isInternalToolName } from '../lib/internalTool';
 import { categoryAreas, isMultiAreaCategory } from '../lib/approveAreas';
@@ -19,6 +25,7 @@ import TagMultiSelect from './TagMultiSelect';
 import AgentMultiSelect from './AgentMultiSelect';
 import CreatorPicker from './CreatorPicker';
 import AgentDetailModal from './AgentDetailModal';
+import { goToField, goToSkillRowError } from '../lib/formFocus';
 import SkillRow, { emptySkillRow, validateSkillRows } from './SkillRow';
 import Hint from './Hint';
 
@@ -79,8 +86,12 @@ const EMPTY_FORM = {
   hml: false,
   externalSource: false,
   humanJob: '',
+  workflowName: '',       // Workflow skills only: the workflow's own name (the main form is its Starter skill)
   tool: '',
   llm: '',
+  permittedDomains: '',
+  prohibitedUses: '',
+  requiredSkills: '',
   dataPrivacy: '',
   sdlcStage: new Set(),
   sdlcProcessMapping: new Set(),
@@ -98,13 +109,6 @@ function emptySkill() {
   // Shape and validation live in SkillRow.jsx so the New form and the Edit
   // form cannot drift apart (2026-08-20).
   return emptySkillRow(`sk-${skillSeq}`);
-}
-
-function typeToFlags(t) {
-  if (t === 'Skill') return { aiAgent: false, skillMd: true };
-  // Agent+Skill: the MAIN doc is a pure Agent — each paired skill becomes its
-  // own separate Skill doc (linked via matchingAgent), so the main is not both.
-  return { aiAgent: true, skillMd: false };
 }
 
 const REUSABLE_OPTIONS = ['Reusable', 'Reusable with Conditions', 'Non-reusable'];
@@ -127,6 +131,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const [connections, setConnections] = useState([]);  // rule-based directional connections
   const [aiResult, setAiResult] = useState(null);
   const [overlapReason, setOverlapReason] = useState('');
+  const screeningConfig = useScreeningConfig();
+  const [screeningAnswers, setScreeningAnswers] = useState({});
+  const [assessOpen, setAssessOpen] = useState(false);
   // Opt-in (default on) to REQUEST the AI-suggested link; a person still confirms it.
   const [requestLink, setRequestLink] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -251,6 +258,16 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     setForm((f) => ({ ...f, skills: f.skills.map((s) => (s._id === id ? { ...s, [key]: value } : s)) }));
   }
 
+  // Workflow skills: members are listed in step order; Required Skills is derived from them.
+  const isWf = form.type === WORKFLOW;
+  const hasPairedSkills = form.type === 'Agent+Skill' || isWf;
+  const skillRowName = (r) => (r.link?.mode === 'existing'
+    ? ((allAgents.length ? allAgents : approvedAgents).find((a) => a.id === r.link.id)?.agentName || '')
+    : (r.link?.name || '').trim());
+  const lib = allAgents.length ? allAgents : approvedAgents;
+  const workflowTakenIds = isWf ? lib.filter((a) => isWorkflow(a) || isPairedSubSkill(a, lib)).map((a) => a.id) : [];
+  const requiredSkillsValue = isWf ? workflowRequiredSkills(form.agentName, form.skills.map(skillRowName)) : form.requiredSkills;
+
   function validate() {
     if (!form.agentName.trim()) return 'ใส่ชื่อ Agent/Skill';
     if (!form.description.trim()) return 'ใส่ Description';
@@ -269,6 +286,19 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     if (form.businessValue.trim().length < MIN_DETAIL_LEN) {
       return `Business Value สั้นเกินไป — ช่วยอธิบายคุณค่าทางธุรกิจให้ชัด (อย่างน้อย ${MIN_DETAIL_LEN} ตัวอักษร, ตอนนี้ ${form.businessValue.trim().length})`;
     }
+    if (isWf) {
+      const wn = form.workflowName.trim();
+      if (!wn) return 'ใส่ Workflow Name';
+      if (wn.toLowerCase() === form.agentName.trim().toLowerCase()) return 'Workflow Name ต้องต่างจากชื่อ Starter skill';
+      if (lib.some((a) => String(a.agentName || '').trim().toLowerCase() === wn.toLowerCase())) return 'ชื่อ Workflow ซ้ำกับรายการที่มีอยู่แล้วใน library';
+      if (form.skills.length < 1) return 'Workflow ต้องมี skill เพิ่มอีกอย่างน้อย 1 ตัวนอกจาก Starter skill';
+    }
+    if (hasPairedSkills) {
+      const skErr = validateSkillRows(form.skills, allAgents);
+      if (skErr) return skErr;
+    }
+    if (!form.tool.trim()) return 'ใส่ Permitted Tools (ประเภท tool ที่อนุญาต)';
+    if (!requiredSkillsValue.trim()) return 'ใส่ Required Skills (ถ้าไม่ต้องใช้ร่วมกับ skill อื่น ให้พิมพ์ "ไม่ต้อง")';
     if (!form.owner.trim()) return 'ใส่ Owner team';
     if (!isValidTeamName(form.owner)) return 'ชื่อ Owner team ต้องมีอย่างน้อย 2 ตัวอักษร';
     if (!form.reusable) return 'เลือก Reusable';
@@ -276,16 +306,45 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       return 'ใส่ Reuse Conditions';
     }
     if (form.hml && !form.humanJob.trim()) return 'ใส่ Human Job (เมื่อเปิด HML)';
-    if (form.type === 'Agent+Skill') {
-      const skErr = validateSkillRows(form.skills, allAgents);
-      if (skErr) return skErr;
-    }
     return '';
+  }
+
+  // Validation failed → show the message AND take the user to that field
+  // (shared standard: src/lib/formFocus.js).
+  const ERROR_FIELDS = [
+    ['Workflow Name', /Workflow Name|ชื่อ Workflow/],
+    [isWf ? 'Starter Skill Name' : 'Agent / Skill Name', /^ใส่ชื่อ/],
+    ['Description', /^(ใส่ )?Description/],
+    ['Core Ability', /Core Ability/],
+    ['Related Role', /Related Role/],
+    ['Input', /^ใส่ Input/],
+    ['Output', /^ใส่ Output/],
+    ['Business Value', /Business Value/],
+    ['Permitted Tools', /Permitted Tools/],
+    ['Required Skills', /Required Skills/],
+    ['Owner team', /Owner team/],
+    ['Reuse Conditions', /Reuse Conditions/],
+    ['Reusable', /^เลือก Reusable/],
+    ['Human Job', /Human Job/],
+  ];
+  function goToError(err) {
+    if (goToSkillRowError('.mbox.mform', err)) return;
+    goToField('.mbox.mform', err, ERROR_FIELDS);
+  }
+
+  // Step 1 → 2: validate the form, then the screening assessment (pre-assessment).
+  // The duplicate check only starts from the Assessment step (runCheck below).
+  function goAssess() {
+    const err = validate();
+    if (err) { setValidationMsg(err); goToError(err); return; }
+    setValidationMsg('');
+    setAssessOpen(true);
+    setTab('assess');
   }
 
   async function runCheck() {
     const err = validate();
-    if (err) { setValidationMsg(err); return; }
+    if (err) { setValidationMsg(err); goToError(err); return; }
     setValidationMsg('');
 
     const draft = {
@@ -432,7 +491,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     setSubmitting(true);
     setSubmitError('');
     try {
-      const { aiAgent, skillMd } = typeToFlags(form.type);
+      // Workflow skills: the main form IS the Starter skill (a plain Skill); the workflow doc wraps it below.
+      const { aiAgent, skillMd } = typeFlags(isWf ? 'Skill' : form.type);
+      const workflowName = form.workflowName.trim();
       const isExternal = form.scope === 'External';
       const agentName = form.agentName.trim();
       const createdBy = user?.uid || '';
@@ -465,6 +526,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         owner: form.owner.trim(),
         tool: form.tool.trim(),
         llm: form.llm.trim(),
+        permittedDomains: form.permittedDomains.trim(),
+        prohibitedUses: form.prohibitedUses.trim(),
+        requiredSkills: requiredSkillsValue.trim(),
         dataPrivacy: form.dataPrivacy.trim(),
         businessValue: form.businessValue.trim(),
         // Array since 2026-08-17: 1 discipline + optionally 1 product. It used
@@ -498,7 +562,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         ? (approvedAgents || []).find((a) => a.agentName === aiResult.suggested_matching_agent && getType(a) === 'agent') || null
         : null;
 
-      const agentRef = await addDoc(collection(db, 'agents'), {
+      const mainDoc = {
         agentName,
         description: form.description.trim(),
         aiAgent,
@@ -521,6 +585,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         externalSource: form.type === 'Skill' && form.externalSource,
         tool: inheritedFromAgent.tool,
         llm: inheritedFromAgent.llm,
+        permittedDomains: inheritedFromAgent.permittedDomains,
+        prohibitedUses: inheritedFromAgent.prohibitedUses,
+        requiredSkills: inheritedFromAgent.requiredSkills,
         dataPrivacy: inheritedFromAgent.dataPrivacy,
         // Sanitised on the way IN as well as at render time — a hostile scheme
         // should never reach Firestore, so no future reader has to remember to
@@ -549,7 +616,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         // that silent write is how skills got linked to other teams' agents.
         // A Skill with a suggestion carries it as a pending link request,
         // confirmed in the Pending queue (functions/linkRules.js).
-        matchingAgent: '',
+        // Workflow skills: the Starter points at its workflow by name (approval cascade); otherwise empty.
+        matchingAgent: isWf ? workflowName : '',
         ...(linkTarget ? { linkSuggestion: { agentId: linkTarget.id, agentName: linkTarget.agentName, status: 'pending', source: 'ai' } } : {}),
         // Snapshot of the duplicate-check result at submit time, so the
         // Pending Approval queue can show reviewers the same risk signal
@@ -569,6 +637,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               categoryReason: aiResult.category_reason || '',
             }
           : null,
+        screening: { ...buildScreening(screeningConfig, screeningAnswers), preAt: serverTimestamp() },
         developmentPhase: 'To Do',
         devProgress: 0,
         phaseSince: serverTimestamp(),
@@ -582,7 +651,13 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
         createdBy,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+      const agentRef = await addDoc(collection(db, 'agents'), mainDoc);
+      // One assessment record per registration (for a workflow: on its Starter skill). Never blocks the submit.
+      addDoc(collection(db, 'assessments'), {
+        ...assessmentRecord({ ...mainDoc, id: agentRef.id }, 'pre', screeningAnswers, createdBy),
+        createdAt: serverTimestamp(),
+      }).catch((e) => console.warn('assessment record not saved:', e?.message || e));
 
       // ── Category proposal (2026-08): the AI decided no existing shortcut
       // fits well. Best-effort, never blocks submission — the agent already
@@ -658,7 +733,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // inherited from the Agent above. They are NOT individually dup-checked
       // (analysisResult null) — only the parent Agent was analyzed.
       const childIds = [];
-      if (form.type === 'Agent+Skill') {
+      if (hasPairedSkills) {
         for (const s of form.skills) {
           // An EXISTING library skill is only LINKED — never re-created and
           // never rewritten. It belongs to whoever registered it and may be a
@@ -686,6 +761,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             externalSource: !!s.externalSource,
             tool: inheritedFromAgent.tool,
             llm: inheritedFromAgent.llm,
+            permittedDomains: inheritedFromAgent.permittedDomains,
+            prohibitedUses: inheritedFromAgent.prohibitedUses,
+            requiredSkills: inheritedFromAgent.requiredSkills,
             dataPrivacy: inheritedFromAgent.dataPrivacy,
             // SDLC context inherited from the Agent (blanked when the skill
             // itself is customer-facing, mirroring the Agent rule).
@@ -697,8 +775,9 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             input: s.input.trim(),
             output: s.output.trim(),
             businessValue: inheritedFromAgent.businessValue,
-            matchingAgent: agentName,   // ← link to parent Agent
+            matchingAgent: isWf ? workflowName : agentName,   // ← link to parent Agent / workflow
             analysisResult: null,
+            screening: { ...buildScreening(screeningConfig, screeningAnswers), preAt: serverTimestamp() },
             developmentPhase: 'To Do',
             devProgress: 0,
             phaseSince: serverTimestamp(),
@@ -721,7 +800,14 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // Explicit doc-ID link on the PARENT. matchingAgent (a name) still ties
       // new skills back for legacy readers, but only this survives a rename
       // and only this works across submitters (CLAUDE.md §25).
-      if (childIds.length) {
+      // Workflow skills: wrap the Starter + members in the workflow doc (members in step order,
+      // Starter first); the Starter itself never carries childSkillIds.
+      let workflowId = null;
+      if (isWf) {
+        const wfRef = await addDoc(collection(db, 'agents'), buildWorkflowDoc(mainDoc, workflowName, agentRef.id, childIds, { internalTool: isInternalToolName(workflowName) }));
+        workflowId = wfRef.id;
+        reindexAgent(wfRef.id);
+      } else if (childIds.length) {
         await updateDoc(doc(db, 'agents', agentRef.id), { childSkillIds: childIds, updatedAt: serverTimestamp() });
       }
 
@@ -732,7 +818,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
       // One email for the whole submission — the parent agent. Sub-skills are
       // filed as separate docs but reviewed as a package, and the notifier
       // skips anything carrying matchingAgent for exactly that reason.
-      notifyEvent('agent.pending', { agentId: agentRef.id });
+      notifyEvent('agent.pending', { agentId: workflowId || agentRef.id });
       if (linkTarget) notifyEvent('link.requested', { agentId: agentRef.id });
 
       // Analysis is now committed to the KB — drop the transient session cache
@@ -791,6 +877,8 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const needsReason = dupBlock.needsJustification;
   const reasonMissing = needsReason && overlapReason.trim().length < MIN_JUSTIFICATION;
   const maxAiConfidence = aiStats?.max ?? 0;
+  const preAssess = preGate(screeningConfig, screeningAnswers);
+  const reqStatus = requiredFieldStatus({ ...form, requiredSkills: requiredSkillsValue }, isWf);
   // "Kitchen-sink" breadth flag — deterministic, doesn't depend on the AI
   // getting overall_risk right. Warns and is stamped on the stored analysis so
   // the approver sees it in the pending queue.
@@ -809,7 +897,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
 
   return (
     <div className="mov open">
-      <div className="mbox wide" style={{ padding: 0 }} onPointerDownCapture={arm} onKeyDownCapture={arm}>
+      <div className="mbox wide mform" style={{ padding: 0 }} onPointerDownCapture={arm} onKeyDownCapture={arm}>
         <button className="mclose" onClick={requestClose} style={{ zIndex: 1 }}>✕</button>
 
         {/* V7: the same two tabs, presented as a 2-step header. Step 2 stays
@@ -827,12 +915,23 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
           <span className="v7-step-line" aria-hidden="true" />
           <button
             role="tab"
+            aria-selected={tab === 'assess'}
+            aria-disabled={!assessOpen}
+            className={`v7-step ${tab === 'assess' ? 'active' : ''} ${!assessOpen ? 'locked' : ''} ${ranked !== null ? 'done' : ''}`}
+            onClick={() => assessOpen && setTab('assess')}
+          >
+            <span className="v7-step-n">{ranked !== null && tab !== 'assess' ? '✓' : '2'}</span>
+            Assessment
+          </button>
+          <span className="v7-step-line" aria-hidden="true" />
+          <button
+            role="tab"
             aria-selected={tab === 'analysis'}
             aria-disabled={ranked === null}
             className={`v7-step ${tab === 'analysis' ? 'active' : ''} ${ranked === null ? 'locked' : ''}`}
             onClick={() => ranked !== null && setTab('analysis')}
           >
-            <span className="v7-step-n">2</span>
+            <span className="v7-step-n">3</span>
             Analysis {ranked !== null ? `(${analysisCount})` : ''}
           </button>
         </div>
@@ -853,52 +952,55 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />{validationMsg}</div>
             )}
 
+            <div className="fsec"><div className="fsec-h"><h4>What are you registering?</h4></div></div>
+            <div className="ftype" role="radiogroup" aria-label="Type">
+              {[['Agent', 'ทำงานเองหลายขั้นตอน'], ['Skill', 'ความสามารถเดี่ยว'], ['Agent+Skill', 'Agent ที่เรียก skill'], [WORKFLOW, 'Starter + skill ต่อกัน']].map(([t, hint]) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.type === t}
+                  className={`ftype-card${form.type === t ? ' on' : ''}`}
+                  onClick={() => setForm((f) => ({
+                    ...f,
+                    type: t,
+                    // The first skill row exists the moment a paired type is selected.
+                    skills: (t === 'Agent+Skill' || t === WORKFLOW) && f.skills.length === 0 ? [emptySkill()] : f.skills,
+                  }))}
+                >
+                  <b>{t}</b><small>{hint}</small>
+                </button>
+              ))}
+            </div>
+            <div style={{ height: 14 }} />
+
+            {isWf && (
+              <div className="fg">
+                <label>Workflow Name <span className="req">*</span><Hint text="ชื่อ workflow ที่ครอบ Starter skill นี้ (ข้อมูลในฟอร์มด้านล่างคือของ Starter skill)" /></label>
+                <input value={form.workflowName} onChange={(e) => setField('workflowName', e.target.value)} placeholder="เช่น Release Note Pipeline" />
+              </div>
+            )}
+
             <div className="fg">
-              <label>Agent / Skill Name <span className="req">*</span></label>
+              <label>{isWf ? 'Starter Skill Name' : 'Agent / Skill Name'} <span className="req">*</span></label>
               <input value={form.agentName} onChange={(e) => setField('agentName', e.target.value)} placeholder="เช่น Epic Writer v2" />
             </div>
 
-            <div className="grid2">
-              <div className="fg">
-                <label>Type <span className="req">*</span></label>
-                <div className="toggle2" role="radiogroup" aria-label="Type">
-                  {['Agent', 'Skill', 'Agent+Skill'].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      role="radio"
-                      aria-checked={form.type === t}
-                      className={form.type === t ? 'sel' : ''}
-                      onClick={() => setForm((f) => ({
-                        ...f,
-                        type: t,
-                        // Default the first skill row in immediately — it's
-                        // the only one that can't be deleted, so it should
-                        // always exist the moment the type is selected.
-                        skills: t === 'Agent+Skill' && f.skills.length === 0 ? [emptySkill()] : f.skills,
-                      }))}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="fg">
-                <label>Scope <span className="req">*</span></label>
-                <div className="toggle2" role="radiogroup" aria-label="Scope">
-                  {[['Internal', 'Internal Use'], ['External', 'Customer Facing']].map(([v, lbl]) => (
-                    <button
-                      key={v}
-                      type="button"
-                      role="radio"
-                      aria-checked={form.scope === v}
-                      className={form.scope === v ? 'sel' : ''}
-                      onClick={() => setField('scope', v)}
-                    >
-                      {lbl}
-                    </button>
-                  ))}
-                </div>
+            <div className="fg">
+              <label>Scope <span className="req">*</span></label>
+              <div className="toggle2" role="radiogroup" aria-label="Scope">
+                {[['Internal', 'Internal Use'], ['External', 'Customer Facing']].map(([v, lbl]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.scope === v}
+                    className={form.scope === v ? 'sel' : ''}
+                    onClick={() => setField('scope', v)}
+                  >
+                    {lbl}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -924,6 +1026,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             )}
 
+            <div className="fsec"><div className="fsec-h"><h4>What it does</h4><span>ใช้ตรวจความซ้ำและแสดงในไลบรารี</span></div></div>
             <div className="fg">
               <label>Description <span className="req">*</span></label>
               <textarea rows={3} value={form.description} onChange={(e) => setField('description', e.target.value)} placeholder="อธิบายว่า Agent/Skill นี้ทำอะไร" />
@@ -951,12 +1054,27 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             </div>
 
+            <div className="fsec"><div className="fsec-h"><h4>Scope of use</h4><span>ประกาศขอบเขตตามแบบคัดกรองของธนาคาร</span></div></div>
+            <div className="grid2">
+              <div className="fg">
+                <label>Permitted Domains</label>
+                <input value={form.permittedDomains} onChange={(e) => setField('permittedDomains', e.target.value)} placeholder={DECL_FIELDS[0].placeholder} />
+                <div className="fhelp">{DECL_FIELDS[0].hint}</div>
+              </div>
+              <div className="fg">
+                <label>Prohibited Uses</label>
+                <input value={form.prohibitedUses} onChange={(e) => setField('prohibitedUses', e.target.value)} placeholder={DECL_FIELDS[1].placeholder} />
+                <div className="fhelp">{DECL_FIELDS[1].hint}</div>
+              </div>
+            </div>
+
             <div className="fg">
               <label>Business Value <span className="req">*</span></label>
               <textarea rows={2} value={form.businessValue} onChange={(e) => setField('businessValue', e.target.value)} placeholder="คุณค่าทางธุรกิจ" />
             </div>
 
             {/* Owner + Creator/Team member — half width each */}
+            <div className="fsec"><div className="fsec-h"><h4>Ownership & reuse</h4></div></div>
             <div className="grid2">
               <div className="fg">
                 <label>Owner team <span className="req">*</span></label>
@@ -1036,16 +1154,29 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 </div>
             </>
 
-            {/* Tech */}
+            {/* Declaration (bank screening D1–D6): purpose = Description above; Domains + Prohibited Uses sit before Business Value; the rest below */}
+            <div className="fsec"><div className="fsec-h"><h4>Tools & dependencies</h4></div></div>
             <div className="grid2">
               <div className="fg">
-                <label>Tool</label>
-                <input value={form.tool} onChange={(e) => setField('tool', e.target.value)} placeholder="เช่น JIRA API, n8n" />
+                <label>Permitted Tools <span className="req">*</span></label>
+                <input value={form.tool} onChange={(e) => setField('tool', e.target.value)} placeholder={DECL_FIELDS[2].placeholder} />
+                <div className="fhelp">{DECL_FIELDS[2].hint}</div>
               </div>
               <div className="fg">
-                <label>LLM</label>
-                <input value={form.llm} onChange={(e) => setField('llm', e.target.value)} placeholder="เช่น Gemini 3 Flash" />
+                <label>Models Tested</label>
+                <input value={form.llm} onChange={(e) => setField('llm', e.target.value)} placeholder={DECL_FIELDS[4].placeholder} />
+                <div className="fhelp">{DECL_FIELDS[4].hint}</div>
               </div>
+            </div>
+            <div className="fg">
+              <label>Required Skills <span className="req">*</span></label>
+              <input
+                value={requiredSkillsValue}
+                onChange={(e) => setField('requiredSkills', e.target.value)}
+                placeholder={isWf ? 'เติมอัตโนมัติจาก skill ใน workflow' : DECL_FIELDS[3].placeholder}
+                readOnly={isWf}
+              />
+              <div className="fhelp">{isWf ? 'เติมอัตโนมัติจาก Starter skill และ skill ที่เพิ่ม' : DECL_FIELDS[3].hint}</div>
             </div>
 
             <div className="fg">
@@ -1053,11 +1184,11 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               <input value={form.dataPrivacy} onChange={(e) => setField('dataPrivacy', e.target.value)} placeholder="เช่น PDPA, PII Masking" />
             </div>
 
-            {/* ── Paired sub-skills (Agent+Skill only) ── */}
-            {form.type === 'Agent+Skill' && (
+            {/* ── Paired sub-skills (Agent+Skill, Workflow skills) ── */}
+            {hasPairedSkills && (
               <div style={{ marginTop: 6, padding: '12px 14px', border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf2)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>Cascade Skills</div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{isWf ? 'Additional Skills' : 'Cascade Skills'}</div>
                   <button type="button" className="btn btn-secondary v7-btn-compact" onClick={addSkill}>+ Add Skill</button>
                 </div>
 
@@ -1069,8 +1200,13 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                     onField={(k, v) => setSkillField(s._id, k, v)}
                     onRemove={() => removeSkill(s._id)}
                     canRemove={form.skills.length > 1}
+                    label={isWf ? `Skill #${idx + 2}` : undefined}
                     allAgents={allAgents.length ? allAgents : approvedAgents}
-                    excludeIds={form.skills.filter((x) => x._id !== s._id && x.link?.mode === 'existing').map((x) => x.link.id)}
+                    excludeIds={[
+                      ...form.skills.filter((x) => x._id !== s._id && x.link?.mode === 'existing').map((x) => x.link.id),
+                      // One workflow per skill: anything already in a workflow/paired under an Agent is not offered.
+                      ...(isWf ? workflowTakenIds : []),
+                    ]}
                     abilityOptions={abilityOptions}
                     roleOptions={roleOptions}
                     onAddRelatedRole={onAddRelatedRole}
@@ -1079,9 +1215,55 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
               </div>
             )}
 
-            <div className="btn-group">
-              <button className="btn btn-primary" onClick={runCheck}>Submit</button>
-              <button className="btn btn-secondary" onClick={() => { setForm(EMPTY_FORM); analysisCacheRef.current.clear(); }}>Clear</button>
+            <div className="fsticky">
+              <span className="fmeta">Required fields: {reqStatus.done} of {reqStatus.total}</span>
+              <div className="fbtns">
+                <button className="btn btn-secondary" onClick={() => { setForm(EMPTY_FORM); setScreeningAnswers({}); setAssessOpen(false); analysisCacheRef.current.clear(); }}>Clear</button>
+                <button className="btn btn-primary" onClick={goAssess}>Next: Assessment →</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'assess' && (
+          <div className="tab-panel">
+            <div className="m-head">
+              <div>
+                <h2 className="mtitle">Pre-assessment</h2>
+                <div className="msub">ตอบแบบประเมินก่อนตรวจความซ้ำซ้อน</div>
+              </div>
+            </div>
+            <div className="as-wrap">
+              <ScreeningQuestions
+                config={screeningConfig}
+                questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
+                answers={screeningAnswers}
+                blockKey="blocksPre"
+                onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
+              />
+              <ScreeningSide
+                config={screeningConfig}
+                answers={screeningAnswers}
+                questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
+                stage="pre"
+                blockKey="blocksPre"
+              />
+            </div>
+            {preAssess.blocked && (
+              <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
+                ไม่สามารถไปต่อได้ — {preAssess.reasons[0]}
+              </div>
+            )}
+            <div className="btn-group" style={{ marginTop: 14 }}>
+              <button className="btn btn-secondary" onClick={() => setTab('form')}>← Back to Form</button>
+              <button
+                className="btn btn-primary"
+                onClick={runCheck}
+                disabled={!preAssess.complete || preAssess.blocked}
+                title={!preAssess.complete ? 'ตอบ C1–C9 ให้ครบก่อน' : undefined}
+              >
+                {!preAssess.complete ? 'ตอบให้ครบก่อน' : preAssess.blocked ? 'ถูกบล็อก (C7)' : 'Continue to Duplicate Check'}
+              </button>
             </div>
           </div>
         )}

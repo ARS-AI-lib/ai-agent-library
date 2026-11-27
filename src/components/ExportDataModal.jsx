@@ -4,7 +4,7 @@ import { downloadCsv as writeCsv } from '../lib/csv';
 import { db } from '../lib/firebase';
 import { getType, getTier } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
-import { isMyAgent, normalizeProgress } from '../lib/agentUtils';
+import { isMyAgent, normalizeProgress, typeBadgeName } from '../lib/agentUtils';
 import { readStats, STAR_LEVELS } from '../lib/agentStats';
 import { useAgentStats } from '../hooks/useAgentStats';
 import useEscapeKey from '../hooks/useEscapeKey';
@@ -61,7 +61,7 @@ const ALL_COLUMNS = [
 function toRow(agent, resolveAreas, statsById) {
   return {
     agentName: agent.agentName || '',
-    type: getType(agent) === 'skill' ? 'Skill' : 'Agent',
+    type: typeBadgeName(agent),
     tier: getTier(agent),
     owner: agent.owner || '',
     creator: agent.creator || '',

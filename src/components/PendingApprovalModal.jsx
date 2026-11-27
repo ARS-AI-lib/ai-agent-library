@@ -5,6 +5,8 @@ import { db } from '../lib/firebase';
 import { getTier, TIER_DEF } from '../lib/tier';
 import { agentApproveAreas } from '../lib/approveAreas';
 import { matchingAgentNames, pairedSubSkills, agentTypeLabel, fmtDate, categoryColor } from '../lib/agentUtils';
+import { ScreeningSummary } from './ScreeningQuestions';
+import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { queueViewer, visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { decideRenameRequest } from '../lib/endpointFiles';
@@ -100,6 +102,7 @@ const RISK_COLOR = { high: 'var(--late)', medium: 'var(--warn)', low: 'var(--ok)
 //   user (base)     — see only their own submissions, and may only reject
 //                     (withdraw) them — never approve their own idea.
 export default function PendingApprovalModal({ pending, deployRequests = [], renameReqs = [], onClose, user, userRole, isAdmin, isCommittee, approveAreas = [], agents = [], schema = {} }) {
+  const screeningConfig = useScreeningConfig();
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
   // Rename requests (2026-08-19) — a third queue beside New Entry and Deploy
@@ -526,6 +529,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                     <strong>Overlap reason</strong> (vs {agent.analysisResult.overlapWith} {agent.analysisResult.overlapConfidence}%): {agent.analysisResult.overlapJustification}
                   </div>
                 )}
+                <ScreeningSummary agent={agent} config={screeningConfig} />
                 {agent.analysisResult?.summary && (
                   <div style={{ fontSize: 11, color: 'var(--tx2)', marginTop: 3, maxWidth: 480, fontStyle: 'italic' }}>
                     "{agent.analysisResult.summary}"
@@ -605,6 +609,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                       )}
                     </div>
                   </div>
+                  <ScreeningSummary agent={agent} config={screeningConfig} />
                 </div>
                 <div className="queue-actions">
                   {(fullAccess || (mine.size > 0 && resolveAreas(agent).some((area) => mine.has(area)))) && (

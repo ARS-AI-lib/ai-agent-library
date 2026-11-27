@@ -37,6 +37,11 @@ import ChatAssistant from './components/ChatAssistant';
 import UserManagementModal from './components/UserManagementModal';
 import ExportDataModal from './components/ExportDataModal';
 import RoleGroupManagerModal from './components/RoleGroupManagerModal';
+import AssessmentMenuModal from './components/AssessmentMenuModal';
+import AssessmentSettingsModal from './components/AssessmentSettingsModal';
+import ReportModal from './components/ReportModal';
+import UsageReportPage from './components/UsageReportPage';
+import AssessmentResultsPage from './components/AssessmentResultsPage';
 import UploadEndpointFileModal from './components/UploadEndpointFileModal';
 import EditAgentModal from './components/EditAgentModal';
 import SDLCTab from './components/SDLCTab';
@@ -211,6 +216,10 @@ export default function App() {
   const [showUsers, setShowUsers] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showRoleGroups, setShowRoleGroups] = useState(false);
+  const [showAssessmentMenu, setShowAssessmentMenu] = useState(false);
+  const [showAssessmentSettings, setShowAssessmentSettings] = useState(false);
+  const [showUsage, setShowUsage] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
 
   // Deep links from Teams notifications (2026-09-28): ?agent=<id> opens that
@@ -388,7 +397,7 @@ export default function App() {
     ...[...role_].map((v) => ({ key: `r-${v}`, label: `Role: ${v}`, onRemove: () => setRole_(without(role_, v)) })),
     ...[...tier].map((v) => ({ key: `t-${v}`, label: `Tier: ${v}`, onRemove: () => setTier(without(tier, v)) })),
     ...[...reusable].map((v) => ({ key: `u-${v}`, label: v, onRemove: () => setReusable(without(reusable, v)) })),
-    ...(type !== 'all' ? [{ key: 'type', label: `Type: ${type === 'agent' ? 'Agent' : 'Skill'}`, onRemove: () => setType('all') }] : []),
+    ...(type !== 'all' ? [{ key: 'type', label: `Type: ${({ agent: 'Agent', skill: 'Skill', workflow: 'Workflow skills' })[type] || type}`, onRemove: () => setType('all') }] : []),
     ...(hasEndpoint ? [{ key: 'ep', label: 'Has endpoint', onRemove: () => setHasEndpoint(false) }] : []),
     ...(search.trim() ? [{ key: 'q', label: `“${search.trim()}”`, onRemove: () => setSearch('') }] : []),
   ];
@@ -532,6 +541,9 @@ export default function App() {
         setActiveTab={setActiveTab}
         onOpenExport={() => setShowExport(true)}
         onOpenRoleGroups={() => setShowRoleGroups(true)}
+        onOpenAssessment={() => setShowAssessmentMenu(true)}
+        onOpenUsage={() => setShowUsage(true)}
+        canSeeAssessment={isAdmin || isCommittee || role === 'approver'}
         canManageRoleGroups={isAdmin || isCommittee}
         canPostAnnouncement={canPostAnnouncements(role)}
         onNewAnnouncement={() => setComposer({})}
@@ -724,6 +736,24 @@ export default function App() {
 
       {showCategoryProposals && isAdmin && (
         <CategoryApprovalPanel onClose={() => setShowCategoryProposals(false)} user={user} schema={schema} />
+      )}
+
+      {showAssessmentMenu && (isAdmin || isCommittee || role === 'approver') && (
+        <AssessmentMenuModal
+          onClose={() => setShowAssessmentMenu(false)}
+          canSettings={isAdmin || isCommittee}
+          onOpenSettings={() => setShowAssessmentSettings(true)}
+          onOpenResults={() => setShowResults(true)}
+        />
+      )}
+      {showUsage && (
+        <ReportModal label="Agent/Skill Usage" onClose={() => setShowUsage(false)}><UsageReportPage embedded /></ReportModal>
+      )}
+      {showResults && (
+        <ReportModal label="Assessment Results" onClose={() => setShowResults(false)}><AssessmentResultsPage embedded /></ReportModal>
+      )}
+      {showAssessmentSettings && (isAdmin || isCommittee) && (
+        <AssessmentSettingsModal onClose={() => setShowAssessmentSettings(false)} />
       )}
 
       {showRoleGroups && (isAdmin || isCommittee) && (

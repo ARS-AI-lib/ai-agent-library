@@ -1,10 +1,17 @@
+import { goToField } from '../lib/formFocus';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from '../lib/toast';
 import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getType, getTier, TIER_DEF, isInternalOrExternal } from '../lib/tier';
+import { checklistFor, checklistGate, buildDeployChecklist } from '../lib/deployChecklist';
+import { questionsToAsk, deployGate, buildScreening, normalizeAnswers } from '../lib/screening';
+import { useScreeningConfig } from '../hooks/useScreeningConfig';
+import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
+import { assessmentRecord } from '../lib/assessments';
+import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
-import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames } from '../lib/agentUtils';
+import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames, typeBadgeName, isWorkflow, workflowMembers, workflowOf } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { recordAgentEvent, submitRating } from '../lib/agentEvents';
@@ -37,6 +44,11 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [saveError, setSaveError] = useState('');
   const [requesting, setRequesting] = useState(false);
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
+  const [deployStep, setDeployStep] = useState(1);
+  const [deployChecked, setDeployChecked] = useState([]);
+  const screeningConfig = useScreeningConfig();
+  const [deployAnswers, setDeployAnswers] = useState({});
+  const [deployDecl, setDeployDecl] = useState({});
   const [editEndpoint, setEditEndpoint] = useState('');
   const [editFile, setEditFile] = useState(null);
   // Which linked sub-skills this progress update should be shared with
@@ -274,6 +286,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // location to.
       if (!linkExempt && !hasEndpoint && !editEndpoint.trim() && !editFile) {
         setSaveError('ต้องระบุ Endpoint URL หรืออัปโหลดไฟล์อย่างใดอย่างหนึ่งก่อน จึงจะปรับเป็น 100% ได้');
+        goToField('.mbox', 'Endpoint', [['Endpoint', /Endpoint/]]);
         return;
       }
       if (editFile) {
@@ -463,6 +476,14 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
     }
   }
 
+  function openDeployDialog() {
+    setDeployStep(1);
+    setDeployChecked([]);
+    setDeployAnswers(normalizeAnswers(screeningConfig, agent.screening?.answers));
+    setDeployDecl({});
+    setConfirmingDeploy(true);
+  }
+
   async function handleRequestDeploy() {
     setConfirmingDeploy(false);
     setRequesting(true);
@@ -473,11 +494,20 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         deploymentStatus: 'requested',
         deployRequestedBy: user?.uid || '',
         deployRequestedAt: serverTimestamp(),
+        // Package checklist + assessment answered in the Request-deploy dialog.
+        deployChecklist: { ...buildDeployChecklist(getTier(agent), deployChecked), at: serverTimestamp() },
+        screening: { ...buildScreening(screeningConfig, deployAnswers), preAt: agent.screening?.preAt ?? serverTimestamp(), deployAt: serverTimestamp() },
         progressUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
       const withPhase = (d) => (phaseChanged(d.devProgress, 95) ? { ...patch, phaseSince: serverTimestamp() } : patch);
-      await updateDoc(doc(db, 'agents', agent.id), withPhase(agent));
+      // Older items predate the declaration fields — fill whatever is still empty (per doc).
+      await updateDoc(doc(db, 'agents', agent.id), { ...withPhase(agent), ...declarationPatch(agent, deployDecl) });
+      // One assessment record per deploy request (parent only, not per cascaded child). Never blocks.
+      addDoc(collection(db, 'assessments'), {
+        ...assessmentRecord({ ...agent, ...declarationPatch(agent, deployDecl) }, 'deploy', deployAnswers, user?.uid || ''),
+        createdAt: serverTimestamp(),
+      }).catch((e) => console.warn('assessment record not saved:', e?.message || e));
       // Parent only: the cascade below writes one doc per sub-skill, and a
       // 7-child parent would otherwise produce 8 emails for one request.
       notifyEvent('deploy.requested', { agentId: agent.id });
@@ -489,8 +519,16 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // cascadeTargets, not pairedSubSkills: a child that is further along
       // than its parent (its own 100%, its own deploy approval) must not be
       // dragged backwards — 18 standalone skills sit at 100% today.
+      // A child that already has its own request/approval is rejected by the rules and
+      // would leave the cascade half-done, so only idle children are written. Each child
+      // keeps its own tier checklist and own declaration fields (never the parent's values).
       for (const sk of cascadeTargets(agent, allAgents || [])) {
-        await updateDoc(doc(db, 'agents', sk.id), withPhase(sk));
+        if (!['none', 'rejected'].includes(sk.deploymentStatus || 'none')) continue;
+        await updateDoc(doc(db, 'agents', sk.id), {
+          ...withPhase(sk),
+          deployChecklist: { ...buildDeployChecklist(getTier(sk), deployChecked), at: serverTimestamp() },
+          ...declarationPatch(sk, deployDecl),
+        });
       }
     } catch (e) {
       setSaveError(failMsg('ขออนุมัติ', e));
@@ -516,7 +554,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         <div className="v7-dhead">
           <div className="v7-dhead-meta">
             <span className="tier-badge" style={{ color: tierDef.color, background: tierDef.bg, borderColor: tierDef.bd }} title={tierDef.label}>
-              {tier} {type === 'agent' ? 'Agent' : 'Skill'}
+              {tier} {typeBadgeName(agent)}
             </span>
             {agent.reusable && <span className="v7-dhead-scope">{agent.reusable}</span>}
             {isArchived && (
@@ -760,7 +798,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
               </div>
               {lockedSubSkill && (
                 <div style={{ fontSize: 10.5, color: 'var(--mu)', marginTop: 6 }}>
-                  Status และ Progress ของ Skill นี้จะปรับตาม Agent หลัก
+                  Status และ Progress ของ Skill นี้จะปรับตาม {workflowOf(agent, allAgents) ? 'Workflow' : 'Agent หลัก'}
                 </div>
               )}
               {((canEdit) || (mayEditThisAgent && !lockedSubSkill)) && (
@@ -768,19 +806,19 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   {canEdit && (
                     <button type="button" className="v7-btn-primary-sm" onClick={startEdit}>Update Progress</button>
                   )}
-                  {mayEditThisAgent && !lockedSubSkill && deploymentStatus !== 'none' && (
-                    <span className="deploy-badge" style={{ color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `color-mix(in srgb, ${DEPLOY_STATUS_COLOR[deploymentStatus]} 9%, transparent)` }}>
-                      {DEPLOY_STATUS_LABEL[deploymentStatus]}
-                    </span>
-                  )}
                   {mayEditThisAgent && !lockedSubSkill && canRequestDeploy && (
                     <button
                       className="v7-btn-outline"
                       disabled={requesting}
-                      onClick={() => setConfirmingDeploy(true)}
+                      onClick={openDeployDialog}
                     >
                       {requesting ? 'Sending…' : 'Request deploy'}
                     </button>
+                  )}
+                  {mayEditThisAgent && !lockedSubSkill && deploymentStatus !== 'none' && (
+                    <span className="deploy-badge" style={{ color: DEPLOY_STATUS_COLOR[deploymentStatus], background: `color-mix(in srgb, ${DEPLOY_STATUS_COLOR[deploymentStatus]} 9%, transparent)` }}>
+                      {DEPLOY_STATUS_LABEL[deploymentStatus]}
+                    </span>
                   )}
                 </div>
               )}
@@ -823,6 +861,20 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
             </div>
           )}
           <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
+          {isWorkflow(agent) && (
+            <div className="mrow">
+              <span className="mk">Skills</span>
+              <span style={{ color: 'var(--sk)', fontSize: 11, fontWeight: 600 }}>
+                {workflowMembers(agent, allAgents).map((m, i) => `${i + 1}. ${m.agentName}${i === 0 ? ' (Starter)' : ''}`).join(' → ') || '—'}
+              </span>
+            </div>
+          )}
+          {!isWorkflow(agent) && workflowOf(agent, allAgents)?.agentName && (
+            <div className="mrow">
+              <span className="mk">Workflow</span>
+              <span style={{ color: 'var(--sk)', fontSize: 11, fontWeight: 600 }}>{workflowOf(agent, allAgents).agentName}</span>
+            </div>
+          )}
           {related.length > 0 && (
             <div className="mrow">
               <span className="mk">{type === 'skill' ? 'Agent' : 'Skill'}</span>
@@ -842,6 +894,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
           )}
           <div className="mrow"><span className="mk">Role</span><span>{role || '—'}</span></div>
           <div className="mrow"><span className="mk">Process</span><span style={{ color: 'var(--mu)', fontSize: 11 }}>{process || '—'}</span></div>
+          {DECL_FIELDS.filter((f) => String(agent[f.key] ?? '').trim()).map((f) => (
+            <div className="mrow" key={f.key}><span className="mk">{f.label}</span><span style={{ fontSize: 11.5 }}>{agent[f.key]}</span></div>
+          ))}
 
         </div>
         {agent.description && <p className="v7-ddesc">{agent.description}</p>}
@@ -1014,22 +1069,111 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         </div>
       )}
 
-      {confirmingDeploy && (
-        <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setConfirmingDeploy(false)}>
-          <div className="mbox" style={{ padding: 18, maxWidth: 380 }}>
-            <button className="mclose" onClick={() => setConfirmingDeploy(false)}>✕</button>
-            <h2 className="mtitle">Request deploy</h2>
-            <div className="msub">Confirm</div>
-            <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 16 }}>
-              ยืนยันว่าผ่านการทดสอบและพร้อมเปิดใช้งาน โปรดแนบหลักฐานการทดสอบให้ Approver พิจารณา
-            </p>
-            <div className="btn-row">
-              <button className="btn btn-secondary" onClick={() => setConfirmingDeploy(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleRequestDeploy}>Request deploy</button>
+      {confirmingDeploy && (() => {
+        const prev = normalizeAnswers(screeningConfig, agent.screening?.answers);
+        const missingDecl = missingDeclaration(agent);
+        const declDone = missingDecl.every((k) => String(deployDecl[k] ?? '').trim() !== '');
+        const items = checklistFor(tier);
+        const cGate = checklistGate(tier, deployChecked);
+        const codes = questionsToAsk(screeningConfig, prev, !!agent.screening);
+        const dGate = deployGate(screeningConfig, deployAnswers);
+        const close = () => setConfirmingDeploy(false);
+        return (
+          <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && close()}>
+            <div className="mbox" style={{ padding: 0, maxWidth: deployStep === 2 ? 880 : 640 }}>
+              <button className="mclose" onClick={close} style={{ zIndex: 1 }}>✕</button>
+              <div className="v7-steps" aria-label="Deploy request steps">
+                <span className={`v7-step ${deployStep === 1 ? 'active' : ''} ${deployStep === 2 ? 'done' : ''}`}>
+                  <span className="v7-step-n">{deployStep === 2 ? '✓' : '1'}</span>Package
+                </span>
+                <span className="v7-step-line" aria-hidden="true" />
+                <span className={`v7-step ${deployStep === 2 ? 'active' : 'locked'}`}>
+                  <span className="v7-step-n">2</span>Assessment
+                </span>
+              </div>
+              <div style={{ padding: '22px 26px' }}>
+                <h2 className="mtitle">Request deploy</h2>
+                <div className="msub">{agent.agentName} · {tier} {typeBadgeName(agent)} · {isInternalOrExternal(agent)}</div>
+                {deployStep === 1 ? (
+                  <>
+                    <div className="fsec"><div className="fsec-h"><h4>Deployment checklist</h4><span>{items.filter((i) => i.required && deployChecked.includes(i.id)).length} of {items.filter((i) => i.required).length} required ticked</span></div></div>
+                    <div className="fcheck">
+                      {items.map((it) => {
+                        const on = deployChecked.includes(it.id);
+                        return (
+                          <label key={it.id} className={`fcheck-item${on ? ' on' : ''}`}>
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={(e) => setDeployChecked((prevIds) => (e.target.checked ? [...prevIds, it.id] : prevIds.filter((x) => x !== it.id)))}
+                            />
+                            <span className="box" aria-hidden="true">{on ? '✓' : ''}</span>
+                            {it.label}
+                            {it.required && <span className="freq">Required</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="fsticky">
+                      <span className="fmeta">{cGate.complete ? 'พร้อมไปขั้นถัดไป' : 'ติ๊กข้อที่ Required ให้ครบก่อน'}</span>
+                      <div className="fbtns">
+                        <button className="btn btn-secondary" onClick={close}>Cancel</button>
+                        <button className="btn btn-primary" disabled={!cGate.complete} onClick={() => setDeployStep(2)}>Next →</button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, margin: '0 0 12px' }}>
+                      {agent.screening
+                        ? 'ตอบแบบประเมินการทดสอบ (และข้อที่ยังไม่ผ่านตอนลงทะเบียน) ก่อนขออนุมัติ'
+                        : 'รายการนี้ยังไม่เคยตอบแบบประเมิน — ตอบให้ครบก่อนขออนุมัติ'}
+                    </p>
+                    <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: 4 }}>
+                      {missingDecl.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div className="fsec"><div className="fsec-h"><h4>Declaration</h4><span>ช่องที่ยังว่างในรายการนี้</span></div></div>
+                          {missingDecl.map((k) => {
+                            const f = DECL_FIELDS.find((x) => x.key === k);
+                            return (
+                              <div className="fg" key={k}>
+                                <label>{f.label} *</label>
+                                <input value={deployDecl[k] ?? ''} placeholder={f.placeholder} onChange={(e) => setDeployDecl((p) => ({ ...p, [k]: e.target.value }))} />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="as-wrap">
+                        <ScreeningQuestions
+                          config={screeningConfig}
+                          questionIds={codes}
+                          answers={deployAnswers}
+                          blockKey="blocksDeploy"
+                          onChange={(code, v) => setDeployAnswers((p) => ({ ...p, [code]: v }))}
+                        />
+                        <ScreeningSide config={screeningConfig} answers={deployAnswers} questionIds={codes} blockKey="blocksDeploy" />
+                      </div>
+                    </div>
+                    {dGate.blocked && (
+                      <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
+                        ยังขอ Deploy ไม่ได้ — {dGate.reasons[0]}
+                      </div>
+                    )}
+                    <div className="fsticky">
+                      <span className="fmeta">{!dGate.complete || !declDone ? 'ตอบให้ครบก่อนขออนุมัติ' : dGate.blocked ? 'ติดเงื่อนไขที่บล็อก' : 'พร้อมขออนุมัติ'}</span>
+                      <div className="fbtns">
+                      <button className="btn btn-secondary" onClick={() => setDeployStep(1)}>← Back</button>
+                      <button className="btn btn-primary" disabled={!dGate.complete || dGate.blocked || !declDone} onClick={handleRequestDeploy}>Request deploy</button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {archiveOpen && (
         <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && setArchiveOpen(false)}>
