@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { toJsDate, fmtDate } from '../lib/agentUtils';
 import {
-  activeAnnouncements, splitLinks, msgReadId, myRequestItems, inboxQueueCount, showToApprove, AUDIENCE_LABEL,
+  activeAnnouncements, splitLinks, msgReadId, safeHttpUrl, myRequestItems, inboxQueueCount, showToApprove, AUDIENCE_LABEL,
 } from '../lib/inbox';
 import useEscapeKey from '../hooks/useEscapeKey';
 import useMyRejected from '../hooks/useMyRejected';
@@ -82,9 +82,9 @@ function MessageRow({ m, unread, open, onToggle }) {
         <span className="v7-ann-meta">{m.createdAt && <span>{fmtDate(m.createdAt)}</span>}</span>
       </button>
       {open && <AnnouncementBody text={m.body} />}
-      {open && m.link && (
+      {open && safeHttpUrl(m.link) && (
         <div className="v7-ann-rowact">
-          <a className="v7-sub-btn pri" href={m.link} target="_blank" rel="noopener noreferrer">Open</a>
+          <a className="v7-sub-btn pri" href={safeHttpUrl(m.link)} target="_blank" rel="noopener noreferrer">Open</a>
         </div>
       )}
     </div>
@@ -234,7 +234,7 @@ export default function InboxModal({
       <div className="mbox wide v7-inbox-box">
         <button className="mclose" onClick={onClose} aria-label="Close">✕</button>
         <h2 className="mtitle">Inbox</h2>
-        <div className="msub">ประกาศจากทีมดูแลระบบ และสถานะคำขอของคุณที่ยังรอการพิจารณา</div>
+        <div className="msub">ประกาศและข้อความจากทีมดูแลระบบ และสถานะคำขอของคุณที่ยังรอการพิจารณา</div>
 
         <div className="v7-subs-bar">
           <div className="v7-inbox-filter" role="tablist" aria-label="Filter inbox">
@@ -245,13 +245,13 @@ export default function InboxModal({
             ))}
           </div>
           {showMarkAll && (
-            <button type="button" className="v7-sub-btn v7-inbox-markall" onClick={() => onMarkAllRead?.()}>Mark all read</button>
+            <button type="button" className="v7-sub-btn v7-inbox-markall" onClick={() => onMarkAllRead?.(current === 'msg' ? 'msg' : 'all')}>Mark all read</button>
           )}
         </div>
 
         {current === 'all' && (
           allAnnList.length === 0 && shownMsgs.length === 0 && mine.length === 0 && !canApprove
-            ? <div className="v7-inbox-empty">ไม่มีรายการใหม่ — ประกาศที่อ่านแล้วดูได้ในแท็บ Announcements</div>
+            ? <div className="v7-inbox-empty">ไม่มีรายการใหม่ — ประกาศและข้อความที่อ่านแล้วดูได้ในแท็บ Announcements / Messages</div>
             : (
               <>
                 {shownMsgs.length > 0 && (

@@ -9,7 +9,7 @@ import { toJsDate } from '../lib/agentUtils';
 // No listener until the email is known.
 export default function useInboxMessages(email) {
   const key = String(email || '').toLowerCase();
-  const [state, setState] = useState({ key: null, messages: [] });
+  const [state, setState] = useState({ key: null, messages: [], loaded: false });
 
   useEffect(() => {
     if (!key) return undefined;
@@ -20,11 +20,12 @@ export default function useInboxMessages(email) {
         const messages = snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
           .sort((a, b) => (toJsDate(b.createdAt)?.getTime() || 0) - (toJsDate(a.createdAt)?.getTime() || 0));
-        setState({ key, messages });
+        setState({ key, messages, loaded: true });
       },
-      () => setState({ key, messages: [] }),
+      () => setState({ key, messages: [], loaded: true }),
     );
   }, [key]);
 
-  return { messages: key && state.key === key ? state.messages : [] };
+  const ok = key && state.key === key;
+  return { messages: ok ? state.messages : [], loaded: !!(ok && state.loaded) };
 }

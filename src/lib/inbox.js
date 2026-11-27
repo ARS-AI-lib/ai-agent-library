@@ -128,6 +128,24 @@ export function showToApprove(v, queueCount) {
 // stored as `msg:{id}` so they cannot collide with an announcement id.
 export const msgReadId = (id) => `msg:${id}`;
 
+// Only http(s) URLs may become a link; javascript:/data:/relative -> null.
+export function safeHttpUrl(u) {
+  if (typeof u !== 'string' || !u.trim()) return null;
+  try {
+    const url = new URL(u.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch { return null; }
+}
+
+// Ids the read-state may keep. `msg:` ids are only pruned once the messages
+// listener has delivered; before that, already-stored msg: ids are preserved.
+export function knownReadIds(annIds, messages, messagesLoaded, readIds) {
+  const msgIds = messagesLoaded
+    ? (messages || []).map((m) => msgReadId(m.id))
+    : [...(readIds || [])].filter((id) => String(id).startsWith('msg:'));
+  return [...(annIds || []), ...msgIds];
+}
+
 export function unreadMessages(messages, readIds) {
   const read = new Set(readIds || []);
   return (messages || []).filter((m) => !read.has(msgReadId(m.id)));

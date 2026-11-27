@@ -7,7 +7,7 @@ import { useConfigSchema } from './hooks/useConfigSchema';
 import { buildAgentFilter, uniq, splitRoles, isMyAgent, isPairedSubSkill } from './lib/agentUtils';
 import { getType, getTier } from './lib/tier';
 import { queueViewer } from './lib/pendingQueue';
-import { activeAnnouncements, unreadAnnouncements, inboxQueueCount, inboxBadgeCount, canPostAnnouncements, unreadMessages as unreadMessagesOf, msgReadId } from './lib/inbox';
+import { activeAnnouncements, unreadAnnouncements, inboxQueueCount, inboxBadgeCount, canPostAnnouncements, unreadMessages as unreadMessagesOf, msgReadId, knownReadIds } from './lib/inbox';
 import useAnnouncements from './hooks/useAnnouncements';
 import useInboxState from './hooks/useInboxState';
 import useInboxMessages from './hooks/useInboxMessages';
@@ -318,12 +318,12 @@ export default function App() {
   const { announcements } = useAnnouncements(role, roleReady);
   const { readIds, markRead, markAllRead } = useInboxState(user?.uid, roleReady);
   const activeAnns = useMemo(() => activeAnnouncements(announcements), [announcements]);
-  const { messages: inboxMessages } = useInboxMessages(roleReady ? user?.email : null);
+  const { messages: inboxMessages, loaded: msgsLoaded } = useInboxMessages(roleReady ? user?.email : null);
   // Known ids for pruning: announcements + messages (`msg:` ids), so reading a
   // message is never pruned away.
   const activeAnnIds = useMemo(
-    () => [...activeAnns.map((a) => a.id), ...inboxMessages.map((m) => msgReadId(m.id))],
-    [activeAnns, inboxMessages],
+    () => knownReadIds(activeAnns.map((a) => a.id), inboxMessages, msgsLoaded, readIds),
+    [activeAnns, inboxMessages, msgsLoaded, readIds],
   );
   const unreadMsgCount = useMemo(() => unreadMessagesOf(inboxMessages, readIds).length, [inboxMessages, readIds]);
   const unreadCount = useMemo(() => unreadAnnouncements(activeAnns, readIds).length, [activeAnns, readIds]);
@@ -695,7 +695,9 @@ export default function App() {
           messages={inboxMessages}
           readIds={readIds}
           onMarkRead={(id) => markRead(id, activeAnnIds)}
-          onMarkAllRead={() => markAllRead(activeAnnIds)}
+          onMarkAllRead={(scope) => (scope === 'msg'
+            ? markAllRead(inboxMessages.map((m) => msgReadId(m.id)), activeAnnIds)
+            : markAllRead(activeAnnIds))}
           allAgents={allAgents}
           pending={pending}
           deployRequests={parentDeployRequests}

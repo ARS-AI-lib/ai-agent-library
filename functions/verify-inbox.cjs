@@ -176,5 +176,10 @@ eq(I.inboxBadgeCount({ unreadCount: 2, queueCount: 3, unreadMessages: 4 }), 9, '
 eq(I.inboxBadgeCount({ unreadCount: 1, queueCount: 1 }), 2, 'badge old two-arg callers unchanged');
 eq(I.pruneReadIds(['a1', 'msg:m1', 'msg:gone'], ['a1', 'msg:m1']), ['a1', 'msg:m1'], 'pruneReadIds keeps known msg ids, drops unknown');
 
+eq(['javascript:alert(1)','data:text/html,x','vbscript:x','/rel/path','','  ',undefined,null,'JaVaScRiPt:1'].map(I.safeHttpUrl), Array(9).fill(null), 'safeHttpUrl rejects non-http(s)');
+eq([I.safeHttpUrl('HTTPS://Example.com/a?b=1'), I.safeHttpUrl('http://x.io')], ['https://example.com/a?b=1', 'http://x.io/'], 'safeHttpUrl allows http(s), normalizes');
+eq(I.knownReadIds(['a1'], [], false, ['a1', 'msg:m1']), ['a1', 'msg:m1'], 'knownReadIds keeps stored msg ids before load');
+eq(I.knownReadIds(['a1'], [{ id: 'm2' }], true, ['msg:m1']), ['a1', 'msg:m2'], 'knownReadIds uses loaded messages after load');
+eq(I.pruneReadIds(['msg:m1'], I.knownReadIds([], [], false, ['msg:m1'])), ['msg:m1'], 'msg read survives prune before load');
 if (fails) { console.error(`\n✗ ${fails} case(s) failed`); process.exit(1); }
 console.log('\n✓ all inbox cases pass');
