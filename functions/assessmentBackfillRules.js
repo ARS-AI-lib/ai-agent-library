@@ -3,7 +3,7 @@
 const {
   normalizeProgress, isPairedSubSkill, getTier,
 } = require('./delayAlertRules');
-const { frameHtml, esc, htmlToText } = require('./messageFrame');
+const { frameHtml, esc } = require('./messageFrame');
 
 const DECL_KEYS = ['description', 'permittedDomains', 'prohibitedUses', 'tool', 'requiredSkills', 'llm'];
 const lc = (e) => String(e || '').trim().toLowerCase();
