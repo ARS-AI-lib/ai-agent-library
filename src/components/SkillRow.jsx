@@ -26,7 +26,7 @@ export default function SkillRow({
   const linked = isExisting ? allAgents.find((a) => a.id === skill.link.id) : null;
 
   return (
-    <div style={{ marginTop: 12, padding: 12, border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf)' }}>
+    <div data-skill-row={index} style={{ marginTop: 12, padding: 12, border: '1px solid var(--bd-soft)', borderRadius: 'var(--r-md)', background: 'var(--sf)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <strong style={{ fontSize: 12.5, color: 'var(--ag)' }}>{label || `Skill #${index + 1}`}</strong>
         {canRemove && (

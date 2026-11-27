@@ -1,3 +1,4 @@
+import { goToField } from '../lib/formFocus';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from '../lib/toast';
 import { addDoc, collection, doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -285,6 +286,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
       // location to.
       if (!linkExempt && !hasEndpoint && !editEndpoint.trim() && !editFile) {
         setSaveError('ต้องระบุ Endpoint URL หรืออัปโหลดไฟล์อย่างใดอย่างหนึ่งก่อน จึงจะปรับเป็น 100% ได้');
+        goToField('.mbox', 'Endpoint', [['Endpoint', /Endpoint/]]);
         return;
       }
       if (editFile) {
