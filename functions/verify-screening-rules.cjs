@@ -48,7 +48,7 @@ async function connect(key, email) {
   const committee = await connect('committee', 'cm@arise.tech');
   await adb.collection('users').doc(staff.uid).set({ role: 'staff', email: 'st@arise.tech' });
   await adb.collection('users').doc(committee.uid).set({ role: 'committee', email: 'cm@arise.tech' });
-  await Promise.all(['a1', 'a2', 'a3', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6'].map(mk));
+  await Promise.all(['a1', 'a2', 'a3', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'e1', 'e2', 'e3', 'e4', 'e5'].map(mk));
 
   const base = (n) => ({
     devProgress: 95, deploymentStatus: 'requested', deployRequestedBy: creator.uid,
@@ -65,6 +65,25 @@ async function connect(key, email) {
   await denied('creator deploy request with an extra unknown key', fsdk.updateDoc(ref(creator, 'a2'), base({ ...extras, sneaky: true })));
   await denied('non-creator cannot file the request', fsdk.updateDoc(ref(other, 'a3'), base(extras)));
   await denied('screening alone (no deploy fields) is not a creator edit', fsdk.updateDoc(ref(creator, 'a3'), { screening: extras.screening, updatedAt: fsdk.serverTimestamp() }));
+
+  // A deploy request must carry the checklist AND the assessment (2026-11-27, Motion Principles incident)
+  const noScreening = { ...extras }; delete noScreening.screening;
+  const noChecklist = { ...extras }; delete noChecklist.deployChecklist;
+  await denied('deploy request WITHOUT screening is refused (stale tab)', fsdk.updateDoc(ref(creator, 'e1'), base(noScreening)));
+  await denied('deploy request WITHOUT deployChecklist is refused', fsdk.updateDoc(ref(creator, 'e2'), base(noChecklist)));
+  await denied('deploy request with screening lacking deployAt is refused', fsdk.updateDoc(ref(creator, 'e3'), base({ ...extras, screening: { ...extras.screening, deployAt: null } })));
+  await denied('deploy request with a malformed checklist (no list) is refused', fsdk.updateDoc(ref(creator, 'e3'), base({ ...extras, deployChecklist: { tier: 'T2', checked: 'x', at: fsdk.serverTimestamp() } })));
+  await allowed('deploy request with checklist + complete screening still passes', fsdk.updateDoc(ref(creator, 'e4'), base(extras)));
+
+  // Approving needs a completed assessment on the doc; rejecting never does
+  const approver = await connect('approver', 'ap@arise.tech');
+  await adb.collection('users').doc(approver.uid).set({ role: 'approver', email: 'ap@arise.tech' });
+  await adb.collection('agents').doc('e5').update({ deploymentStatus: 'requested', devProgress: 95 });
+  const decide = (v) => ({ deploymentStatus: v, deployDecidedBy: approver.uid, deployDecidedAt: fsdk.serverTimestamp(), updatedAt: fsdk.serverTimestamp() });
+  await denied('approver cannot APPROVE a request without an assessment', fsdk.updateDoc(ref(approver, 'e5'), decide('approved')));
+  await allowed('approver can still REJECT a request without an assessment', fsdk.updateDoc(ref(approver, 'e5'), decide('rejected')));
+  await adb.collection('agents').doc('e5').update({ deploymentStatus: 'requested', screening: { v: 2, answers: {}, deployAt: new Date() } });
+  await allowed('approver can approve once the assessment (deployAt) exists', fsdk.updateDoc(ref(approver, 'e5'), decide('approved')));
 
   // Declaration fields in detail edit (Task 10, 2026-11-27)
   const five = { permittedDomains: 'DGL', prohibitedUses: 'ไม่มีข้อห้าม', tool: 'ไม่ใช้ tool', requiredSkills: 'ไม่ต้อง', llm: 'ยังไม่ได้ทดสอบ' };

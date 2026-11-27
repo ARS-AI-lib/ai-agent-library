@@ -324,7 +324,11 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
   // approver acts once on the parent Agent and the whole package flips. The
   // sub-skills are already in 'requested' state (cascaded at request time), so
   // the deploy-decision firestore rule permits this write.
+  // A deploy request counts only with a completed assessment (screening.deployAt). Mirrors firestore.rules.
+  const hasAssessment = (a) => !!a?.screening?.deployAt;
+
   async function decideDeploy(agent, verdict, failMsg) {
+    if (verdict === 'approved' && !hasAssessment(agent)) { setError('ยังไม่มีผล assessment — ต้องให้ Creator ทำก่อนจึงจะอนุมัติได้'); return; }
     setBusyId(agent.id);
     setError('');
     try {
@@ -639,6 +643,12 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                     </div>
                   </div>
                   <ScreeningSummary agent={agent} config={screeningConfig} />
+                  {!hasAssessment(agent) && (
+                    <div className="msg error" style={{ marginTop: 8 }}>
+                      <span className="dot" style={{ background: '#ea4335' }} />
+                      ยังไม่มีผล assessment — ต้องให้ Creator ทำก่อนจึงจะอนุมัติได้ (ลิงก์ให้ Creator: <code>/assess?agent={agent.id}</code>)
+                    </div>
+                  )}
                 </div>
                 <div className="queue-actions">
                   {(fullAccess || (mine.size > 0 && resolveAreas(agent).some((area) => mine.has(area)))) && (
@@ -646,7 +656,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
                       <button className="btn-sm rej" disabled={busyId === agent.id} onClick={() => handleRejectDeploy(agent)}>
                         Reject
                       </button>
-                      <button className="btn-sm appr" disabled={busyId === agent.id} onClick={() => handleApproveDeploy(agent)}>
+                      <button className="btn-sm appr" disabled={busyId === agent.id || !hasAssessment(agent)} title={!hasAssessment(agent) ? 'ยังไม่มีผล assessment' : undefined} onClick={() => handleApproveDeploy(agent)}>
                         Approve
                       </button>
                     </>

@@ -535,6 +535,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
         await updateDoc(doc(db, 'agents', sk.id), {
           ...withPhase(sk),
           deployChecklist: { ...buildDeployChecklist(getTier(sk), deployChecked), at: serverTimestamp() },
+          screening: patch.screening,   // the package shares one assessment; the rules require it on every request
           ...declarationPatch(sk, deployDecl),
         });
       }
