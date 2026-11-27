@@ -308,11 +308,49 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
     return '';
   }
 
+  // Validation failed → show the message AND take the user to the field that
+  // needs fixing (scroll it to the middle and focus it). Matched by the field's
+  // label text, in the same order validate() checks them.
+  const ERROR_FIELDS = [
+    ['Workflow Name', /Workflow Name|ชื่อ Workflow/],
+    ['Agent / Skill Name', /^ใส่ชื่อ/],
+    ['Starter Skill Name', /^ใส่ชื่อ/],
+    ['Description', /^(ใส่ )?Description/],
+    ['Core Ability', /Core Ability/],
+    ['Related Role', /Related Role/],
+    ['Input', /^ใส่ Input/],
+    ['Output', /^ใส่ Output/],
+    ['Business Value', /Business Value/],
+    ['Permitted Tools', /Permitted Tools/],
+    ['Required Skills', /Required Skills/],
+    ['Owner team', /Owner team/],
+    ['Reuse Conditions', /Reuse Conditions/],
+    ['Reusable', /^เลือก Reusable/],
+    ['Human Job', /Human Job/],
+  ];
+  function goToError(err) {
+    setTimeout(() => {
+      const root = document.querySelector('.mbox.mform');
+      if (!root) return;
+      let target = null;
+      const hit = ERROR_FIELDS.find(([, re]) => re.test(err));
+      if (hit) {
+        const lbl = [...root.querySelectorAll('.fg > label')].find((l) => l.textContent.replace('*', '').trim().startsWith(hit[0]));
+        target = lbl?.closest('.fg') || null;
+      }
+      if (!target) target = root.querySelector('.skill-rows, .sk-panel') || root.querySelector('.msg.error');
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const el = target.querySelector('input:not([type=checkbox]):not([type=radio]), textarea, select, .tms-input, button');
+      el?.focus({ preventScroll: true });
+    }, 0);
+  }
+
   // Step 1 → 2: validate the form, then the screening assessment (pre-assessment).
   // The duplicate check only starts from the Assessment step (runCheck below).
   function goAssess() {
     const err = validate();
-    if (err) { setValidationMsg(err); return; }
+    if (err) { setValidationMsg(err); goToError(err); return; }
     setValidationMsg('');
     setAssessOpen(true);
     setTab('assess');
@@ -320,7 +358,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
 
   async function runCheck() {
     const err = validate();
-    if (err) { setValidationMsg(err); return; }
+    if (err) { setValidationMsg(err); goToError(err); return; }
     setValidationMsg('');
 
     const draft = {

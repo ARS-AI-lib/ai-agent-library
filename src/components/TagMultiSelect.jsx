@@ -54,6 +54,7 @@ export default function TagMultiSelect({ label, options = [], selected, onChange
     const hit = [...next].find((s) => s.toLowerCase() === opt.toLowerCase());
     if (hit) next.delete(hit); else next.add(opt);
     onChange(next);
+    setQuery('');
   }
 
   function removeTag(tag) {
