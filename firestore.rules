@@ -502,6 +502,22 @@ service cloud.firestore {
         && (isAdmin() || isOwnerCreatorOrApprover(get(/databases/$(database)/documents/agents/$(request.resource.data.agentId)).data));
       allow update, delete: if false;
     }
+    // Assessment backfill (2026-11-27). All three collections are written ONLY by callables
+    // (Admin SDK); clients never write. toEmail is stored lower-cased, so compare against
+    // the lower-cased token email (a list query must filter where('toEmail','==',lower)).
+    match /inboxMessages/{id} {
+      allow read: if isSignedIn() && resource.data.get('toEmail', '') == request.auth.token.email.lower();
+      allow write: if false;
+    }
+    match /assessmentCampaigns/{id} {
+      allow read: if isCommittee();
+      allow write: if false;
+    }
+    match /assessmentReviews/{id} {
+      allow read: if isApproverOrAbove()
+        || (isSignedIn() && resource.data.get('requestedBy', '') == request.auth.uid);
+      allow write: if false;
+    }
     // Frozen yearly archive — callables (Admin SDK) only.
     match /assessmentArchive/{document=**} {
       allow read, write: if false;
