@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { AREA_ORDER } from '../lib/approveAreas';
 import { downloadCsv } from '../lib/csv';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from '../lib/callable';
 import { filterRecords, groupByOwner, combineByAgent, agentCsv, answerDetail, answerLabel, bangkokDay, bangkokYear, DECL_COLUMNS } from '../lib/assessments';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';

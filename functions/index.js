@@ -37,7 +37,11 @@ function requireCompanyUser(request) {
 setGlobalOptions({ region: 'asia-southeast1', maxInstances: 5 });
 
 const adminApp = initializeApp();
-const db = getFirestore(adminApp, 'ai-agent-lib'); // named DB, not "(default)"
+// Named DB, not "(default)". The test site's copy of these functions (see
+// scripts/deploy-test.sh) sets DB_ID/TEST_MODE in its own .env; production never does.
+const DB_ID = process.env.DB_ID || 'ai-agent-lib';
+const IS_TEST = process.env.TEST_MODE === '1';
+const db = getFirestore(adminApp, DB_ID);
 
 // Core Ability is a choice field owned by /config/schema (never hardcoded —
 // same rule as the React form's dropdown) so the AI's suggested_ability
@@ -950,7 +954,7 @@ const { isProtectedAdminEmail } = require('./protectedAdmins');
 const USAGE_REPORT_ROLES = new Set(['admin', 'committee', 'staff', 'approver']);
 
 const BUCKET = 'wolfy-481609.appspot.com';
-const ENDPOINT_FILE_PREFIX = 'endpointFiles';
+const ENDPOINT_FILE_PREFIX = IS_TEST ? 'test-endpointFiles' : 'endpointFiles';
 
 // Origins that serve this SPA. The client sends its own origin so a preview
 // channel builds a working link, but it is NEVER trusted verbatim — an
@@ -961,8 +965,9 @@ const LIBRARY_ORIGINS = new Set([
   'https://wolfy-481609.web.app',
   'https://wolfy-ai-library.firebaseapp.com',
   'https://wolfy-481609.firebaseapp.com',
+  ...(process.env.CANONICAL_ORIGIN ? [process.env.CANONICAL_ORIGIN] : []),
 ]);
-const CANONICAL_ORIGIN = 'https://wolfy-ai-library.web.app';
+const CANONICAL_ORIGIN = process.env.CANONICAL_ORIGIN || 'https://wolfy-ai-library.web.app';
 
 // Auth already restricts sign-in to the org's Workspace domains, but the
 // download callable IS the SSO gate, so it re-checks rather than inheriting an
@@ -1853,7 +1858,7 @@ const { createUserDocOnce } = require('./userProvision');
 // committee member was silently reset). Audit only — no alert, by decision.
 const { roleAuditEntry } = require('./userProvision');
 exports.auditUserRole = onDocumentWritten(
-  { database: 'ai-agent-lib', document: 'users/{uid}', region: 'asia-southeast1' },
+  { database: DB_ID, document: 'users/{uid}', region: 'asia-southeast1' },
   async (event) => {
     const entry = roleAuditEntry(
       event.params.uid,
@@ -2357,3 +2362,10 @@ exports.sendDelayDigest = onTaskDispatched(
   },
 );
 
+// Test copy only: no Portfolio sync, no scheduled/queued digests — those would
+// act on real data (the portfolio DB) or duplicate production's own runs.
+if (IS_TEST) {
+  delete exports.syncPortfolioAdoption;
+  delete exports.delayAlertsMon;
+  delete exports.sendDelayDigest;
+}

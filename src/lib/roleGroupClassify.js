@@ -1,4 +1,4 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from './callable';
 
 // Client side of Role Group classification (2026-09-24).
 //

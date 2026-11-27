@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getType } from '../lib/tier';
 import { addDoc, doc, setDoc, updateDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from '../lib/callable';
 import { db } from '../lib/firebase';
 import { riskLevel, RISK_DEF, scoreDraftAgainst } from '../lib/similarity';
 import { duplicateBlock, MIN_JUSTIFICATION } from '../lib/dupBlock';

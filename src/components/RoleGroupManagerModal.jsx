@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from '../lib/callable';
 import { useRoleGroups } from '../hooks/useRoleGroups';
 import { getType } from '../lib/tier';
 import TagMultiSelect from './TagMultiSelect';

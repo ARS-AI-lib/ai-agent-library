@@ -24,3 +24,7 @@ dist
 
 # machine-local Claude Code settings (personal permissions, never commit)
 .claude/settings.local.json
+
+# test environment build output / function copy
+/dist-test
+/functions-test

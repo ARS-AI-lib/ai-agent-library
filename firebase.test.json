@@ -1,0 +1,22 @@
+{
+  "hosting": [
+    {
+      "site": "wolfy-ai-library-test",
+      "public": "dist-test",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [{ "source": "**", "destination": "/index.html" }]
+    }
+  ],
+  "firestore": [
+    { "database": "ai-agent-lib-test", "rules": "firestore.rules" }
+  ],
+  "functions": [
+    {
+      "source": "functions-test",
+      "codebase": "test",
+      "prefix": "test",
+      "runtime": "nodejs22",
+      "ignore": ["node_modules", ".git", "*.log"]
+    }
+  ]
+}

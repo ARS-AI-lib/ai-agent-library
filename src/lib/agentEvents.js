@@ -1,4 +1,4 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from './callable';
 
 // Client side of the usage counters (2026-08-18).
 //

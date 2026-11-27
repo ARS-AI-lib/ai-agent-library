@@ -8,7 +8,7 @@ import { matchingAgentNames, pairedSubSkills, agentTypeLabel, fmtDate, categoryC
 import { ScreeningSummary } from './ScreeningQuestions';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { queueViewer, visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from '../lib/callable';
 import { decideRenameRequest } from '../lib/endpointFiles';
 import { notifyEvent } from '../lib/notify';
 import { classifyRoleGroups } from '../lib/roleGroupClassify';
