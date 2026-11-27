@@ -5,7 +5,10 @@ import '../styles/Screening.css';
 // Assessment questions as option tiles (2 columns). answers: { questionId: optionId }.
 // blockKey ('blocksPre' | 'blocksDeploy'): a chosen option carrying it turns red and shows the
 // question's advice right under it — the reason the next step is blocked.
-export function ScreeningQuestions({ config, questionIds, answers, onChange, blockKey }) {
+// reveal=false (default): the tiles show NO points and NO blocking hints while answering — the score,
+// recommendations and blockers are shown only in ScreeningResultModal after the respondent presses Continue,
+// so nobody can tune answers against a live score (2026-11-27).
+export function ScreeningQuestions({ config, questionIds, answers, onChange, blockKey, reveal = false }) {
   const qs = config.questions.filter((q) => questionIds.includes(q.id));
   const groups = [...new Set(qs.map((q) => q.group))];
   return (
@@ -18,7 +21,7 @@ export function ScreeningQuestions({ config, questionIds, answers, onChange, blo
             <div className="as-group-h">{g}<em>{done} / {inGroup.length} answered</em></div>
             {inGroup.map((q) => {
               const picked = optionOf(config, q.id, answers[q.id]);
-              const blocks = !!(picked && blockKey && picked[blockKey]);
+              const blocks = !!(reveal && picked && blockKey && picked[blockKey]);
               return (
                 <div key={q.id} className="as-q" data-q={q.id}>
                   <div className="as-qt">
@@ -31,13 +34,13 @@ export function ScreeningQuestions({ config, questionIds, answers, onChange, blo
                   <div className="as-opts" role="radiogroup" aria-label={q.code}>
                     {q.options.map((o) => {
                       const on = answers[q.id] === o.id;
-                      const bad = blockKey && o[blockKey];
+                      const bad = reveal && blockKey && o[blockKey];
                       return (
                         <label key={o.id} className={`as-opt${on ? ' on' : ''}${bad ? ' bad' : ''}`}>
                           <input type="radio" name={`as-${q.id}`} checked={on} onChange={() => onChange(q.id, o.id)} />
                           <span className="as-dot" aria-hidden="true" />
                           <span className="as-otext">{o.th}</span>
-                          <span className="as-pts" title="Points">{o.score}</span>
+                          {reveal && <span className="as-pts" title="Points">{o.score}</span>}
                         </label>
                       );
                     })}
@@ -49,6 +52,28 @@ export function ScreeningQuestions({ config, questionIds, answers, onChange, blo
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Result popup shown AFTER the respondent pressed Continue with every question answered: score, level,
+// what blocks / needs fixing. When blocked there is no forward button — only "Back to answers".
+export function ScreeningResultModal({ config, answers, questionIds, stage, blockKey, blocked, reasons = [], onClose, onContinue, continueLabel = 'Continue', busy = false }) {
+  return (
+    <div className="mov open" onClick={(e) => e.target.classList.contains('mov') && onClose()}>
+      <div className="mbox" role="dialog" aria-label="Assessment result" style={{ maxWidth: 420 }}>
+        <button className="mclose" onClick={onClose}>✕</button>
+        <h2 className="mtitle">Assessment result</h2>
+        <div className="msub">{blocked ? 'ยังไปขั้นถัดไปไม่ได้ — แก้คำตอบที่ติดเงื่อนไขแล้วกด Continue ใหม่' : 'ผ่านเงื่อนไขของขั้นนี้ — ไปขั้นถัดไปได้'}</div>
+        <ScreeningSide config={config} answers={answers} questionIds={questionIds} stage={stage} blockKey={blockKey} />
+        {blocked && reasons.length > 0 && (
+          <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />{reasons[0]}</div>
+        )}
+        <div className="btn-group" style={{ marginTop: 14 }}>
+          <button className="btn btn-secondary" onClick={onClose}>Back to answers</button>
+          {!blocked && <button className="btn btn-primary" disabled={busy} onClick={onContinue}>{continueLabel}</button>}
+        </div>
+      </div>
     </div>
   );
 }

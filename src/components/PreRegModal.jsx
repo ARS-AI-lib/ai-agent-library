@@ -11,7 +11,7 @@ import { assessmentRecord } from '../lib/assessments';
 import { WORKFLOW, typeFlags, buildWorkflowDoc, workflowRequiredSkills, requiredFieldStatus } from '../lib/registrationType';
 import { DECL_FIELDS } from '../lib/declaration';
 import DeclField from './DeclField';
-import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
+import { ScreeningQuestions, ScreeningResultModal } from './ScreeningQuestions';
 import { runSkill } from '../lib/skills';
 import { warmDirectory } from '../lib/directory';
 import { reindexAgent } from '../lib/reindex';
@@ -135,6 +135,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
   const screeningConfig = useScreeningConfig();
   const [screeningAnswers, setScreeningAnswers] = useState({});
   const [assessOpen, setAssessOpen] = useState(false);
+  const [assessResultOpen, setAssessResultOpen] = useState(false);   // result popup after Continue
   // Opt-in (default on) to REQUEST the AI-suggested link; a person still confirms it.
   const [requestLink, setRequestLink] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -1214,38 +1215,38 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 <div className="msub">ตอบแบบประเมินก่อนตรวจความซ้ำซ้อน</div>
               </div>
             </div>
-            <div className="as-wrap">
-              <ScreeningQuestions
-                config={screeningConfig}
-                questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
-                answers={screeningAnswers}
-                blockKey="blocksPre"
-                onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
-              />
-              <ScreeningSide
+            <ScreeningQuestions
+              config={screeningConfig}
+              questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
+              answers={screeningAnswers}
+              blockKey="blocksPre"
+              onChange={(code, v) => setScreeningAnswers((prev) => ({ ...prev, [code]: v }))}
+            />
+            <div className="btn-group" style={{ marginTop: 14 }}>
+              <button className="btn btn-secondary" onClick={() => setTab('form')}>← Back to Form</button>
+              <button
+                className="btn btn-primary"
+                onClick={() => setAssessResultOpen(true)}
+                disabled={!preAssess.complete}
+                title={!preAssess.complete ? 'ตอบ C1–C9 ให้ครบก่อน' : undefined}
+              >
+                {!preAssess.complete ? 'ตอบให้ครบก่อน' : 'Continue'}
+              </button>
+            </div>
+            {assessResultOpen && (
+              <ScreeningResultModal
                 config={screeningConfig}
                 answers={screeningAnswers}
                 questionIds={questionsFor(screeningConfig, 'pre').map((q) => q.id)}
                 stage="pre"
                 blockKey="blocksPre"
+                blocked={preAssess.blocked}
+                reasons={preAssess.reasons}
+                onClose={() => setAssessResultOpen(false)}
+                onContinue={() => { setAssessResultOpen(false); runCheck(); }}
+                continueLabel="Continue to Duplicate Check"
               />
-            </div>
-            {preAssess.blocked && (
-              <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
-                ไม่สามารถไปต่อได้ — {preAssess.reasons[0]}
-              </div>
             )}
-            <div className="btn-group" style={{ marginTop: 14 }}>
-              <button className="btn btn-secondary" onClick={() => setTab('form')}>← Back to Form</button>
-              <button
-                className="btn btn-primary"
-                onClick={runCheck}
-                disabled={!preAssess.complete || preAssess.blocked}
-                title={!preAssess.complete ? 'ตอบ C1–C9 ให้ครบก่อน' : undefined}
-              >
-                {!preAssess.complete ? 'ตอบให้ครบก่อน' : preAssess.blocked ? 'ถูกบล็อก (C7)' : 'Continue to Duplicate Check'}
-              </button>
-            </div>
           </div>
         )}
 

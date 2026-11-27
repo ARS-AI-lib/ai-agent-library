@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PageHeader from './PageHeader';
 import DeclField from './DeclField';
-import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
+import { ScreeningQuestions } from './ScreeningQuestions';
 import { useAuth } from '../hooks/useAuth';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { getFunctions, httpsCallable } from '../lib/callable';
@@ -184,9 +184,8 @@ export default function AssessBackfillPage() {
                     )}
                     <section className="fsec">
                       <div className="fsec-h">{(cur.missingDecl || []).length ? '2. ' : ''}Assessment · C1–C11</div>
-                      <div className="abf-body">
+                      <div>
                         <ScreeningQuestions config={config} questionIds={config.questions.map((q) => q.id)} answers={answers} onChange={(qid, oid) => setAnswers((a) => ({ ...a, [qid]: oid }))} blockKey="blocksDeploy" />
-                        <ScreeningSide config={config} answers={answers} questionIds={config.questions.map((q) => q.id)} blockKey="blocksDeploy" />
                       </div>
                     </section>
                     <div className="fsticky">

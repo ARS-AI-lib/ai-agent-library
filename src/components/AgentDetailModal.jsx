@@ -10,7 +10,7 @@ import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { DECL_FIELDS, missingDeclaration, declarationPatch } from '../lib/declaration';
 import DeclField from './DeclField';
 import { assessmentRecord } from '../lib/assessments';
-import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
+import { ScreeningQuestions, ScreeningResultModal } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
 import { assessmentWarning } from '../lib/assessmentBackfill';
 import RiskIcon from './RiskIcon';
@@ -48,6 +48,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   const [requesting, setRequesting] = useState(false);
   const [confirmingDeploy, setConfirmingDeploy] = useState(false);
   const [deployStep, setDeployStep] = useState(1);
+  const [deployResultOpen, setDeployResultOpen] = useState(false);   // result popup after Continue
   const [deployChecked, setDeployChecked] = useState([]);
   const screeningConfig = useScreeningConfig();
   const [deployAnswers, setDeployAnswers] = useState({});
@@ -484,6 +485,7 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
 
   function openDeployDialog() {
     setDeployStep(1);
+    setDeployResultOpen(false);
     setDeployChecked([]);
     setDeployAnswers(normalizeAnswers(screeningConfig, agent.screening?.answers));
     setDeployDecl({});
@@ -1159,29 +1161,34 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                           })}
                         </div>
                       )}
-                      <div className="as-wrap">
-                        <ScreeningQuestions
-                          config={screeningConfig}
-                          questionIds={codes}
-                          answers={deployAnswers}
-                          blockKey="blocksDeploy"
-                          onChange={(code, v) => setDeployAnswers((p) => ({ ...p, [code]: v }))}
-                        />
-                        <ScreeningSide config={screeningConfig} answers={deployAnswers} questionIds={codes} blockKey="blocksDeploy" />
-                      </div>
+                      <ScreeningQuestions
+                        config={screeningConfig}
+                        questionIds={codes}
+                        answers={deployAnswers}
+                        blockKey="blocksDeploy"
+                        onChange={(code, v) => setDeployAnswers((p) => ({ ...p, [code]: v }))}
+                      />
                     </div>
-                    {dGate.blocked && (
-                      <div className="msg error" style={{ marginTop: 12 }}><span className="dot" style={{ background: '#ea4335' }} />
-                        ยังขอ Deploy ไม่ได้ — {dGate.reasons[0]}
-                      </div>
-                    )}
                     <div className="fsticky">
-                      <span className="fmeta">{!dGate.complete || !declDone ? 'ตอบให้ครบก่อนขออนุมัติ' : dGate.blocked ? 'ติดเงื่อนไขที่บล็อก' : 'พร้อมขออนุมัติ'}</span>
+                      <span className="fmeta">{!dGate.complete || !declDone ? 'ตอบให้ครบก่อนกด Continue' : 'กด Continue เพื่อดูผลประเมิน'}</span>
                       <div className="fbtns">
                       <button className="btn btn-secondary" onClick={() => setDeployStep(1)}>← Back</button>
-                      <button className="btn btn-primary" disabled={!dGate.complete || dGate.blocked || !declDone} onClick={handleRequestDeploy}>Request deploy</button>
+                      <button className="btn btn-primary" disabled={!dGate.complete || !declDone} onClick={() => setDeployResultOpen(true)}>Continue</button>
                       </div>
                     </div>
+                    {deployResultOpen && (
+                      <ScreeningResultModal
+                        config={screeningConfig}
+                        answers={deployAnswers}
+                        questionIds={codes}
+                        blockKey="blocksDeploy"
+                        blocked={dGate.blocked}
+                        reasons={dGate.reasons}
+                        onClose={() => setDeployResultOpen(false)}
+                        onContinue={() => { setDeployResultOpen(false); handleRequestDeploy(); }}
+                        continueLabel="Request deploy"
+                      />
+                    )}
                   </>
                 )}
               </div>
