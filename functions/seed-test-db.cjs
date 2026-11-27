@@ -131,7 +131,7 @@ const norm = (s) => String(s || '').trim().toLowerCase();
   const cfgMail = writes.find(([c, id]) => c === 'config' && id === 'mail');
   const mailBase = cfgMail ? cfgMail[2] : {};
   const overrides = [
-    ['config', 'mail', { ...mailBase, enabled: false, provider: 'none', emailEnabled: false, allowRecipients: [], approverOverride: [], teamsDomains: [] }],
+    ['config', 'mail', { ...mailBase, enabled: false, provider: 'none', emailEnabled: false, allowRecipients: [], approverOverride: [], assessmentApproverOverride: [], teamsDomains: [] }],
     ['config', 'alerts', { enabled: false, dryRun: true, reviewers: [] }],
   ];
   for (const o of overrides) {
