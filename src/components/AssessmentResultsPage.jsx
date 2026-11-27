@@ -89,11 +89,11 @@ export function RecordsTable({ config, records, groupOwner }) {
         <tr className={`asr-row${isOpen ? ' open' : ''}`} onClick={() => setOpen(isOpen ? null : r.id)} aria-expanded={isOpen}>
           <td className="usage-mono">{bangkokDay(r.createdAt)}</td>
           <td className="usage-strong"><span className="asr-caret" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>{r.agentName}</td>
-          <td><span className={`scr-lvl ${r.level || ''}`}>{r.level || '—'}</span></td>
-          <td className="usage-mono asr-num">{r.hasPre ? r.preScore : '—'}</td>
-          <td className="usage-mono asr-num">{r.deployScore ?? '—'}</td>
-          <td className="usage-mono asr-num asr-total">{r.total}</td>
-          <td>
+          <td className="asr-center"><span className={`scr-lvl ${r.level || ''}`}>{r.level || '—'}</span></td>
+          <td className="usage-mono asr-center">{r.hasPre ? r.preScore : '—'}</td>
+          <td className="usage-mono asr-center">{r.deployScore ?? '—'}</td>
+          <td className="usage-mono asr-center asr-total">{r.total}</td>
+          <td className="asr-center">
             {r.must.map((c) => <span key={`m${c}`} className="asr-chip req" title={issueTitle(config, c)}>{c} · Required fix</span>)}
             {r.should.map((c) => <span key={`s${c}`} className="asr-chip rec" title={issueTitle(config, c)}>{c} · Recommended</span>)}
             {!r.must.length && !r.should.length && <span className="asr-muted">None</span>}
@@ -107,7 +107,8 @@ export function RecordsTable({ config, records, groupOwner }) {
   return (
     <div className="usage-scroll">
       <table className="usage-table">
-        <thead><tr><th>Last update</th><th>Agent/Skill Name</th><th>Level</th><th className="asr-num">Pre-assessment</th><th className="asr-num">Deploy request</th><th className="asr-num">Total</th><th>Issues</th><th>Area</th></tr></thead>
+        <colgroup><col /><col /><col className="asr-col-sm" /><col className="asr-col-sm" /><col className="asr-col-sm" /><col className="asr-col-sm" /><col /><col /></colgroup>
+        <thead><tr><th>Last update</th><th>Agent/Skill Name</th><th className="asr-center">Level</th><th className="asr-center">Pre-assessment</th><th className="asr-center">Deploy request</th><th className="asr-center">Total</th><th className="asr-center">Issues</th><th>Area</th></tr></thead>
         {groups.map((g) => (
           <tbody key={g.owner ?? 'all'}>
             {g.owner !== null && <tr className="usage-group"><td colSpan={COLS}>{g.owner}<span className="usage-badge">{g.rows.length}</span></td></tr>}

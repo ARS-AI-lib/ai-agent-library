@@ -122,6 +122,8 @@ body.v7 .mbox.ast { max-width: min(1360px, 96vw); width: 100%; padding: 0; overf
 .asr-caret { display: inline-block; width: 14px; color: var(--mu); font-size: 11px; }
 .asr-num { text-align: right; }
 th.asr-num { text-align: right; }
+.asr-center, th.asr-center { text-align: center; }
+.asr-col-sm { width: 110px; }
 .asr-total { font-weight: 700; color: var(--tx); }
 .asr-detail-cell { padding: 4px 20px 18px !important; }
 .asr-detail { max-width: 1100px; }
