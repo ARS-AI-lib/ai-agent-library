@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { toJsDate, fmtDate } from '../lib/agentUtils';
 import {
-  activeAnnouncements, splitLinks, msgReadId, safeHttpUrl, myRequestItems, inboxQueueCount, showToApprove, AUDIENCE_LABEL,
+  activeAnnouncements, splitLinks, msgReadId, myRequestItems, inboxQueueCount, showToApprove, AUDIENCE_LABEL,
 } from '../lib/inbox';
 import useEscapeKey from '../hooks/useEscapeKey';
 import useMyRejected from '../hooks/useMyRejected';
