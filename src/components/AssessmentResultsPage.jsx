@@ -107,7 +107,7 @@ export function RecordsTable({ config, records, groupOwner }) {
   return (
     <div className="usage-scroll">
       <table className="usage-table">
-        <colgroup><col /><col /><col className="asr-col-sm" /><col className="asr-col-sm" /><col className="asr-col-sm" /><col className="asr-col-sm" /><col /><col /></colgroup>
+        <colgroup><col className="asr-col-date" /><col /><col className="asr-col-sm" /><col className="asr-col-sm" /><col className="asr-col-sm" /><col className="asr-col-sm" /><col /><col /></colgroup>
         <thead><tr><th>Last update</th><th>Agent/Skill Name</th><th className="asr-center">Level</th><th className="asr-center">Pre-assessment</th><th className="asr-center">Deploy request</th><th className="asr-center">Total</th><th className="asr-center">Issues</th><th>Area</th></tr></thead>
         {groups.map((g) => (
           <tbody key={g.owner ?? 'all'}>
