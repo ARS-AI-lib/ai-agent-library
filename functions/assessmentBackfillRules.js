@@ -152,8 +152,22 @@ function applyDecision(agent, review, { decision, reason, config, now }) {
   return applySubmit(base, { answers: review.answers, decl: review.decl, mode: 'backfill', config, user: { email: by, uid: review.requestedByUid || '' } }, now);
 }
 
+/** Count real outcomes of a send loop. Each result is a sendMail result ({status}) or {error:true}. */
+function tallyDeliveries(results) {
+  const t = { sent: 0, held: 0, skipped: 0, dryRun: 0, failed: 0 };
+  (results || []).forEach((r) => {
+    if (!r || r.error) t.failed += 1;
+    else if (r.status === 'sent') t.sent += 1;
+    else if (r.status === 'held') t.held += 1;
+    else if (r.status === 'skippedDomain') t.skipped += 1;
+    else if (r.status === 'dry-run') t.dryRun += 1;
+    else t.failed += 1;
+  });
+  return t;
+}
+
 module.exports = {
   evaluateAnswers, backfillVerdict, backfillStatus, inBackfillScope, creatorDigests,
-  canSubmit, canDecideReview, notPassRecipients, renderBackfillMessage, formatDueDate, applySubmit, applyDecision,
+  canSubmit, canDecideReview, notPassRecipients, renderBackfillMessage, formatDueDate, applySubmit, applyDecision, tallyDeliveries,
   normalizeProgress, isPairedSubSkill, getTier,
 };

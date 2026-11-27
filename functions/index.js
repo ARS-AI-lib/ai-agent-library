@@ -2424,22 +2424,35 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540 }, async (reques
     return { preview: { subject: m.subject, text: m.text, html: m.html }, count: digests.length };
   }
   const targets = testOnly ? [digests.find((d) => d.email === email) || digests[0]].filter(Boolean).map((d) => ({ ...d, to: email })) : digests.map((d) => ({ ...d, to: d.email }));
-  let sent = 0;
+  const results = [];
   for (const d of targets) {
-    const m = render(d);
-    if (chans.includes('inbox')) {
-      await db.collection('inboxMessages').add({ toEmail: d.to.toLowerCase(), title: m.subject, body: m.text, link: m.link, kind: 'assessment-backfill', createdAt: FieldValue.serverTimestamp() });
+    try {
+      const m = render(d);
+      let r = { status: 'sent' };
+      if (chans.includes('inbox')) {
+        await db.collection('inboxMessages').add({ toEmail: d.to.toLowerCase(), title: m.subject, body: m.text, link: m.link, kind: 'assessment-backfill', createdAt: FieldValue.serverTimestamp() });
+      }
+      if (chans.includes('teams') || chans.includes('email')) {
+        r = await sendMail(db, { to: [d.to], subject: m.subject, text: m.text, html: m.html, title: m.subject, link: m.link, cardLines: m.cardLines, ctaLabel: 'ทำ Assessment' });
+      }
+      results.push(r);
+    } catch (e) {
+      console.error('backfillSend delivery failed');
+      results.push({ error: true });
     }
-    if (chans.includes('teams') || chans.includes('email')) {
-      await sendMail(db, { to: [d.to], subject: m.subject, text: m.text, html: m.html, title: m.subject, link: m.link, cardLines: m.cardLines, ctaLabel: 'ทำ Assessment' });
-    }
-    sent += 1;
   }
-  await db.doc('assessmentCampaigns/current').set({
-    dueDate, channels: chans,
-    sends: FieldValue.arrayUnion({ at: new Date().toISOString(), by: email || uid, count: sent, testOnly: !!testOnly }),
-  }, { merge: true });
-  return { sent, skippedNoEmail: noEmail.length, recipients: targets.map((d) => d.to) };
+  const tally = BF.tallyDeliveries(results);
+  if (!testOnly && results.length) {
+    await db.doc('assessmentCampaigns/current').set({
+      dueDate, channels: chans,
+      sends: FieldValue.arrayUnion({ at: new Date().toISOString(), by: email || uid, count: tally.sent, testOnly: false }),
+    }, { merge: true });
+  } else if (testOnly && results.length) {
+    await db.doc('assessmentCampaigns/current').set({
+      testSends: FieldValue.arrayUnion({ at: new Date().toISOString(), by: email || uid, count: tally.sent }),
+    }, { merge: true });
+  }
+  return { sent: tally.sent, held: tally.held, skipped: tally.skipped, dryRun: tally.dryRun, failed: tally.failed, skippedNoEmail: noEmail.length, recipients: targets.map((d) => d.to) };
 });
 
 exports.backfillMyItems = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
@@ -2457,7 +2470,7 @@ async function bfNotify(agent, subject, to, lines) {
   const text = [`Agent/Skill: ${agent.agentName || ''}`, ...lines].join('\n');
   const link = `${BF_APP_URL}/?agent=${encodeURIComponent(agent.id)}`;
   if (!to.length) return;
-  try { await sendMail(db, { to, subject, text, title: subject, link, cardLines: lines, ctaLabel: 'เปิดรายการ' }); } catch (e) { console.error('assessment notify failed', e); }
+  try { await sendMail(db, { to, subject, text, title: subject, link, cardLines: lines, ctaLabel: 'เปิดรายการ' }); } catch (e) { console.error('assessment notify failed', agent.id); }
 }
 
 exports.backfillSubmit = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
@@ -2496,14 +2509,16 @@ exports.backfillSubmit = onCall({ cors: true, timeoutSeconds: 60 }, async (reque
     });
   } catch (e) { throw bfToHttps(e); }
   const reasons = out.patch.assessment?.reasons || [];
-  if (mode === 'backfill' && out.status === 'fail') {
-    const rec = BF.notPassRecipients(agentNow, await bfUsers(), await loadConfig(db));
-    await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ไม่ผ่าน Assessment — กรุณาแก้ไขโดยด่วน`, rec, [`เหตุผล: ${reasons.join(', ') || '-'}`]);
-  }
-  if (mode === 'review') {
-    const rec = BF.notPassRecipients({ ...agentNow, creatorEmails: [] }, await bfUsers(), await loadConfig(db));
-    await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ขอประเมินใหม่ — รอการยืนยัน`, rec, [`ผู้ขอ: ${user.email}`]);
-  }
+  try {
+    if (mode === 'backfill' && out.status === 'fail') {
+      const rec = BF.notPassRecipients(agentNow, await bfUsers(), await loadConfig(db));
+      await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ไม่ผ่าน Assessment — กรุณาแก้ไขโดยด่วน`, rec, [`เหตุผล: ${reasons.join(', ') || '-'}`]);
+    }
+    if (mode === 'review') {
+      const rec = BF.notPassRecipients({ ...agentNow, creatorEmails: [] }, await bfUsers(), await loadConfig(db));
+      await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ขอประเมินใหม่ — รอการยืนยัน`, rec, [`ผู้ขอ: ${user.email}`]);
+    }
+  } catch (e) { console.error('assessment notify failed', agentId); }
   return { status: out.status, level: verdict?.level || '', reasons };
 });
 
@@ -2534,11 +2549,13 @@ exports.decideReassessment = onCall({ cors: true, timeoutSeconds: 60 }, async (r
       agentNow = agent; status = res.status;
     });
   } catch (e) { throw bfToHttps(e); }
-  const users = await bfUsers();
-  const cfg = await loadConfig(db);
-  const creators = (agentNow.creatorEmails || []).map((e) => String(e).toLowerCase());
-  const to = decision === 'accept' ? BF.notPassRecipients(agentNow, users, cfg) : creators;
-  await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ผลการขอประเมินใหม่: ${decision === 'accept' ? 'ผ่าน' : 'ไม่ผ่าน'}`, to, [decision === 'reject' ? `เหตุผล: ${reason}` : 'ยืนยันผลประเมินใหม่แล้ว']);
+  try {
+    const users = await bfUsers();
+    const cfg = await loadConfig(db);
+    const creators = (agentNow.creatorEmails || []).map((e) => String(e).toLowerCase());
+    const to = decision === 'accept' ? BF.notPassRecipients(agentNow, users, cfg) : creators;
+    await bfNotify(agentNow, `Agent/Skill "${agentNow.agentName}" ผลการขอประเมินใหม่: ${decision === 'accept' ? 'ผ่าน' : 'ไม่ผ่าน'}`, to, [decision === 'reject' ? `เหตุผล: ${reason}` : 'ยืนยันผลประเมินใหม่แล้ว']);
+  } catch (e) { console.error('assessment notify failed', reviewId); }
   return { ok: true, status };
 });
 

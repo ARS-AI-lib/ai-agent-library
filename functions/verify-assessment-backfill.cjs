@@ -131,5 +131,9 @@ const rej = dec('reject', 'ข้อมูลไม่เพียงพอ');
 eq('reject → fail, no screening change', [rej.status, Object.keys(rej.patch), rej.patch.assessment.status, rej.records.length], ['fail', ['assessment'], 'fail', 0]);
 eq('accept failing verdict → failed-precondition', thr(() => R.applyDecision(pend, { ...rvw, answers: { ...PASS, C7: 'C7b' } }, { decision: 'accept', config: CFG, now: NOW })), 'failed-precondition');
 eq('decide when not pending_review → failed-precondition', thr(() => dec('accept', '', failAg)), 'failed-precondition');
+// tallyDeliveries
+const tl = R.tallyDeliveries([{ status: 'sent' }, { status: 'held' }, { status: 'skippedDomain' }, { status: 'dry-run' }, { error: true }, { status: 'sent', inbox: true }]);
+eq('tally counts', tl, { sent: 2, held: 1, skipped: 1, dryRun: 1, failed: 1 });
+eq('tally empty', R.tallyDeliveries([]), { sent: 0, held: 0, skipped: 0, dryRun: 0, failed: 0 });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
