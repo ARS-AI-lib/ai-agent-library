@@ -198,5 +198,43 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   eq('warning 100% pass null', B.assessmentWarning(ag(100, 'pass')), null);
   eq('warning 100% none null', B.assessmentWarning(ag(100)), null);
 }
+// --- fix wave (F2/F5/F7/F10)
+{
+  const NOW = new Date('2026-11-27T10:00:00Z');
+  eq('due ok', R.validateDueDate('2026-12-15', NOW), null);
+  eq('due today ok', R.validateDueDate('2026-11-27', NOW), null);
+  eq('due fake date', typeof R.validateDueDate('2026-13-45', NOW), 'string');
+  eq('due Feb 30', typeof R.validateDueDate('2026-02-30', NOW), 'string');
+  eq('due past', typeof R.validateDueDate('2026-11-26', NOW), 'string');
+  eq('due not string', typeof R.validateDueDate(null, NOW), 'string');
+  const thrown = (f) => { try { f(); return null; } catch (e) { return e.code; } };
+  eq('sanitize ok', R.sanitizeSubmitInput({ answers: { C1: 'C1a' }, decl: { tool: ' x ' } }, CFG).decl, { tool: 'x' });
+  eq('sanitize unknown qid', thrown(() => R.sanitizeSubmitInput({ answers: { ZZ: 'a' }, decl: {} }, CFG)), 'invalid-argument');
+  eq('sanitize non-string option', thrown(() => R.sanitizeSubmitInput({ answers: { C1: 5 }, decl: {} }, CFG)), 'invalid-argument');
+  eq('sanitize unknown decl key', thrown(() => R.sanitizeSubmitInput({ answers: {}, decl: { evil: 'x' } }, CFG)), 'invalid-argument');
+  eq('sanitize decl non-string', thrown(() => R.sanitizeSubmitInput({ answers: {}, decl: { tool: { a: 1 } } }, CFG)), 'invalid-argument');
+  eq('sanitize decl too long', thrown(() => R.sanitizeSubmitInput({ answers: {}, decl: { tool: 'x'.repeat(2001) } }, CFG)), 'invalid-argument');
+  eq('sanitize decl null -> empty', R.sanitizeSubmitInput({ answers: {}, decl: null }, CFG).decl, {});
+  const user = { email: 'c@arise.tech', uid: 'u1' };
+  const ag = { id: 'a1', agentName: 'A', approvalStatus: 'approved', devProgress: 100, creatorEmails: ['c@arise.tech'], assessment: { status: 'fail' } };
+  eq('review incomplete rejected', thrown(() => R.applySubmit(ag, { answers: { C1: 'C1a' }, decl: {}, mode: 'review', config: CFG, user }, NOW)), 'failed-precondition');
+  eq('review complete ok', R.applySubmit(ag, { answers: PASS, decl: {}, mode: 'review', config: CFG, user }, NOW).status, 'pending_review');
+  const nd = { ...ag, aiAgent: false, skillMd: true, assessment: undefined };
+  eq('backfill out of scope', thrown(() => R.applySubmit({ ...nd, devProgress: 50 }, { answers: PASS, decl: {}, mode: 'backfill', config: CFG, user, all: [{ ...nd, devProgress: 50 }] }, NOW)), 'failed-precondition');
+  eq('backfill in scope ok', R.applySubmit(nd, { answers: PASS, decl: {}, mode: 'backfill', config: CFG, user, all: [nd] }, NOW).status, 'pass');
+  const parent = { id: 'p', agentName: 'P', aiAgent: true, skillMd: false, childSkillIds: ['a1'] };
+  eq('backfill paired child blocked', thrown(() => R.applySubmit(nd, { answers: PASS, decl: {}, mode: 'backfill', config: CFG, user, all: [nd, parent] }, NOW)), 'failed-precondition');
+  // self-approval
+  const pr = { ...ag, approveArea: ['X'], assessment: { status: 'pending_review' } };
+  const rv = { answers: PASS, decl: {}, requestedBy: 'c@arise.tech', requestedByUid: 'u1' };
+  eq('self accept refused', thrown(() => R.applyDecision(pr, rv, { decision: 'accept', config: CFG, now: NOW, deciderUid: 'u1' })), 'permission-denied');
+  eq('self reject refused', thrown(() => R.applyDecision(pr, rv, { decision: 'reject', reason: 'because', config: CFG, now: NOW, deciderUid: 'u1' })), 'permission-denied');
+  eq('other accept ok', R.applyDecision(pr, rv, { decision: 'accept', config: CFG, now: NOW, deciderUid: 'u2' }).status, 'pass');
+  // F2 wording
+  const T = { sent: 0, held: 0, skipped: 0, dryRun: 0, disabled: 0, failed: 0 };
+  eq('summary inbox + dry run', R.summarizeSend({ inbox: 12, ...T, dryRun: 12 }), 'ส่ง Inbox แล้ว 12 ข้อความ · Teams/Email: ไม่ได้ส่งจริง (dry run 12)');
+  eq('summary nothing', R.summarizeSend({ inbox: 0, ...T }), 'ไม่มีข้อความที่ส่งออก');
+  eq('summary sent+failed', R.summarizeSend({ inbox: 0, ...T, sent: 3, failed: 1 }), 'Teams/Email: ส่งแล้ว 3 · ล้มเหลว 1');
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

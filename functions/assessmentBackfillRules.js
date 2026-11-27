@@ -99,10 +99,15 @@ function applySubmit(agent, input, now) {
   const tier = getTier(agent);
   const denied = canSubmit(agent, user);
   if (denied) throw err('permission-denied', denied);
+  // F7a: backfill must be for an in-scope item (input.all = every agent, this one included).
+  if (mode === 'backfill' && input.all && !inBackfillScope(agent, input.all)) {
+    throw err('failed-precondition', 'รายการนี้ไม่อยู่ในขอบเขตการประเมินย้อนหลัง');
+  }
   const status0 = backfillStatus(agent, config);
   const ts = now;
   if (mode === 'review') {
     if (status0 !== 'fail') throw err('failed-precondition', 'ขอทบทวนได้เฉพาะรายการที่ไม่ผ่าน');
+    if (!evaluateAnswers(config, answers).complete) throw err('failed-precondition', 'กรุณาตอบให้ครบทุกข้อ');
     return {
       status: 'pending_review', records: [],
       patch: { assessment: { ...(agent.assessment || {}), status: 'pending_review', firstAssessedAt: agent.assessment?.firstAssessedAt || ts, lastAssessedAt: ts, lastBy: user.email } },
@@ -138,7 +143,10 @@ function applySubmit(agent, input, now) {
 }
 
 /** Review decision (pure). Accept re-derives the verdict from the stored answers; a fail verdict cannot be accepted. */
-function applyDecision(agent, review, { decision, reason, config, now }) {
+function applyDecision(agent, review, { decision, reason, config, now, deciderUid }) {
+  if (deciderUid && review?.requestedByUid && review.requestedByUid === deciderUid) {
+    throw err('permission-denied', 'ผู้ขอไม่สามารถยืนยันคำขอของตัวเองได้ ต้องให้ผู้อื่นยืนยัน');
+  }
   if (agent?.assessment?.status !== 'pending_review') throw err('failed-precondition', 'รายการนี้ไม่ได้รอการยืนยัน');
   const by = review?.requestedBy || '';
   if (decision === 'reject') {
@@ -167,7 +175,57 @@ function tallyDeliveries(results) {
   return t;
 }
 
+/** F10: a real calendar date (yyyy-mm-dd), not before today in Bangkok. Returns an error message or null. */
+function validateDueDate(due, now) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(due || ''));
+  if (!m) return 'dueDate ไม่ถูกต้อง';
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return 'dueDate ไม่ใช่วันที่จริง';
+  const today = new Date((now || new Date()).getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+  return String(due) < today ? 'dueDate ต้องไม่เป็นวันที่ผ่านมาแล้ว' : null;
+}
+
+/** F7c: bound client JSON. Returns clean { answers, decl } or throws invalid-argument. */
+function sanitizeSubmitInput({ answers, decl }, config) {
+  const bad = (m) => err('invalid-argument', m);
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) throw bad('answers ไม่ถูกต้อง');
+  const known = new Set((config.questions || []).map((q) => q.id));
+  const cleanAnswers = {};
+  Object.entries(answers).forEach(([k, v]) => {
+    if (!known.has(k) || typeof v !== 'string' || v.length > 60) throw bad('answers ไม่ถูกต้อง');
+    cleanAnswers[k] = v;
+  });
+  const cleanDecl = {};
+  if (decl != null) {
+    if (typeof decl !== 'object' || Array.isArray(decl)) throw bad('decl ไม่ถูกต้อง');
+    Object.entries(decl).forEach(([k, v]) => {
+      if (!DECL_KEYS.includes(k) || typeof v !== 'string') throw bad('decl ไม่ถูกต้อง');
+      const t = v.trim();
+      if (t.length > 2000) throw bad('decl ยาวเกินไป');
+      cleanDecl[k] = t;
+    });
+  }
+  return { answers: cleanAnswers, decl: cleanDecl };
+}
+
+/** F2: plain statement of what a send really did (inbox written vs Teams/Email outcome). */
+function summarizeSend({ inbox = 0, sent = 0, held = 0, skipped = 0, dryRun = 0, disabled = 0, failed = 0 }) {
+  const parts = [];
+  if (inbox) parts.push(`ส่ง Inbox แล้ว ${inbox} ข้อความ`);
+  const m = [];
+  if (sent) m.push(`ส่งแล้ว ${sent}`);
+  if (held) m.push(`ถูกพักไว้ ${held}`);
+  if (skipped) m.push(`ข้าม (นอก domain) ${skipped}`);
+  if (dryRun) m.push(`ไม่ได้ส่งจริง (dry run ${dryRun})`);
+  if (disabled) m.push(`ปิดการส่งอยู่ ${disabled}`);
+  if (failed) m.push(`ล้มเหลว ${failed}`);
+  if (m.length) parts.push(`Teams/Email: ${m.join(' · ')}`);
+  return parts.length ? parts.join(' · ') : 'ไม่มีข้อความที่ส่งออก';
+}
+
 module.exports = {
+  validateDueDate, sanitizeSubmitInput, summarizeSend,
   evaluateAnswers, backfillVerdict, backfillStatus, inBackfillScope, creatorDigests,
   canSubmit, canDecideReview, notPassRecipients, renderBackfillMessage, formatDueDate, applySubmit, applyDecision, tallyDeliveries,
   normalizeProgress, isPairedSubSkill, getTier,

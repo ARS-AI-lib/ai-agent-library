@@ -2406,10 +2406,11 @@ exports.backfillList = onCall({ cors: true, timeoutSeconds: 120 }, async (reques
   return { rows, campaign: camp.exists ? camp.data() : null };
 });
 
-exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540 }, async (request) => {
+exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540, secrets: [TEAMS_FLOW_URL] }, async (request) => {
   const { uid, email } = await bfPrep(request, 'backfillSend', ['admin', 'committee']);
   const { dueDate, channels, testOnly, preview } = request.data || {};
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate || ''))) throw new HttpsError('invalid-argument', 'dueDate ไม่ถูกต้อง');
+  const dueErr = BF.validateDueDate(dueDate, new Date());
+  if (dueErr) throw new HttpsError('invalid-argument', dueErr);
   const chans = (Array.isArray(channels) ? channels : []).filter((c) => ['inbox', 'teams', 'email'].includes(c));
   if (!chans.length && !preview) throw new HttpsError('invalid-argument', 'เลือกช่องทางอย่างน้อย 1 ช่อง');
   const [config, all] = await Promise.all([bfConfig(), bfAgents()]);
@@ -2423,36 +2424,49 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540 }, async (reques
     const m = render(digests[0]);
     return { preview: { subject: m.subject, text: m.text, html: m.html }, count: digests.length };
   }
-  const targets = testOnly ? [digests.find((d) => d.email === email) || digests[0]].filter(Boolean).map((d) => ({ ...d, to: email })) : digests.map((d) => ({ ...d, to: d.email }));
-  const results = [];
-  for (const d of targets) {
+  const allTargets = testOnly ? [digests.find((d) => d.email === email) || digests[0]].filter(Boolean).map((d) => ({ ...d, to: email })) : digests.map((d) => ({ ...d, to: d.email }));
+  // ~1 s pacing between creators; 400 keeps the loop well inside the 540 s timeout.
+  const MAX_SEND = 400;
+  const targets = allTargets.slice(0, MAX_SEND);
+  const truncated = allTargets.length - targets.length;
+  const mailChan = chans.includes('teams') || chans.includes('email');
+  const campRef = db.doc('assessmentCampaigns/current');
+  const startedAt = new Date().toISOString();
+  if (!testOnly && targets.length) {
+    await campRef.set({ dueDate, channels: chans, currentSend: { at: startedAt, by: email || uid, status: 'started', planned: targets.length } }, { merge: true });
+  }
+  const results = []; const failedRecipients = []; let inboxCount = 0;
+  for (let i = 0; i < targets.length; i += 1) {
+    const d = targets[i];
+    if (i > 0) await new Promise((r) => setTimeout(r, 1000));
     try {
       const m = render(d);
-      let r = { status: 'sent' };
       if (chans.includes('inbox')) {
         await db.collection('inboxMessages').add({ toEmail: d.to.toLowerCase(), title: m.subject, body: m.text, link: m.link, kind: 'assessment-backfill', createdAt: FieldValue.serverTimestamp() });
+        inboxCount += 1;
       }
-      if (chans.includes('teams') || chans.includes('email')) {
-        r = await sendMail(db, { to: [d.to], subject: m.subject, text: m.text, html: m.html, title: m.subject, link: m.link, cardLines: m.cardLines, ctaLabel: 'ทำ Assessment' });
+      if (mailChan) {
+        results.push(await sendMail(db, { to: [d.to], subject: m.subject, text: m.text, html: m.html, title: m.subject, link: m.link, cardLines: m.cardLines, ctaLabel: 'ทำ Assessment' }));
       }
-      results.push(r);
     } catch (e) {
       console.error('backfillSend delivery failed');
       results.push({ error: true });
+      failedRecipients.push(d.to);
     }
   }
   const tally = BF.tallyDeliveries(results);
-  if (!testOnly && results.length) {
-    await db.doc('assessmentCampaigns/current').set({
-      dueDate, channels: chans,
-      sends: FieldValue.arrayUnion({ at: new Date().toISOString(), by: email || uid, count: tally.sent, testOnly: false }),
+  if (!testOnly && targets.length) {
+    await campRef.set({
+      currentSend: FieldValue.delete(),
+      sends: FieldValue.arrayUnion({ at: startedAt, by: email || uid, count: tally.sent, inbox: inboxCount, testOnly: false, status: 'done' }),
     }, { merge: true });
-  } else if (testOnly && results.length) {
-    await db.doc('assessmentCampaigns/current').set({
-      testSends: FieldValue.arrayUnion({ at: new Date().toISOString(), by: email || uid, count: tally.sent }),
+  } else if (testOnly && targets.length) {
+    await campRef.set({
+      testSends: FieldValue.arrayUnion({ at: startedAt, by: email || uid, count: tally.sent, inbox: inboxCount }),
     }, { merge: true });
   }
-  return { sent: tally.sent, held: tally.held, skipped: tally.skipped, dryRun: tally.dryRun, disabled: tally.disabled, failed: tally.failed, skippedNoEmail: noEmail.length, recipients: targets.map((d) => d.to) };
+  const counts = { inbox: inboxCount, sent: tally.sent, held: tally.held, skipped: tally.skipped, dryRun: tally.dryRun, disabled: tally.disabled, failed: tally.failed };
+  return { ...counts, summary: BF.summarizeSend(counts), skippedNoEmail: noEmail.length, truncated, failedRecipients, recipients: targets.map((d) => d.to) };
 });
 
 exports.backfillMyItems = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
@@ -2473,13 +2487,15 @@ async function bfNotify(agent, subject, to, lines) {
   try { await sendMail(db, { to, subject, text, title: subject, link, cardLines: lines, ctaLabel: 'เปิดรายการ' }); } catch (e) { console.error('assessment notify failed', agent.id); }
 }
 
-exports.backfillSubmit = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
+exports.backfillSubmit = onCall({ cors: true, timeoutSeconds: 60, secrets: [TEAMS_FLOW_URL] }, async (request) => {
   const { user } = await bfPrep(request, 'backfillSubmit', null);
   const { agentId, answers, decl, mode } = request.data || {};
   if (!agentId || typeof agentId !== 'string') throw new HttpsError('invalid-argument', 'agentId required');
   if (!['backfill', 'review'].includes(mode)) throw new HttpsError('invalid-argument', 'mode ไม่ถูกต้อง');
-  if (!answers || typeof answers !== 'object' || Object.keys(answers).length > 60) throw new HttpsError('invalid-argument', 'answers ไม่ถูกต้อง');
   const config = await bfConfig();
+  let clean;
+  try { clean = BF.sanitizeSubmitInput({ answers, decl }, config); } catch (e) { throw bfToHttps(e); }
+  const allAgents = await bfAgents();
   const ref = db.collection('agents').doc(agentId);
   let out; let agentNow; let verdict;
   try {
@@ -2487,11 +2503,11 @@ exports.backfillSubmit = onCall({ cors: true, timeoutSeconds: 60 }, async (reque
       const snap = await tx.get(ref);
       if (!snap.exists) throw { code: 'not-found', message: 'ไม่พบรายการ' };
       const agent = { id: snap.id, ...snap.data() };
-      const res = BF.applySubmit(agent, { answers, decl, mode, config, user }, new Date());
-      verdict = BF.backfillVerdict({ config, answers, tier: BF.getTier(agent) });
+      const res = BF.applySubmit(agent, { answers: clean.answers, decl: clean.decl, mode, config, user, all: allAgents.map((a) => (a.id === agent.id ? agent : a)) }, new Date());
+      verdict = BF.backfillVerdict({ config, answers: clean.answers, tier: BF.getTier(agent) });
       if (mode === 'review') {
         tx.set(db.collection('assessmentReviews').doc(), {
-          agentId, agentName: agent.agentName || '', approveArea: agent.approveArea || [], answers, decl: decl || {},
+          agentId, agentName: agent.agentName || '', approveArea: agent.approveArea || [], answers: clean.answers, decl: clean.decl,
           verdict: verdict.pass ? 'pass' : 'fail', previous: { status: agent.assessment?.status || '', reasons: agent.assessment?.reasons || [] },
           requestedBy: user.email, requestedByUid: user.uid, createdAt: FieldValue.serverTimestamp(), status: 'pending',
         });
@@ -2522,7 +2538,7 @@ exports.backfillSubmit = onCall({ cors: true, timeoutSeconds: 60 }, async (reque
   return { status: out.status, level: verdict?.level || '', reasons };
 });
 
-exports.decideReassessment = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
+exports.decideReassessment = onCall({ cors: true, timeoutSeconds: 60, secrets: [TEAMS_FLOW_URL] }, async (request) => {
   const { user } = await bfPrep(request, 'decideReassessment', ['admin', 'approver']);
   const { reviewId, decision, reason } = request.data || {};
   if (!reviewId || typeof reviewId !== 'string') throw new HttpsError('invalid-argument', 'reviewId required');
@@ -2539,7 +2555,7 @@ exports.decideReassessment = onCall({ cors: true, timeoutSeconds: 60 }, async (r
       const agent = { id: as.id, ...as.data() };
       const denied = BF.canDecideReview(agent, user);
       if (denied) throw { code: 'permission-denied', message: denied };
-      const res = BF.applyDecision(agent, review, { decision, reason, config, now: new Date() });
+      const res = BF.applyDecision(agent, review, { decision, reason, config, now: new Date(), deciderUid: user.uid });
       const patch = { ...res.patch, updatedAt: FieldValue.serverTimestamp() };
       if (patch.screening) patch.screening = { ...patch.screening, deployAt: FieldValue.serverTimestamp() };
       if (patch.assessment) patch.assessment = { ...patch.assessment, lastAssessedAt: FieldValue.serverTimestamp() };
