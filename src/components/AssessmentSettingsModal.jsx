@@ -140,7 +140,7 @@ export default function AssessmentSettingsModal({ onClose }) {
                     </div>
                   </div>
                   <div className="fg full"><label>Question (TH)</label><textarea rows={2} value={q.th} onChange={(e) => patchQ({ th: e.target.value })} /></div>
-                  <div className="fg"><label>Question (EN) <span className="fopt">Optional</span></label><input value={q.en} onChange={(e) => patchQ({ en: e.target.value })} /></div>
+                  <div className="fg"><label>Question (EN)</label><input value={q.en} onChange={(e) => patchQ({ en: e.target.value })} /></div>
                   <div className="fg"><label>Group</label><input list="ast-groups" value={q.group} onChange={(e) => patchQ({ group: e.target.value })} /></div>
                   <div className="fg full"><label>Advice when it needs fixing</label><input value={q.advice} onChange={(e) => patchQ({ advice: e.target.value })} /><div className="fhelp">แสดงเมื่อตัวเลือกที่เลือกบล็อก หรือต้องแก้</div></div>
                 </div>

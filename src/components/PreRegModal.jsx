@@ -1033,12 +1033,12 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
             <div className="fsec"><div className="fsec-h"><h4>Scope of use</h4><span>ประกาศขอบเขตตามแบบคัดกรองของธนาคาร</span></div></div>
             <div className="grid2">
               <div className="fg">
-                <label>Permitted Domains <span className="fopt">Optional</span></label>
+                <label>Permitted Domains</label>
                 <input value={form.permittedDomains} onChange={(e) => setField('permittedDomains', e.target.value)} placeholder={DECL_FIELDS[0].placeholder} />
                 <div className="fhelp">{DECL_FIELDS[0].hint}</div>
               </div>
               <div className="fg">
-                <label>Prohibited Uses <span className="fopt">Optional</span></label>
+                <label>Prohibited Uses</label>
                 <input value={form.prohibitedUses} onChange={(e) => setField('prohibitedUses', e.target.value)} placeholder={DECL_FIELDS[1].placeholder} />
                 <div className="fhelp">{DECL_FIELDS[1].hint}</div>
               </div>
@@ -1139,7 +1139,7 @@ export default function PreRegModal({ onClose, approvedAgents, allAgents = [], s
                 <div className="fhelp">{DECL_FIELDS[2].hint}</div>
               </div>
               <div className="fg">
-                <label>Models Tested <span className="fopt">Optional</span></label>
+                <label>Models Tested</label>
                 <input value={form.llm} onChange={(e) => setField('llm', e.target.value)} placeholder={DECL_FIELDS[4].placeholder} />
                 <div className="fhelp">{DECL_FIELDS[4].hint}</div>
               </div>
