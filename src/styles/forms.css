@@ -82,3 +82,7 @@ body.v7 .usage-table tbody tr.usage-group:hover td { background: var(--sf2); }
 /* Library link of an item whose assessment did not pass (card arrow + detail modal link). */
 .abf-risk, .v7-open.abf-risk, .v7-open.abf-risk:hover { color: var(--late); }
 .v7-open.abf-risk { width: auto; padding: 0 6px; gap: 4px; }
+
+/* New-version bar (NewVersionBanner): fixed above everything, V7 tokens */
+.nvb { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 10000; display: flex; align-items: center; gap: 14px; max-width: calc(100vw - 32px); padding: 10px 14px 10px 18px; border-radius: 99px; background: var(--tint); border: 1px solid var(--tint-bd); color: var(--tint-fg); font-size: 13px; box-shadow: var(--shadow-md, 0 6px 24px rgba(0,0,0,.12)); }
+@media (max-width: 600px) { .nvb { border-radius: 14px; flex-direction: column; align-items: stretch; text-align: center; } }
