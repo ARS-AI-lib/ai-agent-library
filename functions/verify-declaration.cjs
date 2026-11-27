@@ -23,4 +23,11 @@ eq('text or none phrase fills', D.missingDeclaration({ permittedDomains: 'DGL', 
 eq('declarationPatch fills only missing, all five', D.declarationPatch({ tool: 'own' }, { tool: 'parent', llm: ' G ', permittedDomains: 'd', prohibitedUses: 'p', requiredSkills: ' r ' }),
   { permittedDomains: 'd', prohibitedUses: 'p', requiredSkills: 'r', llm: 'G' });
 eq('declarationPatch never writes undefined', Object.values(D.declarationPatch({}, {})).includes(undefined), false);
+// F6: checkbox is decided by an explicit tick, not by typing
+eq('initialNoneChecked exact phrase', D.initialNoneChecked('requiredSkills', 'ไม่ต้อง'), true);
+eq('initialNoneChecked typing prefix', D.initialNoneChecked('requiredSkills', 'ไม่ต้องใช้ skill'), false);
+eq('initialNoneChecked empty', D.initialNoneChecked('tool', ''), false);
+eq('toggle on sets phrase', D.valueAfterToggle('requiredSkills', true, 'abc'), 'ไม่ต้อง');
+eq('toggle off clears phrase', D.valueAfterToggle('requiredSkills', false, 'ไม่ต้อง'), '');
+eq('toggle off keeps other text', D.valueAfterToggle('requiredSkills', false, 'Skill A'), 'Skill A');
 process.exit(fail ? 1 : 0);

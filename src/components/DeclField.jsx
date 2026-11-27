@@ -1,10 +1,13 @@
-import { isNoneValue } from '../lib/declaration';
+import { useEffect, useState } from 'react';
+import { initialNoneChecked, valueAfterToggle } from '../lib/declaration';
 
 // One declaration field (Task 10, 2026-11-27): required text, OR tick the field's "none" phrase.
 // Checked → value = field.none and the input is hidden; unchecked → input shown (a none phrase is
-// cleared). The checkbox is derived from the value, nothing extra is stored.
+// cleared). Checkbox state is local; only the value is stored.
 export default function DeclField({ field, value, onChange, error = false, disabled = false, readOnly = false, hint, placeholder }) {
-  const none = isNoneValue(field.key, value);
+  // Ticked state is local: initialised from the value on mount / field change, then only an explicit tick changes it.
+  const [none, setNone] = useState(() => initialNoneChecked(field.key, value));
+  useEffect(() => { setNone(initialNoneChecked(field.key, value)); }, [field.key]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="fg">
       <label>{field.label} <span className="req">*</span></label>
@@ -15,7 +18,7 @@ export default function DeclField({ field, value, onChange, error = false, disab
               type="checkbox"
               checked={none}
               disabled={disabled}
-              onChange={(e) => onChange(e.target.checked ? field.none : '')}
+              onChange={(e) => { setNone(e.target.checked); onChange(valueAfterToggle(field.key, e.target.checked, value)); }}
             />
             {field.none}
           </label>
