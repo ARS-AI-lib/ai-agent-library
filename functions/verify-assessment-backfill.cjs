@@ -91,9 +91,11 @@ eq('blocking + High reasons', V({ C7: 'C7b', C2: 'C2d' }, 'T2').reasons, ['C7', 
 eq('non-approved → out of scope', R.inBackfillScope({ ...base, approvalStatus: 'pending' }, []), false);
 // message
 const m = R.renderBackfillMessage({ displayName: 'บ๊อบ', dueDate: '15 Dec 2026', appUrl: 'https://x', items: [{ id: '1', name: 'A', phase: 'Pilot' }, { id: '2', name: 'B', phase: 'Ready to Use' }] });
-eq('subject has date', m.subject, 'ขอความร่วมมือทำ Assessment ของ Agent/Skill ภายใน 15 Dec 2026');
+eq('default subject (no date)', m.subject, 'ขอความร่วมมือตอบ Assessment สำหรับ Agent/Skill ของท่าน');
+eq('[Due date] token replaced in text/html/inbox/cards, none left', [m.text.includes('ภายในวันที่ 15 Dec 2026'), m.html.includes('ภายในวันที่ 15 Dec 2026'), m.inboxText.includes('ภายในวันที่ 15 Dec 2026'), m.cardLines.some((l) => String(l.text || l).includes('ภายในวันที่ 15 Dec 2026')), [m.text, m.html, m.inboxText, m.cardLines.join('\n')].some((x) => x.includes('[Due date]'))], [true, true, true, true, false]);
+eq('override outro keeps the [Due date] token working', R.renderBackfillMessage({ displayName: 'บ๊อบ', dueDate: '15 Dec 2026', appUrl: 'https://x', items: [{ id: '1', name: 'A', phase: 'Pilot' }], overrides: { outro: 'ตอบภายใน [Due date] ครับ' } }).text.includes('ตอบภายใน 15 Dec 2026 ครับ'), true);
 eq('links once each', [m.text.split('/assess?agent=1').length - 1, m.text.split('/assess?agent=2').length - 1], [1, 1]);
-eq('html greeting/links/date', [m.html.includes('เรียน คุณบ๊อบ'), m.html.split('/assess?agent=1').length - 1 >= 1, m.html.includes('15 Dec 2026'), m.html.includes('{{name}}')], [true, true, false, false]);
+eq('html greeting/links/date', [m.html.includes('เรียน คุณบ๊อบ'), m.html.split('/assess?agent=1').length - 1 >= 1, m.html.includes('15 Dec 2026'), m.html.includes('{{name}}')], [true, true, true, false]);
 eq('dueDate format', R.formatDueDate(new Date('2026-12-15T05:00:00Z')), '15 Dec 2026');
 
 // applySubmit
@@ -241,7 +243,7 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   const base = { displayName: 'บ๊อบ', dueDate: '15 Dec 2026', appUrl: 'https://x', items: [{ id: '1', name: 'A', phase: 'Pilot' }] };
   const dm = R.defaultMessageParts('15 Dec 2026');
   eq('default parts', Object.keys(dm), ['subject', 'intro', 'outro']);
-  eq('default subject', dm.subject, 'ขอความร่วมมือทำ Assessment ของ Agent/Skill ภายใน 15 Dec 2026');
+  eq('default subject', dm.subject, 'ขอความร่วมมือตอบ Assessment สำหรับ Agent/Skill ของท่าน');
   eq('no override == default subject', R.renderBackfillMessage(base).subject, dm.subject);
   const ov = R.renderBackfillMessage({ ...base, overrides: { subject: 'S1', intro: 'Hi <b>x</b>', outro: 'Bye' } });
   eq('override subject', ov.subject, 'S1');
@@ -292,8 +294,8 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   const cl = R.renderBackfillMessage({ ...base, overrides: { intro: 'P1\n\nP2', outro: 'C1\n\nC2' } }).cardLines.map(TXT);
   eq('cardLines intro first, items middle, closing last', [cl[0], cl[1], cl[2].startsWith('1. A'), cl[3], cl[4]], ['P1', 'P2', true, 'C1', 'C2']);
   const cd = R.renderBackfillMessage(base).cardLines.map(TXT);
-  eq('default cardLines include intro/closing', [cd[0] === dm.intro, cd[cd.length - 1]], [true, 'ทีม AI Agent Library']);
-  eq('cardLines default has reply + thanks', cd.includes('ขอบคุณครับ'), true);
+  eq('default cardLines start with the intro lines and end with the closing', [cd[0] === dm.intro.split('\n')[0], cd[cd.length - 1]], [true, 'ทีม AI Agent Library']);
+  eq('cardLines default has reply + thanks', cd.includes('ขอบพระคุณยิ่ง'), true);
   eq('cardLines strip control chars', R.renderBackfillMessage({ ...base, overrides: { intro: 'a\u0007b' } }).cardLines.map(TXT)[0], 'ab');
   eq('subject newlines collapsed', R.validateMessage({ subject: 'a\n b\t\tc' }).subject, 'a b c');
   eq('intro keeps paragraphs', R.validateMessage({ intro: 'a\n\nb' }).intro, 'a\n\nb');

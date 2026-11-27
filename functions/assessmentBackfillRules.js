@@ -78,13 +78,16 @@ function notPassRecipients(agent, users, cfg) {
 
 const formatDueDate = (d) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Bangkok' }).format(d);
 
-const REPLY = 'หากรายการใดไม่ได้อยู่ในความดูแลของคุณแล้ว ตอบกลับอีเมลนี้เพื่อแจ้งได้เลย';
-const DEFAULT_INTRO = 'AI Agent Library เพิ่มแบบประเมินความเสี่ยง (Assessment) สำหรับ Agent/Skill ทุกตัว งานที่ใช้งานอยู่แล้วก่อนมีแบบประเมินนี้จึงต้องประเมินย้อนหลังหนึ่งครั้ง คุณเป็น Creator ของรายการต่อไปนี้:';
-const DEFAULT_OUTRO = `${REPLY}\n\nขอบคุณครับ\nทีม AI Agent Library`;
-const subjectFor = (dueDate) => `ขอความร่วมมือทำ Assessment ของ Agent/Skill ภายใน ${dueDate}`;
+// "[Due date]" in the intro/closing is replaced with the formatted due date at render time, so the
+// date always follows the Due date field even when the admin edited the text.
+const DUE_TOKEN = '[Due date]';
+const DEFAULT_INTRO = 'AI Agent Library เพิ่มแบบประเมินความเสี่ยง (Assessment) สำหรับ Agent/Skill\nซึ่ง Agent/Skill ของท่านบน Library ยังไม่ผ่านการประเมินดังกล่าว\nโดยรายการที่ท่านจำเป็นจะต้องทำแบบประเมินให้แล้วเสร็จมีดังนี้:';
+const DEFAULT_OUTRO = `ขอความกรุณาตอบแบบประเมินให้แล้วเสร็จภายในวันที่ ${DUE_TOKEN}\nหากรายการใดไม่ได้อยู่ภายใต้ความดูแลของท่าน สามารถตอบกลับอีเมลนี้เพื่อแจ้งรายละเอียด\n\nขอบพระคุณยิ่ง\nทีม AI Agent Library`;
+const subjectFor = () => 'ขอความร่วมมือตอบ Assessment สำหรับ Agent/Skill ของท่าน';
+const withDue = (t, dueDate) => String(t).split(DUE_TOKEN).join(dueDate);
 
 /** Editable parts with their default copy (page pre-fills from this). */
-const defaultMessageParts = (dueDate) => ({ subject: subjectFor(dueDate), intro: DEFAULT_INTRO, outro: DEFAULT_OUTRO });
+const defaultMessageParts = () => ({ subject: subjectFor(), intro: DEFAULT_INTRO, outro: DEFAULT_OUTRO });
 
 // eslint-disable-next-line no-control-regex
 const stripCtl = (t) => String(t).replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, '').trim();
@@ -123,9 +126,9 @@ const cardBlocks = (intro, items, outro) => [
 function renderBackfillMessage({ displayName, items, dueDate, appUrl, overrides }) {
   const o = overrides || {};
   const pick = (k, d) => (typeof o[k] === 'string' && stripCtl(o[k]) ? stripCtl(o[k]) : d);
-  const subject = pick('subject', subjectFor(dueDate));
-  const intro = pick('intro', DEFAULT_INTRO);
-  const outro = pick('outro', DEFAULT_OUTRO);
+  const subject = pick('subject', subjectFor());
+  const intro = withDue(pick('intro', DEFAULT_INTRO), dueDate);
+  const outro = withDue(pick('outro', DEFAULT_OUTRO), dueDate);
   const url = (i) => `${appUrl}/assess?agent=${i.id}`;
   const lines = items.map((i, n) => `${n + 1}. ${i.name} · ${i.phase} → ${url(i)}`);
   // Hidden-link forms: Teams card text and the inbox body support [label](url); email html uses <a>.
