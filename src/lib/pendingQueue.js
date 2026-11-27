@@ -136,8 +136,9 @@ export function visibleAssessmentReviews(reviews, agents, v) {
   return (reviews || [])
     .map((r) => ({ r, agent: (agents || []).find((a) => a.id === r.agentId) }))
     .filter(({ agent }) => !!agent)
-    // A requester can never confirm their own re-assessment (server refuses too); hide it from list + badge.
-    .filter(({ r }) => !(v.uid && r.requestedByUid && r.requestedByUid === v.uid))
+    // A requester can never confirm their own re-assessment (server refuses too) — hide it from list + badge —
+    // except an admin, who may confirm their own (single-admin teams; user ruling 2026-11-27).
+    .filter(({ r }) => (v.isAdmin || v.role === 'admin') || !(v.uid && r.requestedByUid && r.requestedByUid === v.uid))
     .filter(({ r }) => {
       if (v.isAdmin || v.role === 'admin') return true;
       if (v.role !== 'approver') return false;

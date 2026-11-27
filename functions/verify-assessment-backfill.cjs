@@ -231,6 +231,8 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   const rv = { answers: PASS, decl: {}, requestedBy: 'c@arise.tech', requestedByUid: 'u1' };
   eq('self accept refused', thrown(() => R.applyDecision(pr, rv, { decision: 'accept', config: CFG, now: NOW, deciderUid: 'u1' })), 'permission-denied');
   eq('self reject refused', thrown(() => R.applyDecision(pr, rv, { decision: 'reject', reason: 'because', config: CFG, now: NOW, deciderUid: 'u1' })), 'permission-denied');
+  eq('admin may accept their OWN request', R.applyDecision(pr, rv, { decision: 'accept', config: CFG, now: NOW, deciderUid: 'u1', deciderIsAdmin: true }).status, 'pass');
+  eq('admin flag does not help another requester check (approver self still refused)', thrown(() => R.applyDecision(pr, rv, { decision: 'accept', config: CFG, now: NOW, deciderUid: 'u1', deciderIsAdmin: false })), 'permission-denied');
   eq('other accept ok', R.applyDecision(pr, rv, { decision: 'accept', config: CFG, now: NOW, deciderUid: 'u2' }).status, 'pass');
   eq('stop below limit', R.shouldStopSending(3299999, 3300000), false);
   eq('stop at limit', R.shouldStopSending(3300000, 3300000), true);

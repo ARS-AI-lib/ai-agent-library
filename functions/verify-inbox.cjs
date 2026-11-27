@@ -181,8 +181,8 @@ eq(I.inboxQueueCount([{ ...inB('y'), createdBy: 'ap' }, inB('z')], [], [], [], v
   eq(pq.visibleAssessmentReviews(own, ags, vAp).length, 0, 'reviews: own request hidden from approver (A only)');
   eq(pq.visibleAssessmentReviews(own, ags, vFull).length, 2, 'reviews: admin w/ other uid sees both');
   const vAdminSelf = pq.queueViewer({ isAdmin: true, isCommittee: false, role: 'admin', approveAreas: [], uid: 'zz', email: 'a@x' });
-  eq(pq.visibleAssessmentReviews(own, ags, vAdminSelf).map((x) => x.r.id), ['rg1'], 'reviews: admin does not see own request');
-  eq(pq.pendingBadgeCount([], [], [], ags, vAdminSelf, own), 1, 'badge excludes own request');
+  eq(pq.visibleAssessmentReviews(own, ags, vAdminSelf).map((x) => x.r.id).sort(), ['rg1', 'rg2'], 'reviews: admin sees (and may confirm) their own request');
+  eq(pq.pendingBadgeCount([], [], [], ags, vAdminSelf, own), 2, 'badge counts the admin\'s own request');
   eq(pq.visibleAssessmentReviews(rvs, ags, vSt).length, 0, 'reviews: staff none');
   eq(pq.pendingBadgeCount([], [], [], ags, vAp, rvs), 1, 'badge includes reviews');
   eq(pq.pendingBadgeCount([], [], [], ags, vAp), 0, 'badge old callers unchanged');

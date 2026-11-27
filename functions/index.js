@@ -2565,7 +2565,7 @@ exports.decideReassessment = onCall({ cors: true, timeoutSeconds: 60, secrets: [
       const agent = { id: as.id, ...as.data() };
       const denied = BF.canDecideReview(agent, user);
       if (denied) throw { code: 'permission-denied', message: denied };
-      const res = BF.applyDecision(agent, review, { decision, reason, config, now: new Date(), deciderUid: user.uid });
+      const res = BF.applyDecision(agent, review, { decision, reason, config, now: new Date(), deciderUid: user.uid, deciderIsAdmin: user.role === 'admin' });
       const patch = { ...res.patch, updatedAt: FieldValue.serverTimestamp() };
       if (patch.screening) patch.screening = { ...patch.screening, deployAt: FieldValue.serverTimestamp() };
       if (patch.assessment) patch.assessment = { ...patch.assessment, lastAssessedAt: FieldValue.serverTimestamp() };

@@ -195,8 +195,10 @@ function applySubmit(agent, input, now) {
 }
 
 /** Review decision (pure). Accept re-derives the verdict from the stored answers; a fail verdict cannot be accepted. */
-function applyDecision(agent, review, { decision, reason, config, now, deciderUid }) {
-  if (deciderUid && review?.requestedByUid && review.requestedByUid === deciderUid) {
+// Self-confirmation: a requester may not confirm their own re-assessment — EXCEPT an admin (user ruling 2026-11-27:
+// small teams with a single admin would otherwise be stuck). An approver who requested stays blocked.
+function applyDecision(agent, review, { decision, reason, config, now, deciderUid, deciderIsAdmin = false }) {
+  if (!deciderIsAdmin && deciderUid && review?.requestedByUid && review.requestedByUid === deciderUid) {
     throw err('permission-denied', 'ผู้ขอไม่สามารถยืนยันคำขอของตัวเองได้ ต้องให้ผู้อื่นยืนยัน');
   }
   if (agent?.assessment?.status !== 'pending_review') throw err('failed-precondition', 'รายการนี้ไม่ได้รอการยืนยัน');
