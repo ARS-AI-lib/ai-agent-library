@@ -25,7 +25,6 @@ const plusDays = (n) => bangkokDay(new Date(Date.now() + n * 86400000));
 function tally(r) {
   const p = [r.summary || 'ไม่มีข้อความที่ส่งออก'];
   if (r.skippedNoEmail) p.push(`${r.skippedNoEmail} skipped (no email)`);
-  if (r.truncated) p.push(`${r.truncated} not sent (batch limit — send again)`);
   if ((r.failedRecipients || []).length) p.push(`failed: ${r.failedRecipients.join(', ')}`);
   return p.join(' · ');
 }

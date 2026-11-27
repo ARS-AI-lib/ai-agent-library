@@ -2407,6 +2407,7 @@ exports.backfillList = onCall({ cors: true, timeoutSeconds: 120 }, async (reques
 });
 
 exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540, secrets: [TEAMS_FLOW_URL] }, async (request) => {
+  const t0 = Date.now();
   const { uid, email } = await bfPrep(request, 'backfillSend', ['admin', 'committee']);
   const { dueDate, channels, testOnly, preview } = request.data || {};
   const dueErr = BF.validateDueDate(dueDate, new Date());
@@ -2435,8 +2436,10 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540, secrets: [TEAMS
   if (!testOnly && targets.length) {
     await campRef.set({ dueDate, channels: chans, currentSend: { at: startedAt, by: email || uid, status: 'started', planned: targets.length } }, { merge: true });
   }
-  const results = []; const failedRecipients = []; let inboxCount = 0;
+  const results = []; const failedRecipients = []; let inboxCount = 0; let attempted = 0;
   for (let i = 0; i < targets.length; i += 1) {
+    if (BF.shouldStopSending(Date.now() - t0, 450000)) break;
+    attempted += 1;
     const d = targets[i];
     if (i > 0) await new Promise((r) => setTimeout(r, 1000));
     try {
@@ -2455,10 +2458,12 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540, secrets: [TEAMS
     }
   }
   const tally = BF.tallyDeliveries(results);
+  const remaining = (targets.length - attempted) + (allTargets.length - targets.length);
+  const isPartial = remaining > 0;
   if (!testOnly && targets.length) {
     await campRef.set({
       currentSend: FieldValue.delete(),
-      sends: FieldValue.arrayUnion({ at: startedAt, by: email || uid, count: tally.sent, inbox: inboxCount, testOnly: false, status: 'done' }),
+      sends: FieldValue.arrayUnion({ at: startedAt, by: email || uid, count: tally.sent, inbox: inboxCount, testOnly: false, remaining, status: isPartial ? 'partial' : 'done' }),
     }, { merge: true });
   } else if (testOnly && targets.length) {
     await campRef.set({
@@ -2466,7 +2471,7 @@ exports.backfillSend = onCall({ cors: true, timeoutSeconds: 540, secrets: [TEAMS
     }, { merge: true });
   }
   const counts = { inbox: inboxCount, sent: tally.sent, held: tally.held, skipped: tally.skipped, dryRun: tally.dryRun, disabled: tally.disabled, failed: tally.failed };
-  return { ...counts, summary: BF.summarizeSend(counts), skippedNoEmail: noEmail.length, truncated, failedRecipients, recipients: targets.map((d) => d.to) };
+  return { ...counts, remaining, summary: BF.summarizeSend({ ...counts, remaining }), skippedNoEmail: noEmail.length, truncated: isPartial, truncatedCount: truncated, failedRecipients, recipients: targets.map((d) => d.to) };
 });
 
 exports.backfillMyItems = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {

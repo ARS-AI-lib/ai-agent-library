@@ -210,7 +210,7 @@ function sanitizeSubmitInput({ answers, decl }, config) {
 }
 
 /** F2: plain statement of what a send really did (inbox written vs Teams/Email outcome). */
-function summarizeSend({ inbox = 0, sent = 0, held = 0, skipped = 0, dryRun = 0, disabled = 0, failed = 0 }) {
+function summarizeSend({ inbox = 0, sent = 0, held = 0, skipped = 0, dryRun = 0, disabled = 0, failed = 0, remaining = 0 }) {
   const parts = [];
   if (inbox) parts.push(`ส่ง Inbox แล้ว ${inbox} ข้อความ`);
   const m = [];
@@ -221,10 +221,15 @@ function summarizeSend({ inbox = 0, sent = 0, held = 0, skipped = 0, dryRun = 0,
   if (disabled) m.push(`ปิดการส่งอยู่ ${disabled}`);
   if (failed) m.push(`ล้มเหลว ${failed}`);
   if (m.length) parts.push(`Teams/Email: ${m.join(' · ')}`);
-  return parts.length ? parts.join(' · ') : 'ไม่มีข้อความที่ส่งออก';
+  if (remaining) parts.push(`ยังไม่ได้ส่งถึง ${remaining} คน (หมดเวลาต่อครั้ง) กด Send อีกครั้งเพื่อส่งต่อ (ส่งเฉพาะคนที่ยังมีรายการ not done; คนที่ได้รับแล้วจะได้รับเตือนซ้ำ)`);
+  return parts.length ? parts.join(' · ').replace(' · ยังไม่ได้ส่งถึง', m.length || inbox ? ' · ยังไม่ได้ส่งถึง' : ' · ยังไม่ได้ส่งถึง') : 'ไม่มีข้อความที่ส่งออก';
 }
 
+/** R12: stop STARTING new deliveries once elapsed wall-clock reaches the limit. */
+const shouldStopSending = (elapsedMs, limitMs) => elapsedMs >= limitMs;
+
 module.exports = {
+  shouldStopSending,
   validateDueDate, sanitizeSubmitInput, summarizeSend,
   evaluateAnswers, backfillVerdict, backfillStatus, inBackfillScope, creatorDigests,
   canSubmit, canDecideReview, notPassRecipients, renderBackfillMessage, formatDueDate, applySubmit, applyDecision, tallyDeliveries,
