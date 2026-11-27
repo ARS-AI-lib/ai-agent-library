@@ -20,6 +20,7 @@ const eq = (name, got, want) => {
   console.log(`${ok ? '✓' : '✗'} ${name}${ok ? '' : `\n    got  ${JSON.stringify(got)}\n    want ${JSON.stringify(want)}`}`);
 };
 const PASS = Object.fromEntries(CFG.questions.map((q) => [q.id, q.options[0].id]));
+let seed = 12345; const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
 const V = (over, tier) => R.backfillVerdict({ config: CFG, answers: { ...PASS, ...over }, tier });
 
 // verdict
@@ -32,7 +33,7 @@ eq('incomplete → complete false', R.evaluateAnswers(CFG, { ...PASS, C3: 'nope'
 // drift
 let drift = true;
 for (let i = 0; i < 200; i++) {
-  const a = Object.fromEntries(CFG.questions.map((q) => [q.id, q.options[Math.floor(Math.random() * q.options.length)].id]));
+  const a = Object.fromEntries(CFG.questions.map((q) => [q.id, q.options[Math.floor(rnd() * q.options.length)].id]));
   const x = R.evaluateAnswers(CFG, a); const y = S.evaluate(CFG, a);
   if (x.total !== y.total || x.level !== y.level) drift = false;
 }
@@ -52,10 +53,10 @@ const sub = { ...base, id: 's', aiAgent: false, skillMd: true };
 eq('paired sub-skill → false', R.inBackfillScope(sub, [parent, sub]), false);
 
 // status
-eq('assessment.status wins', R.backfillStatus({ assessment: { status: 'fail' }, screening: { deployAt: 1, answers: PASS } }, CFG, []), 'fail');
-eq('screening deployAt + C7 → fail', R.backfillStatus({ aiAgent: true, screening: { deployAt: 1, answers: { ...PASS, C7: 'C7b' } } }, CFG, []), 'fail');
-eq('screening deployAt all pass → pass', R.backfillStatus({ aiAgent: true, screening: { deployAt: 1, answers: PASS } }, CFG, []), 'pass');
-eq('nothing → not_done', R.backfillStatus({}, CFG, []), 'not_done');
+eq('assessment.status wins', R.backfillStatus({ assessment: { status: 'fail' }, screening: { deployAt: 1, answers: PASS } }, CFG), 'fail');
+eq('screening deployAt + C7 → fail', R.backfillStatus({ aiAgent: true, screening: { deployAt: 1, answers: { ...PASS, C7: 'C7b' } } }, CFG), 'fail');
+eq('screening deployAt all pass → pass', R.backfillStatus({ aiAgent: true, screening: { deployAt: 1, answers: PASS } }, CFG), 'pass');
+eq('nothing → not_done', R.backfillStatus({}, CFG), 'not_done');
 
 // digests
 const d = R.creatorDigests([
@@ -81,14 +82,18 @@ const users = [
   { email: 'ad@arise.tech', role: 'admin' }, { email: 'co@arise.tech', role: 'committee' },
   { email: 'ap@arise.tech', role: 'approver', approveAreas: ['QA'] }, { email: 'ap2@arise.tech', role: 'approver', approveAreas: ['SIT'] },
 ];
-const rec = (o) => R.notPassRecipients(ag, users, { approverOverride: o }).sort();
+const rec = (o) => R.notPassRecipients(ag, users, { assessmentApproverOverride: o }).sort();
 eq('override replaces approvers', rec(['x@arise.tech']), ['ad@arise.tech', 'c@arise.tech', 'co@arise.tech', 'x@arise.tech']);
+eq('legacy approverOverride ignored → real approvers', R.notPassRecipients(ag, users, { approverOverride: ['x@arise.tech'], assessmentApproverOverride: [] }).sort(), ['ad@arise.tech', 'ap@arise.tech', 'c@arise.tech', 'co@arise.tech']);
 eq('empty override → real approvers', rec([]), ['ad@arise.tech', 'ap@arise.tech', 'c@arise.tech', 'co@arise.tech']);
 
+eq('blocking + High reasons', V({ C7: 'C7b', C2: 'C2d' }, 'T2').reasons, ['C7', 'High']);
+eq('non-approved → out of scope', R.inBackfillScope({ ...base, approvalStatus: 'pending' }, []), false);
 // message
 const m = R.renderBackfillMessage({ displayName: 'บ๊อบ', dueDate: '15 Dec 2026', appUrl: 'https://x', items: [{ id: '1', name: 'A', phase: 'Pilot' }, { id: '2', name: 'B', phase: 'Ready to Use' }] });
 eq('subject has date', m.subject, 'ขอความร่วมมือทำ Assessment ของ Agent/Skill ภายใน 15 Dec 2026');
 eq('links once each', [m.text.split('/assess?agent=1').length - 1, m.text.split('/assess?agent=2').length - 1], [1, 1]);
+eq('html greeting/links/date', [m.html.includes('เรียน คุณบ๊อบ'), m.html.split('/assess?agent=1').length - 1 >= 1, m.html.includes('15 Dec 2026'), m.html.includes('{{name}}')], [true, true, true, false]);
 eq('dueDate format', R.formatDueDate(new Date('2026-12-15T05:00:00Z')), '15 Dec 2026');
 
 // applySubmit
@@ -98,6 +103,7 @@ const ag2 = { id: 'a1', agentName: 'A', owner: 'O', approveArea: ['QA'], creator
 const decl = { description: 'new', tool: 'T', requiredSkills: 'none', permittedDomains: '', prohibitedUses: '', llm: 'L' };
 const run = (agent, over = {}) => R.applySubmit(agent, { answers: PASS, decl, mode: 'backfill', config: CFG, user, tier: 'T1', ...over }, NOW);
 const thr = (fn) => { try { fn(); return null; } catch (e) { return e.code; } };
+eq('input.tier ignored', (() => { const a = { ...ag2, aiAgent: true, skillMd: false }; return R.applySubmit(a, { answers: { ...PASS, C2: 'C2d' }, decl, mode: 'backfill', config: CFG, user, tier: 'T1' }, new Date()).status; })(), 'fail');
 const r1 = run(ag2);
 eq('backfill pass', r1.status, 'pass');
 eq('patch shape', [r1.patch.screening.v, r1.patch.screening.deployAt === NOW, r1.patch.assessment.status, r1.patch.assessment.lastBy], [2, true, 'pass', 'c@arise.tech']);

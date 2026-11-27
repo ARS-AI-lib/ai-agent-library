@@ -3,19 +3,20 @@
 const {
   normalizeProgress, isPairedSubSkill, getTier,
 } = require('./delayAlertRules');
-const { frameHtml, esc } = require('./messageFrame');
+const { frameHtml, esc, salutation } = require('./messageFrame');
+const { isAgentCreator } = require('./agentReadyRules');
 
 const DECL_KEYS = ['description', 'permittedDomains', 'prohibitedUses', 'tool', 'requiredSkills', 'llm'];
 const lc = (e) => String(e || '').trim().toLowerCase();
 const filled = (v) => String(v ?? '').trim() !== '';
 
-const optionOf = (config, q, id) => q.options.find((o) => o.id === id) || null;
+const optionOf = (q, id) => q.options.find((o) => o.id === id) || null;
 
 /** Port of screening.evaluate + per-option blocksPre||blocksDeploy. Unknown option id = unanswered. */
 function evaluateAnswers(config, answers) {
   let total = 0; let complete = true; const blocking = [];
   (config.questions || []).forEach((q) => {
-    const o = optionOf(config, q, answers?.[q.id]);
+    const o = optionOf(q, answers?.[q.id]);
     if (!o) { complete = false; return; }
     total += o.score || 0;
     if (o.blocksPre || o.blocksDeploy) blocking.push(q.code);
@@ -32,7 +33,7 @@ function backfillVerdict({ config, answers, tier }) {
   return { pass: blocking.length === 0 && !high, level, total, reasons };
 }
 
-function backfillStatus(agent, config, all) {
+function backfillStatus(agent, config) {
   if (agent?.assessment?.status) return agent.assessment.status;
   if (agent?.screening?.deployAt) {
     return backfillVerdict({ config, answers: agent.screening.answers || {}, tier: getTier(agent) }).pass ? 'pass' : 'fail';
@@ -57,10 +58,7 @@ function creatorDigests(rows) {
   return { digests: [...by].map(([email, items]) => ({ email, items })), noEmail };
 }
 
-const isCreator = (agent, user) => {
-  const e = lc(user?.email);
-  return (!!e && (agent?.creatorEmails || []).map(lc).includes(e)) || (!!user?.uid && agent?.createdBy === user.uid);
-};
+const isCreator = (agent, user) => isAgentCreator(agent, { userEmail: user?.email, userUid: user?.uid });
 const canSubmit = (agent, user) => (isCreator(agent, user) ? null : 'เฉพาะ Creator ของรายการนี้เท่านั้นที่ทำ Assessment ได้');
 function canDecideReview(agent, user) {
   if (user?.role === 'admin') return null;
@@ -70,7 +68,7 @@ function canDecideReview(agent, user) {
 }
 
 function notPassRecipients(agent, users, cfg) {
-  const o = (Array.isArray(cfg?.approverOverride) ? cfg.approverOverride : []).filter(Boolean);
+  const o = (Array.isArray(cfg?.assessmentApproverOverride) ? cfg.assessmentApproverOverride : []).filter(Boolean);
   const areas = Array.isArray(agent?.approveArea) ? agent.approveArea : [];
   const fixed = users.filter((u) => u.role === 'admin' || u.role === 'committee').map((u) => u.email);
   const appr = o.length ? o : users.filter((u) => u.role === 'approver' && (u.approveAreas || []).some((a) => areas.includes(a))).map((u) => u.email);
@@ -87,9 +85,9 @@ function renderBackfillMessage({ displayName, items, dueDate, appUrl }) {
   const dur = `ใช้เวลาประมาณ 5 นาทีต่อรายการ (11 ข้อ แบบเลือกตอบ) กรุณาทำให้เสร็จภายใน ${dueDate}`;
   const reply = 'หากรายการใดไม่ได้อยู่ในความดูแลของคุณแล้ว ตอบกลับอีเมลนี้เพื่อแจ้งได้เลย';
   const first = String(displayName || '').trim();
-  const text = ['เรียน คุณ' + first, intro, ...lines, dur, reply, 'ขอบคุณครับ', 'ทีม AI Agent Library'].join('\n');
+  const text = [`เรียน ${salutation(first)}`, intro, ...lines, dur, reply, 'ขอบคุณครับ', 'ทีม AI Agent Library'].join('\n');
   const list = items.map((i, n) => `<li>${esc(i.name)} · ${esc(i.phase)} → <a href="${esc(`${appUrl}/assess?agent=${i.id}`)}">${esc(`${appUrl}/assess?agent=${i.id}`)}</a></li>`).join('');
-  const html = frameHtml(`<p style="margin:0 0 14px">${esc(intro)}</p><ol>${list}</ol><p>${esc(dur)}</p><p>${esc(reply)}</p><p>ขอบคุณครับ<br/>ทีม AI Agent Library</p>`);
+  const html = frameHtml(`<p style="margin:0 0 14px">${esc(intro)}</p><ol>${list}</ol><p>${esc(dur)}</p><p>${esc(reply)}</p><p>ขอบคุณครับ<br/>ทีม AI Agent Library</p>`).replace('{{name}}', esc(salutation(first)));
   return { subject, text, html, cardLines: lines, link: `${appUrl}/assess?agent=${items[0]?.id || ''}` };
 }
 
@@ -97,10 +95,11 @@ const bkkYear = (d) => new Date(d.getTime() + 7 * 3600 * 1000).getUTCFullYear();
 const err = (code, message) => ({ code, message });
 
 function applySubmit(agent, input, now) {
-  const { answers, decl, mode, config, user, tier } = input;
+  const { answers, decl, mode, config, user } = input;
+  const tier = getTier(agent);
   const denied = canSubmit(agent, user);
   if (denied) throw err('permission-denied', denied);
-  const status0 = backfillStatus(agent, config, []);
+  const status0 = backfillStatus(agent, config);
   const ts = now;
   if (mode === 'review') {
     if (status0 !== 'fail') throw err('failed-precondition', 'ขอทบทวนได้เฉพาะรายการที่ไม่ผ่าน');
@@ -117,8 +116,8 @@ function applySubmit(agent, input, now) {
   const qs = config.questions;
   const screening = {
     v: 2, answers: Object.fromEntries(qs.map((q) => [q.id, answers[q.id]])), level: v.level || '', total: v.total,
-    must: qs.filter((q) => optionOf(config, q, answers[q.id])?.fix === 'must').map((q) => q.id),
-    should: qs.filter((q) => ['should'].includes(optionOf(config, q, answers[q.id])?.fix)).map((q) => q.id),
+    must: qs.filter((q) => optionOf(q, answers[q.id])?.fix === 'must').map((q) => q.id),
+    should: qs.filter((q) => optionOf(q, answers[q.id])?.fix === 'should').map((q) => q.id),
     preAt: agent.screening?.preAt || ts, deployAt: ts,
   };
   const patch = {
