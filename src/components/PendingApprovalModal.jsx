@@ -7,7 +7,7 @@ import { agentApproveAreas } from '../lib/approveAreas';
 import { matchingAgentNames, pairedSubSkills, agentTypeLabel, fmtDate, categoryColor } from '../lib/agentUtils';
 import { ScreeningSummary } from './ScreeningQuestions';
 import { useScreeningConfig } from '../hooks/useScreeningConfig';
-import { queueViewer, visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, queueAreaEmptyForApprover } from '../lib/pendingQueue';
+import { queueViewer, visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, visibleAssessmentReviews, queueAreaEmptyForApprover } from '../lib/pendingQueue';
 import { getFunctions, httpsCallable } from '../lib/callable';
 import { decideRenameRequest } from '../lib/endpointFiles';
 import { notifyEvent } from '../lib/notify';
@@ -16,6 +16,7 @@ import AgentDetailModal from './AgentDetailModal';
 import useEscapeKey from '../hooks/useEscapeKey';
 import { failMsg } from '../lib/copy';
 import Hint from './Hint';
+import { goToField } from '../lib/formFocus';
 
 // One .tier-badge-styled chip per area (2026-08-10) — replaces a single
 // comma-joined text span. Area is the field a reviewer actually decides
@@ -101,7 +102,7 @@ const RISK_COLOR = { high: 'var(--late)', medium: 'var(--warn)', low: 'var(--ok)
 //                     overlaps their own approveAreas.
 //   user (base)     — see only their own submissions, and may only reject
 //                     (withdraw) them — never approve their own idea.
-export default function PendingApprovalModal({ pending, deployRequests = [], renameReqs = [], onClose, user, userRole, isAdmin, isCommittee, approveAreas = [], agents = [], schema = {} }) {
+export default function PendingApprovalModal({ pending, deployRequests = [], renameReqs = [], assessmentReviews = [], onClose, user, userRole, isAdmin, isCommittee, approveAreas = [], agents = [], schema = {} }) {
   const screeningConfig = useScreeningConfig();
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
@@ -235,6 +236,33 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
       notifyEvent('link.decided', { agentId: skillId });
     } catch (e) {
       setError(failMsg('ตัดสินคำขอผูก', e));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Assessment re-assessment reviews (2026-11-27). Reject needs a reason (>= 5
+  // chars); on a validation failure show it AND take the user to the field.
+  const visibleReviews = useMemo(
+    () => visibleAssessmentReviews(assessmentReviews, agents, viewer),
+    [assessmentReviews, agents, viewer],
+  );
+  const [asmReject, setAsmReject] = useState(null); // { id, reason, err }
+  async function decideReview(reviewId, decision, reason = '') {
+    if (busyId) return;
+    if (decision === 'reject' && String(reason).trim().length < 5) {
+      const err = 'ใส่เหตุผลที่ไม่ยืนยัน (อย่างน้อย 5 ตัวอักษร)';
+      setAsmReject((s) => ({ ...s, err }));
+      goToField('.abf-reject', err, [['Reason', /เหตุผล/]]);
+      return;
+    }
+    setBusyId(reviewId);
+    setError('');
+    try {
+      await httpsCallable(getFunctions(undefined, 'asia-southeast1'), 'decideReassessment')({ reviewId, decision, reason: String(reason).trim() });
+      setAsmReject(null);
+    } catch (e) {
+      setError(failMsg('ตัดสินผลประเมินใหม่', e));
     } finally {
       setBusyId(null);
     }
@@ -430,7 +458,7 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
           <div>
             <h2 className="mtitle">Inbox</h2>
             <div className="msub" style={{ margin: 0 }}>
-              <strong style={{ color: 'var(--tx)' }}>{visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length} requests</strong> รอคุณ
+              <strong style={{ color: 'var(--tx)' }}>{visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length + visibleReviews.length} requests</strong> รอคุณ
               {fullAccess ? ' · คุณเห็นทุก Area' : mine.size > 0 ? ` · คุณอนุมัติ ${[...mine].join(', ')}` : ''}
             </div>
           </div>
@@ -438,11 +466,12 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
 
         <div className="v7-inbox-filter" role="tablist" aria-label="Request type">
           {[
-            ['all', 'All', visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length],
+            ['all', 'All', visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length + visibleReviews.length],
             ['new', 'New Entry', visible.length],
             ['deploy', 'Deploy', visibleDeploy.length],
             ['rename', 'Rename', visibleRenames.length],
             ['link', 'Link', visibleLinks.length],
+            ['assessment', 'Assessment', visibleReviews.length],
           ].map(([k, label, n]) => (
             <button key={k} role="tab" aria-selected={kind === k} className={kind === k ? 'active' : ''} onClick={() => setKind(k)}>
               {label}<span>{n}</span>
@@ -719,9 +748,48 @@ export default function PendingApprovalModal({ pending, deployRequests = [], ren
 
         </>)}
 
-        {(kind === 'all' ? visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length
+        {(kind === 'all' || kind === 'assessment') && (<>
+        {visibleReviews.map(({ r, agent }) => (
+          <div className="queue-row v7-qrow" key={r.id} style={{ flexWrap: 'wrap' }}>
+            <div className="queue-content">
+              <div className="dup-name">
+                <span className="v7-kind">Assessment</span>
+                <span style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }} onClick={() => setDetailAgent(agent)} title="คลิกเพื่อดูรายละเอียด">{agent.agentName}</span>
+              </div>
+              <div className="queue-meta">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px' }}>
+                  <span>Requested by: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>{r.requestedBy || '—'}</strong></span>
+                  <span>Previous: <strong style={{ color: 'var(--tx2)', fontWeight: 600 }}>Not pass{(r.previous?.reasons || []).length ? ` (${r.previous.reasons.join(', ')})` : ''}</strong></span>
+                  <span>New answers: <strong style={{ color: r.verdict === 'pass' ? 'var(--ok, #1e8e3e)' : 'var(--late)', fontWeight: 600 }}>{r.verdict === 'pass' ? 'Pass' : 'Not pass'}</strong></span>
+                </div>
+              </div>
+            </div>
+            <div className="queue-actions">
+              <button className="btn-sm rej" disabled={busyId === r.id} onClick={() => setAsmReject({ id: r.id, reason: '', err: '' })}>Reject</button>
+              <button className="btn-sm appr" disabled={busyId === r.id} onClick={() => decideReview(r.id, 'accept')}>
+                {busyId === r.id ? '…' : 'Accept'}
+              </button>
+            </div>
+            {asmReject?.id === r.id && (
+              <div className="abf-reject" style={{ flexBasis: '100%', marginTop: 8 }}>
+                <div className="fg">
+                  <label>Reason for not confirming *</label>
+                  <textarea rows={2} value={asmReject.reason} onChange={(e) => setAsmReject({ ...asmReject, reason: e.target.value, err: '' })} placeholder="อธิบายเหตุผลให้ผู้ส่ง (อย่างน้อย 5 ตัวอักษร)" />
+                  {asmReject.err && <div className="msg error">{asmReject.err}</div>}
+                </div>
+                <div className="queue-actions" style={{ marginTop: 6 }}>
+                  <button className="btn-sm" onClick={() => setAsmReject(null)}>Cancel</button>
+                  <button className="btn-sm rej" disabled={busyId === r.id} onClick={() => decideReview(r.id, 'reject', asmReject.reason)}>Confirm reject</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        </>)}
+
+        {(kind === 'all' ? visible.length + visibleDeploy.length + visibleRenames.length + visibleLinks.length + visibleReviews.length
           : kind === 'new' ? visible.length : kind === 'deploy' ? visibleDeploy.length
-          : kind === 'rename' ? visibleRenames.length : visibleLinks.length) === 0 && (
+          : kind === 'rename' ? visibleRenames.length : kind === 'assessment' ? visibleReviews.length : visibleLinks.length) === 0 && (
           <div className="v7-inbox-empty">ไม่มีคำขอที่รอการพิจารณา</div>
         )}
 

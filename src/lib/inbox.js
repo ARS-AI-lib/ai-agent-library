@@ -1,6 +1,6 @@
 import { toJsDate, isMyAgent, isPairedSubSkill } from './agentUtils';
 import { nextStep } from './mySubmissions';
-import { visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, queueAreaEmptyForApprover } from './pendingQueue';
+import { visiblePending, visibleDeployRequests, visibleRenameRequests, visibleLinkRequests, visibleAssessmentReviews, queueAreaEmptyForApprover } from './pendingQueue';
 
 // Inbox (announcements + "my requests") — pure logic, no Firebase, no React.
 //
@@ -112,12 +112,13 @@ export function myRequestItems({ pending, allAgents, rejected, user, now = Date.
 
 // Approver queue size WITHOUT the base-user "own submissions" fallback that
 // visiblePending applies — an inbox badge must not count a user's own items.
-export function inboxQueueCount(pending, deployRequests, renameReqs, agents, v) {
+export function inboxQueueCount(pending, deployRequests, renameReqs, agents, v, reviews = []) {
   const hasAreaMatch = v.fullAccess || (v.areas.size > 0 && !queueAreaEmptyForApprover(pending, v));
   return (hasAreaMatch ? visiblePending(pending, v).length : 0)
     + visibleDeployRequests(deployRequests, agents, v).length
     + visibleRenameRequests(renameReqs, agents, v).length
-    + visibleLinkRequests([...(agents || []), ...(pending || [])], v).length;
+    + visibleLinkRequests([...(agents || []), ...(pending || [])], v).length
+    + visibleAssessmentReviews(reviews, agents, v).length;
 }
 
 export function showToApprove(v, queueCount) {

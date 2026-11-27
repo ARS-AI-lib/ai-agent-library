@@ -143,7 +143,8 @@ eq('tally empty', R.tallyDeliveries([]), Z);
 const CSVL = loadEsm('csv.js');
 const DL = loadEsm('declaration.js');
 const AS = loadEsm('assessments.js', { DECL_FIELDS: DL.DECL_FIELDS, evaluate: S.evaluate, optionOf: S.optionOf, normalizeAnswers: S.normalizeAnswers });
-const B = loadEsm('assessmentBackfill.js', { csvCell: CSVL.csvCell, bangkokDay: AS.bangkokDay });
+const UT = loadEsm('agentUtils.js', { getType: T.getType, getTier: T.getTier });
+const B = loadEsm('assessmentBackfill.js', { csvCell: CSVL.csvCell, bangkokDay: AS.bangkokDay, normalizeProgress: UT.normalizeProgress });
 const it = (id, status) => ({ id, status });
 const L = [it('a', 'not_done'), it('b', 'pass'), it('c', 'not_done'), it('d', 'not_done')];
 eq('nextItem after a → c', B.nextItem(L, 'a', 'backfill'), 'c');
@@ -187,6 +188,15 @@ eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
   eq('filter pass excludes pending_review', B.matchesStatus('pending_review', 'pass'), false);
   eq('filter all', B.matchesStatus('not_done', 'all'), true);
   eq('summarize', B.summarize([row({ status: 'pass', creators: ['a'] }), row({ status: 'fail', creators: ['a'] }), row({ status: 'pending_review' }), row({ creators: ['a'] }), row({})]), { items: 5, done: 3, notDone: 2, noEmail: 2 });
+}
+{
+  const WARN = 'รายการนี้ยังไม่ผ่าน assessment อาจมีความเสี่ยงจากการใช้งาน';
+  const ag = (devProgress, status) => ({ devProgress, assessment: status ? { status } : undefined });
+  eq('warning 100% fail', B.assessmentWarning(ag(100, 'fail')), WARN);
+  eq('warning "100%" string pending_review', B.assessmentWarning(ag('100%', 'pending_review')), WARN);
+  eq('warning 99% fail null', B.assessmentWarning(ag(99, 'fail')), null);
+  eq('warning 100% pass null', B.assessmentWarning(ag(100, 'pass')), null);
+  eq('warning 100% none null', B.assessmentWarning(ag(100)), null);
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

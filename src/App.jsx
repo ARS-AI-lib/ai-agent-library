@@ -311,6 +311,19 @@ export default function App() {
     );
     return unsub;
   }, [role]);
+  // Assessment re-assessment reviews (2026-11-27): fourth queue. Only attached
+  // for roles the rules let list /assessmentReviews (approver-or-above) so
+  // nobody else gets a permission-denied listener.
+  const [assessmentReviews, setAssessmentReviews] = useState([]);
+  useEffect(() => {
+    if (!['approver', 'committee', 'admin'].includes(role)) { setAssessmentReviews([]); return undefined; }
+    const q = query(collection(db, 'assessmentReviews'), where('status', '==', 'pending'));
+    return onSnapshot(
+      q,
+      (snap) => setAssessmentReviews(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      () => setAssessmentReviews([]),
+    );
+  }, [role]);
   // Inbox (2026-11-17): announcements + read state. Called here, above every
   // early return, so hook order never changes. Both stay detached until the
   // role doc has resolved (and useAnnouncements also until the role has an
@@ -331,8 +344,8 @@ export default function App() {
   // own-items fallback (own items are listed under My requests, never counted).
   // The same queueCount is handed to InboxModal so badge and list cannot drift.
   const queueCount = useMemo(
-    () => inboxQueueCount(pending, parentDeployRequests, renameReqs, agents, queueViewerCtx),
-    [pending, parentDeployRequests, renameReqs, agents, queueViewerCtx]
+    () => inboxQueueCount(pending, parentDeployRequests, renameReqs, agents, queueViewerCtx, assessmentReviews),
+    [pending, parentDeployRequests, renameReqs, agents, queueViewerCtx, assessmentReviews]
   );
   const inboxCount = inboxBadgeCount({ unreadCount, queueCount, unreadMessages: unreadMsgCount });
 
@@ -702,6 +715,7 @@ export default function App() {
           pending={pending}
           deployRequests={parentDeployRequests}
           renameReqs={renameReqs}
+          assessmentReviews={assessmentReviews}
           queueViewerCtx={queueViewerCtx}
           queueCount={queueCount}
           onOpenAgent={(a) => { setShowInbox(false); setSelectedAgent(a); }}
@@ -726,6 +740,7 @@ export default function App() {
           pending={pending}
           deployRequests={parentDeployRequests}
           renameReqs={renameReqs}
+          assessmentReviews={assessmentReviews}
           onClose={() => setShowPending(false)}
           user={user}
           userRole={role}

@@ -37,7 +37,7 @@ const I = loadEsm('inbox.js', {
   toJsDate: utils.toJsDate, isMyAgent: utils.isMyAgent, isPairedSubSkill: utils.isPairedSubSkill,
   nextStep: mine.nextStep,
   visiblePending: pq.visiblePending, visibleDeployRequests: pq.visibleDeployRequests,
-  visibleRenameRequests: pq.visibleRenameRequests, visibleLinkRequests: pq.visibleLinkRequests,
+  visibleRenameRequests: pq.visibleRenameRequests, visibleLinkRequests: pq.visibleLinkRequests, visibleAssessmentReviews: pq.visibleAssessmentReviews,
   queueAreaEmptyForApprover: pq.queueAreaEmptyForApprover,
 });
 
@@ -164,6 +164,21 @@ const inB = (id) => ({ id, approvalStatus: 'pending', approveArea: [B] });
 const vAp = pq.queueViewer({ isAdmin: false, isCommittee: false, role: 'approver', approveAreas: [A], uid: 'ap', email: 'ap@x' });
 eq(I.inboxQueueCount([inA('x'), inB('y'), inB('z')], [], [], [], vAp), 1, 'approver: 1 of 3 matches -> 1');
 eq(I.inboxQueueCount([{ ...inB('y'), createdBy: 'ap' }, inB('z')], [], [], [], vAp), 0, 'approver nothing matching -> 0 (fallback ignored)');
+{
+  const rv = (id, area) => ({ id: 'r' + id, agentId: id, status: 'pending', approveArea: [area] });
+  const ags = [{ id: 'g1', approveArea: [A], approvalStatus: 'approved' }, { id: 'g2', approveArea: [B], approvalStatus: 'approved' }];
+  const rvs = [rv('g1', A), rv('g2', B), { id: 'rx', agentId: 'gone', status: 'pending' }];
+  const vCom = pq.queueViewer({ isAdmin: false, isCommittee: true, role: 'committee', approveAreas: [A], uid: 'c', email: 'c@x' });
+  const vSt = pq.queueViewer({ isAdmin: false, isCommittee: false, role: 'staff', approveAreas: [A], uid: 's', email: 's@x' });
+  eq(pq.visibleAssessmentReviews(rvs, ags, vFull).length, 2, 'reviews: admin sees all (resolvable)');
+  eq(pq.visibleAssessmentReviews(rvs, ags, vAp).map((x) => x.r.id), ['rg1'], 'reviews: approver by area overlap');
+  eq(pq.visibleAssessmentReviews(rvs, ags, vCom).length, 0, 'reviews: committee none');
+  eq(pq.visibleAssessmentReviews(rvs, ags, vSt).length, 0, 'reviews: staff none');
+  eq(pq.pendingBadgeCount([], [], [], ags, vAp, rvs), 1, 'badge includes reviews');
+  eq(pq.pendingBadgeCount([], [], [], ags, vAp), 0, 'badge old callers unchanged');
+  eq(I.inboxQueueCount([], [], [], ags, vAp, rvs), 1, 'inboxQueueCount includes reviews');
+  eq(I.inboxQueueCount([], [], [], ags, vAp), 0, 'inboxQueueCount old callers unchanged');
+}
 eq([I.showToApprove(vFull, 0), I.showToApprove(v0, 0), I.showToApprove(v0, 2)], [true, false, true], 'showToApprove');
 eq([I.inboxBadgeCount({ unreadCount: 2, queueCount: 3 }), I.inboxBadgeCount({ unreadCount: 0, queueCount: 0 })], [5, 0], 'inboxBadgeCount');
 

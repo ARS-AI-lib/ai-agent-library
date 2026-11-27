@@ -1,5 +1,6 @@
 import { csvCell } from './csv';
 import { bangkokDay } from './assessments';
+import { normalizeProgress } from './agentUtils';
 
 // Creator /assess page helpers (2026-11-27). mode: 'backfill' (not_done items) | 'review' (fail items).
 export const isAssessable = (item, mode) => item.status === (mode === 'review' ? 'fail' : 'not_done');
@@ -40,3 +41,10 @@ export function summarize(rows) {
 
 // Status filter predicate: 'fail' (labelled "Not pass") also covers pending_review rows.
 export const matchesStatus = (status, filter) => filter === 'all' || status === filter || (filter === 'fail' && status === 'pending_review');
+
+// Library risk warning (2026-11-27): a Ready-to-Use item whose assessment did not pass.
+export const ASSESSMENT_WARNING = 'รายการนี้ยังไม่ผ่าน assessment อาจมีความเสี่ยงจากการใช้งาน';
+export function assessmentWarning(agent) {
+  const st = agent?.assessment?.status;
+  return normalizeProgress(agent?.devProgress) >= 100 && (st === 'fail' || st === 'pending_review') ? ASSESSMENT_WARNING : null;
+}

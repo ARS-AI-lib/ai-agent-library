@@ -125,10 +125,30 @@ export function visibleLinkRequests(pool, v) {
     .filter(({ skill, target }) => !!target && canDecideLink(v, skill, target));
 }
 
+/**
+ * Assessment re-assessment reviews (2026-11-27). Same audience as the server's
+ * decideReassessment: admin (all) or an approver whose areas overlap the
+ * review's STORED approveArea. Committee/staff see none. Unresolvable agents
+ * are dropped so the badge never promises a row the modal cannot draw.
+ * Returns [{ r, agent }].
+ */
+export function visibleAssessmentReviews(reviews, agents, v) {
+  return (reviews || [])
+    .map((r) => ({ r, agent: (agents || []).find((a) => a.id === r.agentId) }))
+    .filter(({ agent }) => !!agent)
+    .filter(({ r }) => {
+      if (v.isAdmin || v.role === 'admin') return true;
+      if (v.role !== 'approver') return false;
+      const areas = Array.isArray(r.approveArea) ? r.approveArea : [r.approveArea];
+      return areas.some((a) => v.areaList.includes(a));
+    });
+}
+
 /** The number the Pending badge shows — exactly what the modal will list. */
-export function pendingBadgeCount(pending, deployRequests, renameReqs, agents, v) {
+export function pendingBadgeCount(pending, deployRequests, renameReqs, agents, v, reviews = []) {
   return visiblePending(pending, v).length
     + visibleDeployRequests(deployRequests, agents, v).length
     + visibleRenameRequests(renameReqs, agents, v).length
-    + visibleLinkRequests([...(agents || []), ...(pending || [])], v).length;
+    + visibleLinkRequests([...(agents || []), ...(pending || [])], v).length
+    + visibleAssessmentReviews(reviews, agents, v).length;
 }

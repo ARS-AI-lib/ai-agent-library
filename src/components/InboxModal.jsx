@@ -128,6 +128,7 @@ export default function InboxModal({
   pending = [],
   deployRequests = [],
   renameReqs = [],
+  assessmentReviews = [],
   queueViewerCtx,
   queueCount: queueCountProp,
   onOpenAgent,
@@ -161,7 +162,7 @@ export default function InboxModal({
   // disagree; the local computation is only a fallback.
   const queueCount = typeof queueCountProp === 'number'
     ? queueCountProp
-    : inboxQueueCount(pending, deployRequests, renameReqs, allAgents, queueViewerCtx);
+    : inboxQueueCount(pending, deployRequests, renameReqs, allAgents, queueViewerCtx, assessmentReviews);
   const canApprove = !!queueViewerCtx && showToApprove(queueViewerCtx, queueCount);
 
   const tabs = [

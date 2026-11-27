@@ -12,6 +12,7 @@ import DeclField from './DeclField';
 import { assessmentRecord } from '../lib/assessments';
 import { ScreeningQuestions, ScreeningSide } from './ScreeningQuestions';
 import { agentStatus, ST_DEF, progressBucket, developmentPhaseLabel, phaseChanged } from '../lib/status';
+import { assessmentWarning } from '../lib/assessmentBackfill';
 import { fmtDate, skillsOfAgent, agentsOfSkill, canUpdateProgress, canEditDetails, canEditSDLC, canEditReadyToUseFields, canMarkAgentReady, isMyAgent, pairedSubSkills, cascadeTargets, isPairedSubSkill, normalizeProgress, safeEndpointUrl, endpointLabel, agentUseCaseNames, typeBadgeName, isWorkflow, workflowMembers, workflowOf } from '../lib/agentUtils';
 import { agentApproveAreas } from '../lib/approveAreas';
 import useEscapeKey from '../hooks/useEscapeKey';
@@ -172,6 +173,9 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
   // Re-sanitised at render even though writes are already sanitised — docs
   // predating that write path (or touched by a script) must not be trusted.
   const endpointHref = safeEndpointUrl(agent.endpoint);
+  const riskWarning = assessmentWarning(agent);
+  const asmStatus = agent.assessment?.status;
+  const isCreatorOfItem = isMyAgent(agent, user) || !!(agent.createdBy && agent.createdBy === user?.uid);
   const useCaseNames = agentUseCaseNames(agent);
   const process = Array.isArray(agent.sdlcProcessMapping) ? agent.sdlcProcessMapping.join(', ') : agent.sdlcProcessMapping;
   const scope = isInternalOrExternal(agent);
@@ -842,8 +846,10 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                 href={endpointHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
-                title={endpointHref}
+                className={riskWarning ? 'abf-risk' : undefined}
+                style={{ color: riskWarning ? 'var(--late)' : 'var(--accent)', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, wordBreak: 'break-all' }}
+                title={riskWarning || endpointHref}
+                aria-label={riskWarning ? `${endpointLabel(agent.endpoint)} — ${riskWarning}` : undefined}
                 onClick={(e) => {
                   recordAgentEvent(agent.id, 'endpoint');
                   handleEndpointClick(e, agent.endpoint);
@@ -854,12 +860,22 @@ export default function AgentDetailModal({ agent, allAgents, onClose, user, user
                   <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
                 </svg>
                 {endpointLabel(agent.endpoint)}
+                {riskWarning && <span aria-hidden="true">⚠</span>}
               </a>
               {/* "ลิงก์ภายนอก" tag removed entirely (2026-08-26, user
                   request) — the §24/§25 requirement to distinguish our own
                   files from external links stays met by File History existing
                   only on our own uploads; no inline tag needed here anymore. */}
             </div>
+          )}
+          {isCreatorOfItem && asmStatus === 'fail' && (
+            <div className="mrow">
+              <span className="mk">Assessment</span>
+              <button type="button" className="btn-sm" onClick={() => { window.location.href = `/assess?agent=${encodeURIComponent(agent.id)}&review=1`; }}>Request re-assessment</button>
+            </div>
+          )}
+          {isCreatorOfItem && asmStatus === 'pending_review' && (
+            <div className="mrow"><span className="mk">Assessment</span><span style={{ color: 'var(--mu)', fontSize: 11 }}>รอ Approver ยืนยันผลประเมินใหม่</span></div>
           )}
           <div className="mrow"><span className="mk">Ability</span><span>{ability || '—'}</span></div>
           {isWorkflow(agent) && (
