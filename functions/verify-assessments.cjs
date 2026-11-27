@@ -53,5 +53,28 @@ const evil = { ...mk('9', '=SUM(A1)', [], '2026-11-26T05:00:00Z'), agentName: '@
 const ec = A.recordCsv(CFG, [evil]);
 eq('csv: formula-looking owner/agent/declaration cells are prefixed with a quote', [ec.rows[0][1], ec.rows[0][2], ec.rows[0][ec.headers.indexOf('Description')], ec.rows[0][ec.headers.indexOf('Permitted Tools')]], ["'=SUM(A1)", "'@cmd", "'+1+1", "'-2"]);
 eq('csv: ordinary text is unchanged', A.recordCsv(CFG, [mk('8', 'Team A', [], '2026-11-26T05:00:00Z')]).rows[0][1], 'Team A');
+// ── one row per agent: pre + deploy combined (Results page)
+const P = { C1: 'C1a', C2: 'C2a', C3: 'C3a', C4: 'C4d', C5: 'C5a', C6: 'C6b', C7: 'C7a', C8: 'C8a', C9: 'C9a' };
+const rPre = { ...mk('p1', 'Team A', ['QA'], '2026-11-20T05:00:00Z', 'pre', P), agentId: 'A1', agentName: 'Flow', decl: { description: 'old' } };
+const rDep = { ...mk('d1', 'Team A', ['QA'], '2026-11-22T05:00:00Z', 'deploy', { ...P, C6: 'C6a', C10: 'C10a', C11: 'C11c' }), agentId: 'A1', agentName: 'Flow', decl: { description: 'new' } };
+const rOnlyPre = { ...mk('p2', 'Team B', ['Security'], '2026-11-21T05:00:00Z', 'pre', { ...P, C4: 'C4a' }), agentId: 'B1', agentName: 'Solo' };
+const rows = A.combineByAgent(CFG, [rPre, rDep, rOnlyPre]);
+eq('combineByAgent: one row per agent', rows.map((r) => r.agentId).sort(), ['A1', 'B1']);
+const a1 = rows.find((r) => r.agentId === 'A1');
+eq('combined row: pre + deploy scores and total', [a1.preScore, a1.deployScore, a1.total], [8, 6, 14]);
+eq('combined row: deploy answers win (C6 re-answered), level from the total', [a1.answers.C6, a1.level, a1.must], ['C6a', 'High', ['C11']]);
+eq('combined row: latest date + latest declaration', [A.bangkokDay(a1.createdAt), a1.decl.description], ['2026-11-22', 'new']);
+const b1 = rows.find((r) => r.agentId === 'B1');
+eq('pre-only row: deploy score is null', [b1.preScore, b1.deployScore, b1.total], [0, null, 0]);
+// answer detail: text + points + status
+const q = (id) => CFG.questions.find((x) => x.id === id);
+eq('answerDetail ok', A.answerDetail(CFG, a1.answers, q('C4')), { text: q('C4').options[3].th, points: 8, status: 'ok' });
+eq('answerDetail needs fixing', A.answerDetail(CFG, a1.answers, q('C11')).status, 'fix');
+eq('answerDetail unanswered', A.answerDetail(CFG, b1.answers, q('C10')), { text: '', points: 0, status: 'unanswered' });
+eq('answerDetail removed option', A.answerDetail(CFG, { C11: 'C11x' }, q('C11')).status, 'removed');
+eq('answerLabel', [A.answerLabel(A.answerDetail(CFG, a1.answers, q('C4'))), A.answerLabel(A.answerDetail(CFG, a1.answers, q('C11'))), A.answerLabel(A.answerDetail(CFG, b1.answers, q('C10')))], [`${q('C4').options[3].th} (8)`, `${q('C11').options[2].th} (6 · ยังไม่ผ่าน)`, '(ยังไม่ตอบ)']);
+const ac = A.agentCsv(CFG, rows);
+eq('agentCsv headers', ac.headers.slice(0, 9), ['Date', 'Owner', 'Agent/Skill', 'Level', 'Pre-assessment score', 'Deploy request score', 'Total score', 'Must fix', 'Should fix']);
+eq('agentCsv C cell carries the label', ac.rows.find((r) => r[2] === 'Flow')[ac.headers.indexOf('C4')], `${q('C4').options[3].th} (8)`);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

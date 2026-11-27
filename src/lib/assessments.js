@@ -79,3 +79,69 @@ export function recordCsv(config, records) {
   });
   return { headers, rows };
 }
+
+// ── Results page: one row per Agent/Skill (2026-11-27) ──────────────────────────
+// Combines the latest 'pre' and the latest 'deploy' record of an agent. The deploy record re-answers
+// pre questions, so its answers win. Scores: pre stage, deploy stage (null if never requested), total.
+export function combineByAgent(config, records) {
+  const byAgent = new Map();
+  records.forEach((r) => {
+    const k = r.agentId || r.id;
+    const cur = byAgent.get(k) || { pre: null, deploy: null };
+    const slot = r.stage === 'deploy' ? 'deploy' : 'pre';
+    if (!cur[slot] || asDate(r.createdAt) > asDate(cur[slot].createdAt)) cur[slot] = r;
+    byAgent.set(k, cur);
+  });
+  return [...byAgent.entries()].map(([agentId, { pre, deploy }]) => {
+    const latest = [pre, deploy].filter(Boolean).sort((a, b) => asDate(b.createdAt) - asDate(a.createdAt))[0];
+    const answers = { ...normalizeAnswers(config, pre?.answers), ...normalizeAnswers(config, deploy?.answers) };
+    const all = evaluate(config, answers, undefined, { partial: true });
+    return {
+      id: agentId,
+      agentId,
+      agentName: latest.agentName,
+      owner: latest.owner,
+      approveArea: latest.approveArea || [],
+      createdAt: latest.createdAt,
+      year: latest.year,
+      decl: latest.decl || {},
+      answers,
+      hasPre: !!pre,
+      hasDeploy: !!deploy,
+      preScore: evaluate(config, answers, 'pre', { partial: true }).total,
+      deployScore: deploy ? evaluate(config, answers, 'deploy', { partial: true }).total : null,
+      total: all.total,
+      level: all.level,
+      must: all.must.map((m) => m.item),
+      should: all.should.map((m) => m.item),
+    };
+  });
+}
+
+// One answer for display: text, points and whether it still needs attention.
+export function answerDetail(config, answers, q) {
+  const v = answers?.[q.id];
+  if (v === undefined || v === null || v === '') return { text: '', points: 0, status: 'unanswered' };
+  const o = optionOf(config, q.id, v);
+  if (!o) return { text: '(removed option)', points: 0, status: 'removed' };
+  return { text: o.th, points: o.score, status: o.fix === 'none' && !o.blocksPre && !o.blocksDeploy ? 'ok' : 'fix' };
+}
+
+export function answerLabel(d) {
+  if (d.status === 'unanswered') return '(ยังไม่ตอบ)';
+  if (d.status === 'removed') return '(removed option)';
+  return `${d.text} (${d.points}${d.status === 'fix' ? ' · ยังไม่ผ่าน' : ''})`;
+}
+
+export function agentCsv(config, rows) {
+  const headers = ['Date', 'Owner', 'Agent/Skill', 'Level', 'Pre-assessment score', 'Deploy request score', 'Total score', 'Must fix', 'Should fix', ...DECL_COLUMNS.map((c) => c.label), ...config.questions.map((q) => q.code)];
+  const out = rows.map((r) => [
+    bangkokDateTime(r.createdAt), safeCell(r.owner || ''), safeCell(r.agentName || ''), r.level || '',
+    r.preScore, r.deployScore ?? '', r.total, r.must.join(' '), r.should.join(' '),
+    ...DECL_COLUMNS.map((c) => safeCell(r.decl?.[c.key] || '')),
+    ...config.questions.map((q) => safeCell(answerLabel(answerDetail(config, r.answers, q)))),
+  ]);
+  return { headers, rows: out };
+}
+
+export { DECL_COLUMNS };

@@ -7,8 +7,7 @@ import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { AREA_ORDER } from '../lib/approveAreas';
 import { downloadCsv } from '../lib/csv';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { filterRecords, groupByOwner, recordCsv, recordResult, answerText, bangkokDay, bangkokYear } from '../lib/assessments';
-import { DECL_FIELDS } from '../lib/declaration';
+import { filterRecords, groupByOwner, combineByAgent, agentCsv, answerDetail, answerLabel, bangkokDay, bangkokYear, DECL_COLUMNS } from '../lib/assessments';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';
 import '../styles/Screening.css';
@@ -22,55 +21,83 @@ import '../styles/Screening.css';
  * Same shape and classes as /usage so the two reports look alike.
  */
 const VIEW_ROLES = ['admin', 'committee', 'approver'];
-const DECL_ROWS = [{ key: 'description', label: 'Description' }, ...DECL_FIELDS.map((f) => ({ key: f.key, label: f.label }))];
 
 export function exportRecordsCsv(config, records, name) {
-  const { headers, rows } = recordCsv(config, records);
+  const { headers, rows } = agentCsv(config, combineByAgent(config, records));
   const cols = headers.map((_, i) => String(i));
   downloadCsv(rows.map((r) => Object.fromEntries(r.map((v, i) => [String(i), v]))), `${name}-${bangkokDay(new Date())}.csv`, cols, headers);
 }
 
+const STATUS_CLASS = { ok: '', fix: 'fix', unanswered: 'muted', removed: 'muted' };
+
+// Detail of one Agent/Skill: Declaration (D) on top, then the answers (C) per stage with points.
+function AgentDetail({ config, row }) {
+  const stages = [['pre', 'Pre-assessment', row.preScore], ['deploy', 'Deploy request', row.deployScore]];
+  return (
+    <div className="asr-detail">
+      <div className="asr-sec">Declaration</div>
+      <dl className="asr-decl">
+        {DECL_COLUMNS.map((c) => (
+          <div key={c.key}><dt>{c.label}</dt><dd>{row.decl?.[c.key] || <span className="asr-muted">—</span>}</dd></div>
+        ))}
+      </dl>
+      {stages.map(([stage, title, score]) => (
+        <div key={stage}>
+          <div className="asr-sec">{title}<span>{score === null ? 'ยังไม่ได้ขอ Deploy' : `${score} pts`}</span></div>
+          <ul className="asr-answers">
+            {config.questions.filter((q) => q.stage === stage).map((q) => {
+              const d = answerDetail(config, row.answers, q);
+              return (
+                <li key={q.id}>
+                  <span className="as-code">{q.code}</span>
+                  <span className="asr-q">{q.th}</span>
+                  <span className={`asr-a ${STATUS_CLASS[d.status]}`}>{answerLabel(d)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// One row per Agent/Skill, grouped by owner, newest first.
 export function RecordsTable({ config, records, groupOwner }) {
   const [open, setOpen] = useState(null);
-  const groups = groupOwner ? groupByOwner(records) : [{ owner: null, rows: groupByOwner(records).flatMap((g) => g.rows).sort((a, b) => (b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) - (a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt))) }];
+  const rows = combineByAgent(config, records);
+  const grouped = groupByOwner(rows);
+  const groups = groupOwner ? grouped : [{ owner: null, rows: grouped.flatMap((g) => g.rows).sort((a, b) => (b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) - (a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt))) }];
+  const COLS = 8;
   const Row = ({ r }) => {
-    const e = recordResult(config, r);
     const isOpen = open === r.id;
     return (
       <Fragment>
-        <tr style={{ cursor: 'pointer' }} onClick={() => setOpen(isOpen ? null : r.id)}>
+        <tr className={`asr-row${isOpen ? ' open' : ''}`} onClick={() => setOpen(isOpen ? null : r.id)} aria-expanded={isOpen}>
           <td className="usage-mono">{bangkokDay(r.createdAt)}</td>
-          <td className="usage-strong">{r.agentName}</td>
-          <td>{r.stage === 'pre' ? 'Pre-assessment' : 'Deploy request'}</td>
-          <td><span className={`scr-lvl ${e.level || ''}`}>{e.level || '—'}</span></td>
-          <td className="usage-mono">{e.total}</td>
+          <td className="usage-strong"><span className="asr-caret" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>{r.agentName}</td>
+          <td><span className={`scr-lvl ${r.level || ''}`}>{r.level || '—'}</span></td>
+          <td className="usage-mono asr-num">{r.hasPre ? r.preScore : '—'}</td>
+          <td className="usage-mono asr-num">{r.deployScore ?? '—'}</td>
+          <td className="usage-mono asr-num asr-total">{r.total}</td>
           <td className="usage-dim">
-            {e.must.length > 0 && <span className="scr-sum-must">Must {e.must.map((m) => m.item).join(', ')} </span>}
-            {e.should.length > 0 && <span>Should {e.should.map((m) => m.item).join(', ')}</span>}
-            {!e.must.length && !e.should.length && '—'}
+            {r.must.length > 0 && <span className="scr-sum-must">Must {r.must.join(', ')} </span>}
+            {r.should.length > 0 && <span>Should {r.should.join(', ')}</span>}
+            {!r.must.length && !r.should.length && '—'}
           </td>
           <td className="usage-dim">{(r.approveArea || []).join(', ') || '—'}</td>
         </tr>
-        {isOpen && (
-          <tr>
-            <td colSpan={7} style={{ background: 'var(--sf2)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '6px 18px', fontSize: 11.5, padding: '4px 0' }}>
-                {DECL_ROWS.map((d) => <div key={d.key}><span className="usage-dim">{d.label}: </span>{r.decl?.[d.key] || '—'}</div>)}
-                {config.questions.map((q) => <div key={q.id}><span className="usage-dim">{q.code}: </span>{answerText(config, r, q) || '—'}</div>)}
-              </div>
-            </td>
-          </tr>
-        )}
+        {isOpen && <tr><td colSpan={COLS} className="asr-detail-cell"><AgentDetail config={config} row={r} /></td></tr>}
       </Fragment>
     );
   };
   return (
     <div className="usage-scroll">
       <table className="usage-table">
-        <thead><tr><th>Date</th><th>Agent/Skill Name</th><th>Stage</th><th>Level</th><th>Score</th><th>Fix</th><th>Area</th></tr></thead>
+        <thead><tr><th>Last update</th><th>Agent/Skill Name</th><th>Level</th><th className="asr-num">Pre-assessment</th><th className="asr-num">Deploy request</th><th className="asr-num">Total</th><th>Fix</th><th>Area</th></tr></thead>
         {groups.map((g) => (
           <tbody key={g.owner ?? 'all'}>
-            {g.owner !== null && <tr className="usage-group"><td colSpan={7}>{g.owner}<span className="usage-badge">{g.rows.length}</span></td></tr>}
+            {g.owner !== null && <tr className="usage-group"><td colSpan={COLS}>{g.owner}<span className="usage-badge">{g.rows.length}</span></td></tr>}
             {g.rows.map((r) => <Row key={r.id} r={r} />)}
           </tbody>
         ))}
@@ -78,7 +105,6 @@ export function RecordsTable({ config, records, groupOwner }) {
     </div>
   );
 }
-
 
 // Admin-only: archive past years (current year is refused by the callable too) and browse what was
 // archived. Archived rows never appear in the normal Results view; they are read through the
@@ -133,7 +159,7 @@ function ArchivedPanel({ liveRecords, onChanged }) {
       {data && (
         <>
           <div className="usage-head">
-            <div className="usage-count">Archived {data.year} — {data.items.length} รายการ</div>
+            <div className="usage-count">Archived {data.year} — {new Set(data.items.map((r) => r.agentId)).size} Agent/Skill · {data.items.length} assessment</div>
             <button className="btn btn-secondary" onClick={() => exportRecordsCsv(data.configSnapshot, data.items, `assessment-archive-${data.year}`)} disabled={!data.items.length}>↓ Download CSV</button>
           </div>
           {data.truncated && <div className="msg error"><span className="dot" style={{ background: '#ea4335' }} />แสดงเพียง {data.items.length} จากทั้งหมด {data.total} รายการ — ข้อมูลปีนี้มากกว่าที่แสดงได้ในครั้งเดียว</div>}
@@ -240,7 +266,7 @@ export default function AssessmentResultsPage() {
         )}
         {visible !== null && (
           <>
-            <div className="usage-count">{filtered.length} รายการ{filtered.length !== visible.length && ` (จากทั้งหมด ${visible.length})`}</div>
+            <div className="usage-count">{new Set(filtered.map((r) => r.agentId)).size} Agent/Skill · {filtered.length} assessment</div>
             {filtered.length === 0
               ? <div className="empty-state">ยังไม่มีผล assessment ตามเงื่อนไขนี้</div>
               : <RecordsTable config={config} records={filtered} groupOwner={groupOwner} />}
