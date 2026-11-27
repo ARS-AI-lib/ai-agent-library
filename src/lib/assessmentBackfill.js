@@ -10,3 +10,6 @@ export function nextItem(items, currentId, mode) {
 
 // Escape text for use inside a RegExp (labels may contain regex characters).
 export const escapeRe = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// goToField table for declaration errors shaped `ใส่ ${label}` / `ใส่ ${label} (หรือติ๊ก …)`.
+export const declErrorFields = (labels) => labels.map((l) => [l, new RegExp(`^ใส่ ${escapeRe(l)}(?: |$)`)]);

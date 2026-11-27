@@ -155,5 +155,14 @@ eq('assessable review not_done', B.isAssessable(it('x', 'not_done'), 'review'), 
 eq('nextItem empty', B.nextItem([], 'a', 'backfill'), null);
 eq('nextItem unknown current', B.nextItem(L, 'zzz', 'backfill'), 'a');
 eq('escapeRe', new RegExp(B.escapeRe('A (b)+?')).test('A (b)+?'), true);
+{
+  const labels = ['Permitted Tools', 'Description', 'Required Skills', 'A (b)+'];
+  const fields = B.declErrorFields(labels);
+  const msgs = { 'Permitted Tools': 'ใส่ Permitted Tools (หรือติ๊ก "ไม่ใช้ tool")', Description: 'ใส่ Description', 'Required Skills': 'ใส่ Required Skills', 'A (b)+': 'ใส่ A (b)+' };
+  labels.forEach((l) => {
+    const hits = fields.filter(([, re]) => re.test(msgs[l])).map(([x]) => x);
+    eq(`declErrorFields matches only ${l}`, hits, [l]);
+  });
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

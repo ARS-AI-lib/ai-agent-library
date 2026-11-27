@@ -7,7 +7,7 @@ import { useScreeningConfig } from '../hooks/useScreeningConfig';
 import { getFunctions, httpsCallable } from '../lib/callable';
 import { DECL_FIELDS } from '../lib/declaration';
 import { goToField } from '../lib/formFocus';
-import { nextItem, isAssessable, escapeRe } from '../lib/assessmentBackfill';
+import { nextItem, isAssessable, declErrorFields } from '../lib/assessmentBackfill';
 import { optionOf } from '../lib/screening';
 import { failMsg } from '../lib/copy';
 import '../styles/UsageReport.css';
@@ -78,7 +78,7 @@ export default function AssessBackfillPage() {
       const label = FIELDS.find(([k]) => k === missing)?.[1] || missing;
       const none = DECL_FIELDS.find((f) => f.key === missing)?.none;
       const msg = none ? `ใส่ ${label} (หรือติ๊ก "${none}")` : `ใส่ ${label}`;
-      setDeclErr(missing); setError(msg); goToField('.abf-wrap', msg, FIELDS.map(([, l]) => [l, new RegExp(`^${escapeRe(l)}`)])); return;
+      setDeclErr(missing); setError(msg); goToField('.abf-wrap', msg, declErrorFields(FIELDS.map(([, l]) => l))); return;
     }
     const unanswered = config.questions.find((q) => !optionOf(config, q.id, answers[q.id]));
     if (unanswered) {
