@@ -9,6 +9,7 @@ import TimelinePage from './components/TimelinePage.jsx'
 import FileDownloadPage from './components/FileDownloadPage.jsx'
 import UsageReportPage from './components/UsageReportPage.jsx'
 import AssessmentResultsPage from './components/AssessmentResultsPage.jsx'
+import AssessBackfillPage from './components/AssessBackfillPage.jsx'
 import WorkshopPage from './components/WorkshopPage.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 
@@ -28,6 +29,7 @@ const path = window.location.pathname.replace(/\/+$/, '');
 const Root = path === '/timeline' ? TimelinePage
   : path === '/usage' ? UsageReportPage
     : path === '/assessments' ? AssessmentResultsPage
+    : path === '/assess' ? AssessBackfillPage
     : path === '/workshop' ? WorkshopPage
       : path.startsWith('/f/') ? FileDownloadPage
         : App;

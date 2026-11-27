@@ -1,0 +1,17 @@
+/* Creator assessment page (/assess). Prefix .abf- */
+.abf-wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 0; }
+.abf-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.abf-chip { border: 1px solid var(--bd, #e5e7eb); background: transparent; color: inherit; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.abf-chip.done { color: var(--mu); }
+.abf-chip.cur { border-color: var(--accent); background: var(--accent-tint, rgba(0, 78, 133, .08)); font-weight: 600; }
+.abf-cap { color: var(--mu); font-size: 12.5px; margin-left: auto; }
+.abf-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px; }
+.abf-title h2 { margin: 0; font-size: 20px; }
+.abf-meta { color: var(--mu); font-size: 12.5px; }
+.abf-due { border-radius: 999px; padding: 3px 10px; font-size: 12px; border: 1px solid var(--bd, #e5e7eb); }
+.abf-body { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+.abf-body aside { position: sticky; top: 76px; }
+.abf-note { border: 1px solid var(--bd, #e5e7eb); border-radius: 10px; padding: 12px 14px; margin: 12px 0; font-size: 13.5px; }
+.abf-note.ok { border-color: #0EB678; }
+.abf-note.bad { border-color: var(--late, #ea4335); }
+@media (max-width: 800px) { .abf-body { grid-template-columns: 1fr; } .abf-body aside { position: static; } }

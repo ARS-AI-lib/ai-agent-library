@@ -138,5 +138,19 @@ const Z = { sent: 0, held: 0, skipped: 0, dryRun: 0, disabled: 0, failed: 0 };
 eq('tally thrown', R.tallyDeliveries([{ error: true }]), { ...Z, failed: 1 });
 eq('tally mix keeps sent accurate', R.tallyDeliveries([{ status: 'sent' }, { status: 'sent' }, { status: 'held' }]), { ...Z, sent: 2, held: 1 });
 eq('tally empty', R.tallyDeliveries([]), Z);
+
+// creator page helpers
+const B = loadEsm('assessmentBackfill.js');
+const it = (id, status) => ({ id, status });
+const L = [it('a', 'not_done'), it('b', 'pass'), it('c', 'not_done'), it('d', 'not_done')];
+eq('nextItem after a → c', B.nextItem(L, 'a', 'backfill'), 'c');
+eq('nextItem wraps to earlier', B.nextItem(L, 'd', 'backfill'), 'a');
+eq('nextItem none left', B.nextItem([it('a', 'pass')], 'a', 'backfill'), null);
+eq('nextItem review picks fail only', B.nextItem([it('a', 'fail'), it('b', 'not_done'), it('c', 'fail')], 'a', 'review'), 'c');
+eq('nextItem current excluded', B.nextItem([it('a', 'not_done')], 'a', 'backfill'), null);
+eq('assessable backfill', B.isAssessable(it('x', 'not_done'), 'backfill'), true);
+eq('assessable backfill done', B.isAssessable(it('x', 'pass'), 'backfill'), false);
+eq('assessable review fail', B.isAssessable(it('x', 'fail'), 'review'), true);
+eq('assessable review not_done', B.isAssessable(it('x', 'not_done'), 'review'), false);
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
